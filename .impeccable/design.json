@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-04T14:00:00-04:00",
+  "title": "Design System: Surviv Aim Trainer",
+  "extensions": {
+    "colorMeta": {
+      "tracer-yellow": { "role": "primary", "displayName": "Tracer Yellow", "canonical": "#ffd35c", "tonalRamp": ["#2e2408", "#5c470f", "#8a6a17", "#b88e1f", "#e6b12b", "#ffd35c", "#ffe08a", "#fff0c4"] },
+      "night-floor": { "role": "neutral", "displayName": "Night Floor", "canonical": "#1a1f16", "tonalRamp": ["#0f130d", "#1a1f16", "#23291f", "#2e3629", "#38422f", "#4c5a3f", "#6f8060", "#a9b89e"] },
+      "panel-moss": { "role": "neutral", "displayName": "Panel Moss", "canonical": "#23291f", "tonalRamp": ["#0f130d", "#161b13", "#1c2118", "#23291f", "#2e3629", "#38422f", "#4c5a3f", "#6f8060"] },
+      "moss-line": { "role": "neutral", "displayName": "Moss Line", "canonical": "#3c4634", "tonalRamp": ["#161b13", "#23291f", "#2e3629", "#3c4634", "#4c5a3f", "#5f7050", "#7c8f6b", "#a9b89e"] },
+      "sage-label": { "role": "neutral", "displayName": "Sage Label", "canonical": "#9fb48c", "tonalRamp": ["#2b3324", "#3f4c34", "#566647", "#6f825c", "#889c73", "#9fb48c", "#b7d3a0", "#d6e6c8"] },
+      "field-grass": { "role": "tertiary", "displayName": "Field Grass", "canonical": "#507a32", "tonalRamp": ["#1c2b11", "#2c4419", "#3f6128", "#507a32", "#63943f", "#7bb052", "#9ccb78", "#c6e3ae"] },
+      "hit-green": { "role": "status-good", "displayName": "Hit Green", "canonical": "#61d15b" },
+      "warn-orange": { "role": "status-warning", "displayName": "Warn Orange", "canonical": "#ffb080" },
+      "danger-red": { "role": "status-critical", "displayName": "Danger Red", "canonical": "#ff5b5b" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Screen titles only: SURVIV AIM TRAINER, RESULTS, PAUSED, REST." },
+      "headline": { "displayName": "Headline number", "purpose": "One hero figure per screen, e.g. the rest countdown." },
+      "hud": { "displayName": "HUD number", "purpose": "Timer and magazine count over the field, with text shadow." },
+      "title": { "displayName": "Section title", "purpose": "Uppercase sage section headers." },
+      "body": { "displayName": "Body", "purpose": "Descriptions, table labels, insight text." },
+      "label": { "displayName": "Label", "purpose": "Form labels and chart headers, uppercase sage." }
+    },
+    "shadows": [
+      { "name": "panel-float", "value": "0 10px 40px rgba(0,0,0,0.5)", "purpose": "The one shadow: floating panels above the field." },
+      { "name": "field-text", "value": "0 1px 3px rgba(0,0,0,0.8)", "purpose": "Text shadow for HUD text drawn over grass." }
+    ],
+    "motion": [
+      { "name": "bar-fill", "value": "transform 80ms linear", "purpose": "Health bar fill changes; transform-based so it never triggers layout." },
+      { "name": "hover", "value": "background-color 120ms ease-out", "purpose": "Button and list hover." }
+    ],
+    "breakpoints": [
+      { "name": "stack", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button", "kind": "button", "refersTo": "button-primary",
+      "description": "The one yellow action per screen, right-most in its row.",
+      "html": "<button class=\"ds-btn-primary\">Start</button>",
+      "css": ".ds-btn-primary { font: 700 16px system-ui, sans-serif; padding: 10px 20px; border-radius: 6px; border: 1px solid transparent; background: #ffd35c; color: #1a1f16; cursor: pointer; transition: background-color 120ms ease-out; } .ds-btn-primary:hover { background: #ffe08a; } .ds-btn-primary:focus-visible { outline: 2px solid #eeeeee; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button", "kind": "button", "refersTo": "button-secondary",
+      "description": "Menu, End, Reset: moss surface with a moss line.",
+      "html": "<button class=\"ds-btn-secondary\">Menu</button>",
+      "css": ".ds-btn-secondary { font: 700 16px system-ui, sans-serif; padding: 10px 20px; border-radius: 6px; border: 1px solid #3c4634; background: #2e3629; color: #eeeeee; cursor: pointer; transition: background-color 120ms ease-out; } .ds-btn-secondary:hover { background: #38422f; } .ds-btn-secondary:focus-visible { outline: 2px solid #ffd35c; outline-offset: 2px; }"
+    },
+    {
+      "name": "List Item", "kind": "nav", "refersTo": "list-item",
+      "description": "Routine or drill entry; active state is the yellow selection.",
+      "html": "<button class=\"ds-list-item\">Tracking<small>MP5 · 1x</small></button><button class=\"ds-list-item ds-active\">Benchmark<small>10 steps · ~8 min</small></button>",
+      "css": ".ds-list-item { display: block; width: 240px; text-align: left; font: 600 15px system-ui, sans-serif; padding: 10px 12px; margin: 0 0 6px; border-radius: 6px; border: 1px solid #3c4634; background: #2e3629; color: #eeeeee; cursor: pointer; } .ds-list-item small { display: block; font-weight: 400; font-size: 12px; opacity: .75; margin-top: 2px; } .ds-list-item:hover { background: #38422f; } .ds-list-item.ds-active { background: #ffd35c; color: #1a1f16; border-color: #ffd35c; } .ds-list-item:focus-visible { outline: 2px solid #ffd35c; outline-offset: 2px; }"
+    },
+    {
+      "name": "Labeled Input", "kind": "input", "refersTo": "input",
+      "description": "Uppercase sage label over a sunken field.",
+      "html": "<label class=\"ds-field\">Duration (s)<input class=\"ds-input\" type=\"number\" value=\"60\"></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 3px; font: 400 12px system-ui, sans-serif; text-transform: uppercase; letter-spacing: .5px; color: #9fb48c; } .ds-input { font: 400 14px system-ui, sans-serif; color: #eeeeee; background: #161b13; border: 1px solid #3c4634; border-radius: 5px; padding: 6px 8px; } .ds-input:focus-visible { outline: 2px solid #ffd35c; outline-offset: 1px; }"
+    },
+    {
+      "name": "Panel", "kind": "card", "refersTo": "panel",
+      "description": "The floating range card: moss surface, moss line, deep shadow, yellow display title.",
+      "html": "<div class=\"ds-panel\"><h1 class=\"ds-display\">RESULTS</h1><p class=\"ds-sub\">Tracking · MP5 · 1x · 60s</p></div>",
+      "css": ".ds-panel { background: #23291f; border: 1px solid #3c4634; border-radius: 10px; padding: 26px 30px; box-shadow: 0 10px 40px rgba(0,0,0,.5); color: #eeeeee; font-family: system-ui, sans-serif; } .ds-display { margin: 0 0 4px; font-size: 30px; letter-spacing: 3px; font-weight: 900; color: #ffd35c; } .ds-sub { margin: 0; opacity: .8; font-size: 15px; }"
+    },
+    {
+      "name": "Insight Card", "kind": "custom", "refersTo": "insight-card",
+      "description": "Post-run coaching sentence; green variant when the player did the expert thing.",
+      "html": "<div class=\"ds-insight\">You overshoot flicks by 12% on average. Aim to land just short and finish with a small correction.</div>",
+      "css": ".ds-insight { background: #1c2118; border-radius: 4px; padding: 10px 12px; font: 400 14px/1.45 system-ui, sans-serif; color: #eeeeee; max-width: 42ch; } .ds-insight.ds-ok { box-shadow: inset 0 0 0 1px #61d15b; }"
+    },
+    {
+      "name": "Tier Badge", "kind": "chip", "refersTo": "tier-badge",
+      "description": "Benchmark tier pill; always carries its name as text.",
+      "html": "<span class=\"ds-tier ds-gold\">Gold</span> <span class=\"ds-tier\">Bronze</span>",
+      "css": ".ds-tier { display: inline-block; padding: 1px 7px; border-radius: 10px; font: 700 11px system-ui, sans-serif; letter-spacing: .5px; text-transform: uppercase; background: #3c4634; color: #eeeeee; } .ds-tier.ds-gold { background: #d4a72c; color: #111; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Range Card",
+    "overview": "A range card is the small dark notebook a marksman keeps beside the rifle: distances, holds, wind, what worked. This interface is that card laid on top of surviv's grass. The game field is the only bright, saturated thing on screen. Everything the player reads before and after a run sits on dark mossy panels that take their greens from the field itself, one step darker, so the chrome reads as belonging to the world rather than floating over it. The single accent is the yellow of a 9mm tracer, spent sparingly: one primary action, one active selection, one line on a chart.\n\nDensity is Operate density. Menus are lists and forms; results are tables with a few cards. Nothing decorative competes with the numbers, and the copy does the personality work: drill tips are written like a coach who plays the game. During a run the interface almost disappears: a survev-shaped HUD and nothing else.",
+    "keyCharacteristics": [
+      "Field-derived greens for every surface; the grass is the brightest green on screen.",
+      "One yellow accent, used as a tracer: rare, directional, meaning \"go\" or \"this one\".",
+      "System font throughout, heavy weights for numbers and titles, uppercase sage labels.",
+      "Dark tonal layering instead of shadows, except the one deep shadow under a floating panel.",
+      "HUD copies survev's layout so a player's eyes need no retraining."
+    ],
+    "rules": [
+      { "name": "The One Tracer Rule", "body": "Yellow appears on at most one action and one selection per screen, plus data marks. If two buttons are yellow, one of them is wrong.", "section": "colors" },
+      { "name": "The Field Is Brighter Rule", "body": "No panel surface may be lighter or more saturated than the grass. The chrome recedes; the field is the subject.", "section": "colors" },
+      { "name": "The Reserved Status Rule", "body": "Green, orange and red mean good, caution and danger everywhere, and always travel with a word, a sign or a number. They are never used as series colors.", "section": "colors" },
+      { "name": "The Heavy Numbers Rule", "body": "Any number the player is meant to compare is at least weight 700 and uses tabular figures. Prose stays regular weight.", "section": "typography" },
+      { "name": "The Sink, Don't Lift Rule", "body": "Nested content goes darker, never lighter, and never gains a shadow. Only whole panels cast one.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do derive every new surface color from the field greens; step darker to nest.",
+      "Do keep one yellow action per screen and put it right-most in the button row.",
+      "Do write drill copy as a coach who plays: concrete units, real weapon names, numbers in the game's own terms (units, u/s, degrees of spread).",
+      "Do mark honesty states visibly: warm-up, provisional thresholds, hollow markers.",
+      "Do pair every status color with text, a sign or a number.",
+      "Do give every chart a text or table alternative and a keyboard path."
+    ],
+    "donts": [
+      "Don't add a second accent hue or use tier colors as a general palette.",
+      "Don't show mid-run statistics the real game does not show; the HUD stays survev-shaped.",
+      "Don't let a panel clip at the top of the viewport; scroll it instead.",
+      "Don't add shadows to nested elements or lighten nested surfaces.",
+      "Don't introduce webfonts or a display face; the system sans is the identity.",
+      "Don't celebrate ranks with animation, confetti or badges beyond the tier pill."
+    ]
+  }
+}
