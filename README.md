@@ -4,9 +4,8 @@ A browser aim trainer for [surviv.io](https://surviv.io) / [survev.io](https://s
 Top-down view, absolute mouse cursor, WASD movement, and bullets that actually travel,
 so you practice leading targets the way the real game demands.
 
-Demo of a simulated user running the Benchmark, an adaptive Flick drill and the
-Bullet-leads drill: `demo/surviv-trainer-demo.mp4`. Chase and Dodge drills:
-`demo/moving-drills-demo.mp4`.
+Demo of a simulated user running the Benchmark, an adaptive Flick drill, the
+Bullet-leads drill, and the Chase and Dodge drills: `demo/surviv-trainer-demo.mp4`.
 
 ## Run
 

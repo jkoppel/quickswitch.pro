@@ -1,5 +1,6 @@
-// Records a demo video of a simulated user running the Benchmark routine, an adaptive Flick drill,
-// and the Bullet-leads drill with the fading lead marker. Usage: node demo/record.mjs [url]
+// Records one demo video of a simulated user running the Benchmark routine, an adaptive Flick drill,
+// the Bullet-leads drill with the fading lead marker, then the Chase and Dodge drills.
+// Usage: node demo/record.mjs [url]   (STEP_SECONDS shortens benchmark steps; default 15)
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -40,36 +41,14 @@ await page.evaluate((sec) => {
   document.body.appendChild(s);
 }, STEP_SECONDS);
 
-if (process.env.MODE === 'moving') {
-  // Short clip: the Chase and Dodge drills only.
-  await page.waitForTimeout(800);
-  for (const [name, dur] of [[/^Chase/, 30], [/^Dodge/, 30]]) {
-    await page.getByRole('button', { name }).click(); await page.waitForTimeout(1200);
-    await page.locator('#f-duration').fill(String(dur));
-    await page.getByRole('button', { name: 'Start' }).click();
-    await waitScreen(page, 'game'); await playStep(page, { movement: 'auto' });
-    await waitScreen(page, 'results'); await page.waitForTimeout(4000);
-    await page.getByRole('button', { name: 'Menu' }).click(); await page.waitForTimeout(600);
-  }
-  const video = page.video();
-  await ctx.close();
-  const webm = await video.path();
-  await browser.close();
-  const mp4 = join(here, 'moving-drills-demo.mp4');
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', webm, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '23', '-movflags', '+faststart', mp4]);
-  renameSync(webm, join(here, 'moving-drills-demo.webm'));
-  console.log(JSON.stringify({ mp4, errors }, null, 2));
-  process.exit(0);
-}
-
 // Browse the menu a little.
 await page.waitForTimeout(1200);
 await page.getByRole('button', { name: /^Daily 15/ }).click(); await page.waitForTimeout(900);
 await page.getByRole('button', { name: /^Benchmark/ }).click(); await page.waitForTimeout(1200);
 await page.getByRole('button', { name: 'Start' }).click();
-for (let i = 0; i < 8; i++) {
+for (let i = 0; i < 12; i++) {
   await waitScreen(page, 'game', 10000);
-  await playStep(page, i >= 4 && i <= 5 ? { trackLag: 0.5 } : {});
+  await playStep(page, { movement: 'auto', ...(i >= 4 && i <= 5 ? { trackLag: 0.5 } : {}) });
   if ((await readState(page)).screen === 'results') break;
 }
 await waitScreen(page, 'results', 15000);
@@ -92,10 +71,22 @@ await page.getByRole('button', { name: 'Menu' }).click(); await page.waitForTime
 await page.getByRole('button', { name: /^Sniper Leads/ }).click(); await page.waitForTimeout(800);
 await page.locator('#f-duration').fill(String(STEP_SECONDS + 10));
 await page.locator('#f-scope').selectOption('4x');
+if (!(await page.locator('#advanced').evaluate(d => d.open))) await page.locator('#advanced summary').click();
+await page.waitForTimeout(300);
 await page.locator('#f-mind').fill('18'); await page.locator('#f-maxd').fill('32');
 await page.getByRole('button', { name: 'Start' }).click();
 await waitScreen(page, 'game'); await playStep(page, { leadSkill: 0.7, reaction: [0.25, 0.4] });
 await waitScreen(page, 'results'); await page.waitForTimeout(3000);
+
+// Chase: run after a fleeing enemy while shooting; Dodge: juke a hard bot that shoots back.
+for (const name of [/^Chase/, /^Dodge/]) {
+  await page.getByRole('button', { name: 'Menu' }).click(); await page.waitForTimeout(800);
+  await page.getByRole('button', { name }).click(); await page.waitForTimeout(1000);
+  await page.locator('#f-duration').fill(String(STEP_SECONDS + 15));
+  await page.getByRole('button', { name: 'Start' }).click();
+  await waitScreen(page, 'game'); await playStep(page, { movement: 'auto' });
+  await waitScreen(page, 'results'); await page.waitForTimeout(3500);
+}
 
 // Back to the menu to show the trend chart with the runs just recorded, and hover it.
 await page.getByRole('button', { name: 'Menu' }).click(); await page.waitForTimeout(600);
