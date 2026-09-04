@@ -93,8 +93,16 @@ window.ST = window.ST || {};
       this.rocks = settings.obstacles ? this.makeRocks() : [];
       this.stats = {
         shots: 0, pellets: 0, hits: 0, kills: 0, deaths: 0, dmgDealt: 0, dmgTaken: 0,
-        expired: 0, ttk: [], reaction: [], engage: [],
+        expired: 0, ttk: [], reaction: [], engage: [], movingShots: 0, onTarget: 0, firing: 0,
       };
+      // Kinematics: cursor samples (screen px) and one record per acquired target.
+      this.cursorLog = [];
+      this.targets = [];
+      this.lastAcqT = 0;
+      this.mouseSpeed = 0;
+      // Adaptive difficulty (0..1). Staircase tuned for ~75% success.
+      this.diff = settings.adaptive ? 0.35 : (settings.difficulty ?? 0.5);
+      this.adaptWindow = { t: 0, pellets: 0, hits: 0 };
       this.hitFlash = 0;
       this.dmgFlash = 0;
       this.deathFlash = 0;
@@ -241,6 +249,40 @@ window.ST = window.ST || {};
         avgReaction: avg(st.reaction),
         avgEngage: avg(st.engage),
         shotsPerKill: st.kills ? st.shots / st.kills : null,
+        hitsPerSec: st.hits / Math.max(this.time, 1),
+        score: this.score(),
+        movingShotFrac: st.shots ? st.movingShots / st.shots : 0,
+        onTargetFrac: st.onTarget / Math.max(this.time, 1),
+        firingFrac: st.firing / Math.max(this.time, 1),
+        difficulty: this.diff,
+        targets: this.targets,
+        kinematics: this.kinematics(),
+      };
+    }
+
+    // Throughput-style score: speed at acceptable accuracy, not accuracy alone.
+    score() {
+      const st = this.stats;
+      const acc = st.pellets ? st.hits / st.pellets : 0;
+      return 100 * (st.hits / Math.max(this.time, 1)) * Math.sqrt(acc);
+    }
+
+    kinematics() {
+      const T = this.targets.filter(t => t.firstHit !== null);
+      const avg = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+      const sectors = [];
+      for (let i = 0; i < 8; i++) {
+        const ts = T.filter(t => t.sector === i);
+        sectors.push({ n: ts.length, firstHit: avg(ts.map(t => t.firstHit)), gain: avg(ts.map(t => t.gain).filter(g => g !== null)) });
+      }
+      return {
+        n: T.length,
+        reaction: avg(T.map(t => t.reaction).filter(v => v !== null)),
+        moveTime: avg(T.map(t => t.moveTime).filter(v => v !== null)),
+        firstHit: avg(T.map(t => t.firstHit)),
+        gain: avg(T.map(t => t.gain).filter(v => v !== null)),
+        peaks: avg(T.map(t => t.peaks)),
+        sectors,
       };
     }
 
@@ -254,6 +296,9 @@ window.ST = window.ST || {};
         weapon: g.def.name,
         kills: this.stats.kills, deaths: this.stats.deaths,
         accuracy: this.stats.pellets ? this.stats.hits / this.stats.pellets : 0,
+        hits: this.stats.hits,
+        difficulty: this.s.adaptive ? this.diff : null,
+        label: this.s.label || null,
       };
     }
 
@@ -284,12 +329,13 @@ window.ST = window.ST || {};
     spawnEnemy() {
       const pos = this.randomSpawn();
       const skill = ST.AIM_SKILL[this.s.enemyAim] || ST.AIM_SKILL.normal;
+      const hp = this.s.invincible ? Infinity : this.s.enemyHp;
       const e = {
-        pos, vel: { x: 0, y: 0 }, hp: this.s.enemyHp, maxHp: this.s.enemyHp,
+        pos, vel: { x: 0, y: 0 }, hp, maxHp: hp,
         aim: Math.atan2(this.player.pos.y - pos.y, this.player.pos.x - pos.x),
         behavior: this.s.behavior, timer: 0, dirSign: Math.random() < 0.5 ? -1 : 1,
         wander: rand(0, TAU), stopped: false,
-        spawnT: this.time, firstHitT: null, ttl: this.s.ttl > 0 ? this.s.ttl : Infinity,
+        spawnT: this.time, firstHitT: null, ttl: this.s.ttl > 0 ? this.s.ttl * this.ttlScale() : Infinity, ttlMax: this.s.ttl > 0 ? this.s.ttl * this.ttlScale() : Infinity,
         gun: makeGun(this.enemyDef), skill, aimErr: 0, aimErrT: 0, reactT: skill.reaction,
         hitFlash: 0,
       };
@@ -301,11 +347,91 @@ window.ST = window.ST || {};
     update(dt) {
       this.time += dt;
       if (this.s.duration > 0 && this.time >= this.s.duration) { this.finish(); return; }
+      this.sampleCursor(dt);
       this.updatePlayer(dt);
       this.updateEnemies(dt);
       this.updateBullets(dt);
       this.updateEffects(dt);
       this.updateRespawns(dt);
+      this.updateAdaptive(dt);
+    }
+
+    // ---------- difficulty ----------
+    ttlScale() { return lerp(1.6, 0.45, this.diff); }
+    strafeScale() { return lerp(1.5, 0.55, this.diff); }
+    bumpDiff(delta) {
+      if (!this.s.adaptive) return;
+      this.diff = clamp(this.diff + delta, 0, 1);
+    }
+    updateAdaptive(dt) {
+      if (!this.s.adaptive || !this.s.invincible) return;
+      // Tracking has no kill events, so grade each one-second window on hit ratio.
+      const w = this.adaptWindow;
+      w.t += dt;
+      if (w.t >= 1) {
+        if (w.pellets > 0) this.bumpDiff(w.hits / w.pellets >= 0.6 ? 0.03 : -0.09);
+        w.t = 0; w.pellets = 0; w.hits = 0;
+      }
+    }
+
+    // ---------- kinematics ----------
+    sampleCursor(dt) {
+      const log = this.cursorLog;
+      const last = log[log.length - 1];
+      const sample = { t: this.time, x: this.mouse.x, y: this.mouse.y, v: 0 };
+      if (last && dt > 0) sample.v = Math.hypot(sample.x - last.x, sample.y - last.y) / dt;
+      this.mouseSpeed = sample.v;
+      log.push(sample);
+      while (log.length && log[0].t < this.time - 5) log.shift();
+      // Time the cursor spends on any live target (tracking metric).
+      const m = this.mouseWorld();
+      if (this.enemies.some(e => Math.hypot(e.pos.x - m.x, e.pos.y - m.y) <= PLAYER_R * 1.15)) this.stats.onTarget += dt;
+      if (this.mouse.down) this.stats.firing += dt;
+    }
+
+    // Called on the first hit of a target: reconstruct the acquisition movement from the cursor log.
+    recordAcquisition(e) {
+      const t0 = Math.max(this.lastAcqT, e.spawnT);
+      const now = this.time;
+      const log = this.cursorLog.filter(c => c.t >= t0);
+      const rec = { t: now, spawnT: e.spawnT, acqT: t0, firstHit: now - t0, reaction: null, moveTime: null, gain: null, peaks: 0, sector: null, distPx: null, killed: false, expired: false };
+      this.targets.push(rec);
+      e.rec = rec;
+      if (log.length < 3) return rec;
+      const c0 = log[0];
+      const tp = this.worldToScreen(e.pos.x, e.pos.y);
+      const dx = tp.x - c0.x, dy = tp.y - c0.y;
+      const dist = Math.hypot(dx, dy);
+      rec.distPx = dist;
+      rec.sector = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
+      const thresh = this.h * 0.35; // px/s: movement onset
+      let onset = null, peak = 0, peaks = 0, rising = false, primaryEnd = null;
+      for (let i = 1; i < log.length; i++) {
+        const c = log[i];
+        if (onset === null && c.v > thresh) onset = c.t;
+        if (onset === null) continue;
+        if (c.v > peak) peak = c.v;
+        const prev = log[i - 1].v;
+        if (c.v > prev && c.v > thresh) rising = true;
+        else if (rising && c.v < prev) { peaks++; rising = false; }
+        if (primaryEnd === null && peaks >= 1 && c.v < peak * 0.15) primaryEnd = c;
+      }
+      if (onset !== null) {
+        rec.reaction = onset - t0;
+        rec.moveTime = now - onset;
+        rec.peaks = peaks;
+        const end = primaryEnd || log[log.length - 1];
+        if (dist > 40) {
+          const proj = ((end.x - c0.x) * dx + (end.y - c0.y) * dy) / dist;
+          rec.gain = proj / dist;
+        }
+      }
+      return rec;
+    }
+
+    worldToScreen(x, y) {
+      const p = this.player.pos;
+      return { x: this.w / 2 + (x - p.x) * this.ppu, y: this.h / 2 + (y - p.y) * this.ppu };
     }
 
     updatePlayer(dt) {
@@ -353,7 +479,7 @@ window.ST = window.ST || {};
           case 'static':
             break;
           case 'strafe': {
-            if (e.timer <= 0) { if (Math.random() < 0.8) e.dirSign = -e.dirSign; e.timer = rand(0.3, 1.1); }
+            if (e.timer <= 0) { if (Math.random() < 0.8) e.dirSign = -e.dirSign; e.timer = rand(0.3, 1.1) * this.strafeScale(); }
             vx = px * e.dirSign; vy = py * e.dirSign;
             if (d < this.s.minDist) { vx -= tx * 0.9; vy -= ty * 0.9; }
             if (d > this.s.maxDist) { vx += tx * 0.9; vy += ty * 0.9; }
@@ -361,7 +487,7 @@ window.ST = window.ST || {};
           }
           case 'juke': {
             if (e.timer <= 0) {
-              e.timer = rand(0.15, 0.55);
+              e.timer = rand(0.15, 0.55) * this.strafeScale();
               e.stopped = Math.random() < 0.15;
               // Bias toward lateral movement, like a player dodging.
               const lateral = (Math.random() < 0.5 ? -1 : 1);
@@ -371,6 +497,18 @@ window.ST = window.ST || {};
             if (!e.stopped) { vx = Math.cos(e.wander); vy = Math.sin(e.wander); }
             if (d < this.s.minDist) { vx -= tx * 1.2; vy -= ty * 1.2; }
             if (d > this.s.maxDist) { vx += tx * 1.2; vy += ty * 1.2; }
+            break;
+          }
+          case 'smooth': {
+            // Predictable sinusoidal strafe for precise tracking.
+            e.timer -= 0; // unused
+            const phase = (this.time - e.spawnT) * (1.2 / this.strafeScale());
+            const sgn = Math.cos(phase) >= 0 ? 1 : -1;
+            const mag = Math.abs(Math.cos(phase));
+            vx = px * sgn * mag; vy = py * sgn * mag;
+            const mid = (this.s.minDist + this.s.maxDist) / 2;
+            const k = clamp((mid - d) * 0.3, -0.5, 0.5);
+            vx -= tx * k; vy -= ty * k;
             break;
           }
           case 'orbit': {
@@ -425,8 +563,12 @@ window.ST = window.ST || {};
       // Remove expired (flick) targets and schedule replacements.
       for (let i = this.enemies.length - 1; i >= 0; i--) {
         if (this.enemies[i].expired) {
+          const e = this.enemies[i];
           this.enemies.splice(i, 1);
           this.stats.expired++;
+          this.targets.push({ t: this.time, spawnT: e.spawnT, acqT: Math.max(this.lastAcqT, e.spawnT), firstHit: null, reaction: null, moveTime: null, gain: null, peaks: 0, sector: null, distPx: null, killed: false, expired: true });
+          this.lastAcqT = this.time;
+          this.bumpDiff(-0.09);
           this.pushFeed('Target escaped', '#ffb080');
           this.respawns.push(this.s.respawnDelay);
         }
@@ -444,8 +586,9 @@ window.ST = window.ST || {};
           x: ox, y: oy, sx: ox, sy: oy, dx: Math.cos(a), dy: Math.sin(a),
           speed: def.speed, dmg: def.dmg, range: def.range, traveled: 0, owner, ammo: def.ammo,
         });
-        if (owner === 'player') this.stats.pellets++;
+        if (owner === 'player') { this.stats.pellets++; this.adaptWindow.pellets++; }
       }
+      if (owner === 'player' && moving) this.stats.movingShots++;
       this.particles.push({ x: ox, y: oy, vx: 0, vy: 0, life: 0.05, maxLife: 0.05, r: 0.6, color: 'rgba(255,230,150,0.9)' });
       if (owner === 'player' || Math.hypot(shooter.pos.x - this.player.pos.x, shooter.pos.y - this.player.pos.y) < 60) {
         ST.audio.shot(def);
@@ -492,8 +635,9 @@ window.ST = window.ST || {};
     damageEnemy(e, b, hx, hy) {
       const st = this.stats;
       st.hits++;
+      this.adaptWindow.hits++;
       const dmg = Math.min(b.dmg, e.hp);
-      st.dmgDealt += dmg;
+      st.dmgDealt += isFinite(dmg) ? dmg : b.dmg;
       e.hp -= b.dmg;
       e.hitFlash = 0.08;
       this.hitFlash = 0.12;
@@ -501,9 +645,13 @@ window.ST = window.ST || {};
       if (e.firstHitT === null) {
         e.firstHitT = this.time;
         st.reaction.push(this.time - e.spawnT);
+        this.recordAcquisition(e);
       }
       if (e.hp <= 0) {
         st.kills++;
+        if (e.rec) e.rec.killed = true;
+        this.lastAcqT = this.time;
+        this.bumpDiff(0.03);
         const ttk = this.time - e.spawnT;
         st.ttk.push(ttk);
         st.engage.push(this.time - e.firstHitT);
@@ -658,13 +806,27 @@ window.ST = window.ST || {};
         const bw = 2.6, bh = 0.32, bx = e.pos.x - bw / 2, by = e.pos.y - PLAYER_R - 0.9;
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.fillRect(bx - 0.06, by - 0.06, bw + 0.12, bh + 0.12);
-        const frac = clamp(e.hp / e.maxHp, 0, 1);
-        ctx.fillStyle = frac > 0.5 ? '#61d15b' : frac > 0.25 ? '#f2c94c' : '#e0473d';
+        const frac = isFinite(e.maxHp) ? clamp(e.hp / e.maxHp, 0, 1) : 1;
+        ctx.fillStyle = !isFinite(e.maxHp) ? '#9fb4ff' : frac > 0.5 ? '#61d15b' : frac > 0.25 ? '#f2c94c' : '#e0473d';
         ctx.fillRect(bx, by, bw * frac, bh);
+        // Lead marker: where a bullet fired now would meet the target. Fades out over the run.
+        if (this.s.leadHint) {
+          const a = this.leadAlpha();
+          if (a > 0) {
+            const lp = this.intercept(e);
+            if (lp) {
+              ctx.globalAlpha = a;
+              ctx.beginPath(); ctx.arc(lp.x, lp.y, 0.5, 0, TAU);
+              ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.12; ctx.stroke();
+              ctx.beginPath(); ctx.arc(lp.x, lp.y, 0.08, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill();
+              ctx.globalAlpha = 1;
+            }
+          }
+        }
         // Flick targets: shrinking timer ring.
         if (isFinite(e.ttl) && this.s.ttl > 0) {
           ctx.beginPath();
-          ctx.arc(e.pos.x, e.pos.y, PLAYER_R + 0.45, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(e.ttl / this.s.ttl, 0, 1));
+          ctx.arc(e.pos.x, e.pos.y, PLAYER_R + 0.45, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(e.ttl / e.ttlMax, 0, 1));
           ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 0.15; ctx.stroke();
         }
       }
@@ -697,6 +859,34 @@ window.ST = window.ST || {};
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(0, 0, W, H);
       }
+    }
+
+    leadAlpha() {
+      const dur = this.s.duration || 60;
+      const f = this.time / dur;
+      return f < 0.3 ? 0.9 : f < 0.7 ? 0.9 * (1 - (f - 0.3) / 0.4) : 0;
+    }
+
+    // Solve |e.pos + e.vel*t - muzzle| = speed*t for the earliest t > 0.
+    intercept(e) {
+      const p = this.player;
+      const def = p.gun.def;
+      const muzzle = PLAYER_R + def.barrel * 0.55;
+      const ox = p.pos.x + Math.cos(p.aim) * muzzle, oy = p.pos.y + Math.sin(p.aim) * muzzle;
+      const rx = e.pos.x - ox, ry = e.pos.y - oy;
+      const vx = e.vel.x, vy = e.vel.y, s = def.speed;
+      const a = vx * vx + vy * vy - s * s, b = 2 * (rx * vx + ry * vy), c = rx * rx + ry * ry;
+      let t;
+      if (Math.abs(a) < 1e-6) t = -c / b;
+      else {
+        const disc = b * b - 4 * a * c;
+        if (disc < 0) return null;
+        const r = Math.sqrt(disc);
+        const t1 = (-b - r) / (2 * a), t2 = (-b + r) / (2 * a);
+        t = Math.min(t1 > 0 ? t1 : Infinity, t2 > 0 ? t2 : Infinity);
+      }
+      if (!(t > 0) || !isFinite(t)) return null;
+      return { x: e.pos.x + vx * t, y: e.pos.y + vy * t };
     }
 
     drawCharacter(x, y, aim, def, skin, outline) {

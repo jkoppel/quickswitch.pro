@@ -8,11 +8,13 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="tip" class="tip"></div>
 
 <div id="hud" class="hidden">
   <div id="hud-top">
     <div id="hud-timer">1:00</div>
     <div id="hud-score"><span id="hud-kills">0</span> kills &middot; <span id="hud-acc">0%</span> acc<span id="hud-deaths"></span></div>
+    <div id="hud-step"></div>
   </div>
   <div id="hud-bottom">
     <div id="hud-health"><div id="hud-health-fill"></div><div id="hud-health-text">100</div></div>
@@ -22,47 +24,68 @@
       <div id="hud-reload"><div id="hud-reload-fill"></div></div>
     </div>
   </div>
+  <div id="hud-diff"></div>
   <div id="hud-hint">WASD move &middot; LMB shoot &middot; R reload &middot; Esc pause</div>
 </div>
 
 <div id="menu" class="screen">
   <div class="panel wide">
-    <h1>SURVIV AIM TRAINER</h1>
-    <p class="sub">Top-down drills with surviv.io / survev.io bullet speeds, spread and reload times.</p>
+    <div class="titlebar">
+      <div>
+        <h1>SURVIV AIM TRAINER</h1>
+        <p class="sub">Top-down drills with surviv.io / survev.io bullet speeds, spread and reload times.</p>
+      </div>
+      <div class="session">
+        <div id="session-today">Today: 0 min</div>
+        <button id="btn-fullscreen" class="secondary small">Fullscreen</button>
+      </div>
+    </div>
     <div class="cols">
       <div class="col modes">
-        <h2>Drill</h2>
-        <div id="mode-list"></div>
+        <h2>Routines</h2>
+        <div id="routine-list" class="list"></div>
+        <h2 class="mt">Drills</h2>
+        <div id="mode-list" class="list"></div>
       </div>
       <div class="col settings">
         <h2 id="mode-title">Tracking</h2>
         <p id="mode-desc" class="desc"></p>
-        <p id="mode-tip" class="tip"></p>
-        <div class="grid">
-          <label>Weapon <select id="f-weapon"></select></label>
-          <label>Scope <select id="f-scope"></select></label>
-          <label>Duration (s) <input id="f-duration" type="number" min="10" max="600" step="5"></label>
-          <label>Enemies <input id="f-enemies" type="number" min="1" max="8"></label>
-          <label>Movement <select id="f-behavior"></select></label>
-          <label>Enemy HP <input id="f-hp" type="number" min="1" max="1000"></label>
-          <label>Spawn min dist <input id="f-mind" type="number" min="2" max="150"></label>
-          <label>Spawn max dist <input id="f-maxd" type="number" min="3" max="150"></label>
-          <label>Target lifetime (s, 0 = forever) <input id="f-ttl" type="number" min="0" max="10" step="0.1"></label>
-          <label>Enemy aim <select id="f-aim"></select></label>
-          <label class="check"><input id="f-shoots" type="checkbox"> Enemies shoot back</label>
-          <label class="check"><input id="f-obstacles" type="checkbox"> Rocks</label>
-          <label class="check"><input id="f-sound" type="checkbox"> Sound</label>
-          <label class="check"><input id="f-hitmarker" type="checkbox"> Hit marker</label>
+        <p id="mode-tip" class="tip-text"></p>
+        <div id="routine-steps" class="steps hidden"></div>
+        <div id="drill-form">
+          <div class="grid">
+            <label>Weapon <select id="f-weapon"></select></label>
+            <label>Scope <select id="f-scope"></select></label>
+            <label>Duration (s) <input id="f-duration" type="number" min="10" max="600" step="5"></label>
+            <label>Enemies <input id="f-enemies" type="number" min="1" max="8"></label>
+            <label>Movement <select id="f-behavior"></select></label>
+            <label>Enemy HP <input id="f-hp" type="number" min="1" max="1000"></label>
+            <label>Spawn min dist <input id="f-mind" type="number" min="2" max="150"></label>
+            <label>Spawn max dist <input id="f-maxd" type="number" min="3" max="150"></label>
+            <label>Target lifetime (s, 0 = forever) <input id="f-ttl" type="number" min="0" max="10" step="0.1"></label>
+            <label>Enemy aim <select id="f-aim"></select></label>
+            <label class="check"><input id="f-shoots" type="checkbox"> Enemies shoot back</label>
+            <label class="check"><input id="f-invincible" type="checkbox"> Invincible bots (pure tracking)</label>
+            <label class="check"><input id="f-adaptive" type="checkbox"> Adaptive difficulty</label>
+            <label class="check"><input id="f-lead" type="checkbox"> Lead marker (fades out)</label>
+            <label class="check"><input id="f-obstacles" type="checkbox"> Rocks</label>
+            <label class="check"><input id="f-sound" type="checkbox"> Sound</label>
+            <label class="check"><input id="f-hitmarker" type="checkbox"> Hit marker</label>
+          </div>
+          <div id="weapon-info" class="weapon-info"></div>
         </div>
-        <div id="weapon-info" class="weapon-info"></div>
+        <div class="chart-block">
+          <div class="chart-head"><span id="trend-title">Score over runs</span><span class="legend">● counted &nbsp;○ warm-up</span></div>
+          <canvas id="trend" class="chart"></canvas>
+        </div>
         <div id="best" class="best"></div>
         <div class="row">
-          <button id="btn-reset" class="secondary">Reset drill defaults</button>
+          <button id="btn-reset" class="secondary">Reset defaults</button>
           <button id="btn-start" class="primary">Start</button>
         </div>
       </div>
     </div>
-    <p class="foot">Player radius = 1 unit, run speed 12 units/s. Bullets have travel time, so lead moving targets.</p>
+    <p class="foot">Score = 100 × hits per second × √accuracy. Hit rate plateaus in days; speed keeps improving for months, so the score follows speed at acceptable accuracy. First two runs each day are warm-up and don't count toward bests. Rationale in <code>docs/RESEARCH.md</code>.</p>
   </div>
 </div>
 
@@ -70,17 +93,42 @@
   <div class="panel">
     <h1>PAUSED</h1>
     <div class="row">
-      <button id="btn-quit" class="secondary">End drill</button>
+      <button id="btn-quit" class="secondary">End</button>
       <button id="btn-resume" class="primary">Resume</button>
     </div>
   </div>
 </div>
 
-<div id="results" class="screen hidden">
+<div id="rest" class="screen hidden">
   <div class="panel">
+    <h1>REST</h1>
+    <p id="rest-last" class="sub"></p>
+    <p class="big"><span id="rest-count">20</span>s</p>
+    <p id="rest-next" class="desc"></p>
+    <div class="row">
+      <button id="btn-rest-quit" class="secondary">End routine</button>
+      <button id="btn-rest-skip" class="primary">Go now</button>
+    </div>
+  </div>
+</div>
+
+<div id="results" class="screen hidden">
+  <div class="panel wide">
     <h1>RESULTS</h1>
     <p id="results-sub" class="sub"></p>
-    <table id="results-table"></table>
+    <div class="cols">
+      <div class="col">
+        <table id="results-table"></table>
+        <div id="strategy" class="insight hidden"></div>
+      </div>
+      <div class="col narrow">
+        <h2>Insights</h2>
+        <div id="insights"></div>
+        <h2 class="mt">Time to first hit by flick direction</h2>
+        <canvas id="rose" class="rose"></canvas>
+        <p class="legend">Brighter = slower. Hover for detail.</p>
+      </div>
+    </div>
     <div class="row">
       <button id="btn-menu" class="secondary">Menu</button>
       <button id="btn-again" class="primary">Run again</button>
@@ -90,6 +138,10 @@
 
 <script src="js/weapons.js"></script>
 <script src="js/modes.js"></script>
+<script src="js/benchmark.js"></script>
+<script src="js/history.js"></script>
+<script src="js/insights.js"></script>
+<script src="js/charts.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/game.js"></script>
 <script src="js/main.js"></script>

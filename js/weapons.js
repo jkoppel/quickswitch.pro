@@ -42,6 +42,7 @@ ST.BEHAVIORS = {
   static: { name: 'Stationary',   desc: 'Does not move.' },
   strafe: { name: 'Strafe',       desc: 'Runs side to side, flipping direction unpredictably.' },
   juke:   { name: 'Juke',         desc: 'Random direction changes and stops, like a real player dodging.' },
+  smooth: { name: 'Smooth strafe', desc: 'Predictable side-to-side sweep. Precise tracking.' },
   orbit:  { name: 'Orbit',        desc: 'Circles you at a constant distance.' },
   rush:   { name: 'Rush',         desc: 'Charges you and dances at point-blank range.' },
 };

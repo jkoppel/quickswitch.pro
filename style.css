@@ -69,3 +69,36 @@ button.secondary:hover { background: #38422f; }
   .col.modes { flex: none; }
   .grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- v2 additions ---------- */
+.titlebar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.session { text-align: right; font-size: 13px; color: #9fb48c; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.session.over { color: #ffb347; }
+button.small { padding: 6px 12px; font-size: 13px; }
+.list { display: flex; flex-direction: column; gap: 6px; }
+h2.mt, .mt { margin-top: 16px; }
+.tip-text { margin: 0 0 14px; font-size: 13px; color: #b7d3a0; }
+.tip-text:empty { display: none; }
+.steps { margin: 0 0 12px; font-size: 13px; }
+.steps ol { margin: 6px 0 0; padding-left: 20px; }
+.steps li { margin: 2px 0; }
+.steps li span { color: #9fb48c; }
+.chart-block { margin-top: 14px; }
+.chart-head { display: flex; justify-content: space-between; font-size: 12px; color: #9fb48c; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+.legend { font-size: 11px; color: rgba(255,255,255,.5); text-transform: none; letter-spacing: 0; }
+canvas.chart { width: 100%; height: 130px; display: block; background: #1c2118; border: 1px solid #3c4634; border-radius: 6px; }
+canvas.rose { width: 100%; max-width: 240px; height: 200px; display: block; margin: 0 auto; }
+.tip { position: fixed; display: none; pointer-events: none; background: #0f130d; border: 1px solid #3c4634; color: #eee; padding: 6px 9px; border-radius: 5px; font-size: 12px; line-height: 1.4; z-index: 50; white-space: nowrap; }
+.tip b { color: #ffd35c; }
+.col.narrow { flex: 0 0 260px; }
+.insight { margin-top: 12px; padding: 10px 12px; background: #1c2118; border-left: 3px solid #ffd35c; border-radius: 4px; font-size: 14px; line-height: 1.45; }
+.insight + .insight { margin-top: 8px; }
+.insight.ok { border-left-color: #61d15b; }
+.insight.muted { border-left-color: #3c4634; color: rgba(255,255,255,.6); }
+.big { font-size: 56px; font-weight: 900; margin: 6px 0; color: #ffd35c; text-align: center; }
+#hud-step { font-size: 13px; opacity: .75; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+#hud-diff { position: absolute; bottom: 8px; left: 12px; font-size: 12px; opacity: .6; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+.tier { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; background: #3c4634; color: #eee; }
+.tier.Bronze { background: #7a4d2b; } .tier.Silver { background: #8b8f96; color: #111; } .tier.Gold { background: #d4a72c; color: #111; }
+.tier.Platinum { background: #7fd1c9; color: #111; } .tier.Diamond { background: #7fa9ff; color: #111; } .tier.Master { background: #ff6b6b; color: #111; }
+#results-table td.delta-up { color: #9cff9c; } #results-table td.delta-down { color: #ffb080; }
