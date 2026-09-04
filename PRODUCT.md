@@ -66,8 +66,9 @@ confirmed this as the claim future work should protect.
   movement time, overshoot gain, submovements, direction rose), moving vs
   standing accuracy, damage taken while still, adaptive difficulty reached,
   per-scenario trend chart, personal bests, provisional benchmark tiers.
-- Weapon values approximate survev gun definitions and should stay tied to
-  them; player radius 1 unit, run speed 12 units/s.
+- Weapon values are survev's gun definitions verbatim (`vendor/survev/defs`) and
+  should be refreshed from upstream rather than edited; player radius 1 unit, run
+  speed 12 units/s.
 - Terminology follows the games: scopes 1x/2x/4x/8x/15x, weapon names as in
   survev, "units" for world distance.
 - Must remain a static site with no build step (confirmed).
@@ -89,8 +90,8 @@ player circles, weapon tracers) for fidelity, not as a binding brand.
 - `docs/RESEARCH.md`: literature review and critique with sources (Listman et
   al. 2021, KovaaK's reliability pilot, Aimlabs kinematics study, Sala & Gobet
   2018, contextual-interference meta-analysis, and others).
-- `demo/surviv-trainer-demo.mp4` and `demo/moving-drills-demo.mp4`: recordings
-  of a simulated user (`demo/bot.mjs`) running the Benchmark and drills.
+- `demo/surviv-trainer-demo.mp4`: one recording of a simulated user (`demo/bot.mjs`)
+  running the Benchmark, Flick, Sniper Leads, Chase and Dodge drills.
 - No real player data, testimonials, or transfer-to-game results exist. Do not
   fabricate improvement claims, user counts, or comparisons.
 
