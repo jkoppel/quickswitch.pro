@@ -225,6 +225,8 @@ window.ST = window.ST || {};
       this.running = false;
       if (this.raf) cancelAnimationFrame(this.raf);
       this.unbindInput();
+      this.feed = [];
+      this.render();
       if (this.hooks.onFinish) this.hooks.onFinish(this.results());
     }
 

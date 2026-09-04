@@ -5,12 +5,14 @@
   const screens = { menu: $('menu'), pause: $('pause'), rest: $('rest'), results: $('results') };
   const hud = $('hud');
   const tip = $('tip');
+  const WARMUP_COPY = 'Your first ~40 s of practice each day is warm-up and doesn’t count toward bests.';
 
   let selection = { kind: 'mode', item: ST.MODES[0] };
   let game = null;
   let seq = null;          // active sequence: { steps, index, results, routine }
   let lastSeqSpec = null;  // for "Run again"
   let restTimer = null;
+  let current = 'menu';    // which screen is showing
 
   // ---------- persistence ----------
   const LS = {
@@ -34,7 +36,22 @@
       select.appendChild(o);
     }
   }
-  fill(fields.weapon, Object.entries(ST.WEAPONS).map(([k, w]) => [k, `${w.name} (${ST.AMMO[w.ammo].label})`]));
+  // Weapons grouped by class so the 14-item list scans.
+  const WEAPON_CLASS = [
+    ['Pistols', ['m9']], ['SMGs', ['mp5', 'vector']], ['Assault rifles', ['ak47', 'm4a1', 'scar']], ['LMG', ['dp28']],
+    ['DMRs', ['mk12', 'm39']], ['Shotguns', ['m870', 'spas12']], ['Snipers', ['mosin', 'sv98', 'awm']],
+  ];
+  (function fillWeapons() {
+    const sel = fields.weapon;
+    sel.innerHTML = '';
+    const seen = new Set();
+    for (const [group, ids] of WEAPON_CLASS) {
+      const og = document.createElement('optgroup'); og.label = group;
+      for (const id of ids) { const w = ST.WEAPONS[id]; if (!w) continue; seen.add(id); const o = document.createElement('option'); o.value = id; o.textContent = `${w.name} (${ST.AMMO[w.ammo].label})`; og.appendChild(o); }
+      sel.appendChild(og);
+    }
+    for (const [id, w] of Object.entries(ST.WEAPONS)) if (!seen.has(id)) { const o = document.createElement('option'); o.value = id; o.textContent = w.name; sel.appendChild(o); }
+  })();
   fill(fields.scope, Object.keys(ST.SCOPES).map(k => [k, k]));
   fill(fields.behavior, Object.entries(ST.BEHAVIORS).map(([k, b]) => [k, b.name]));
   fill(fields.enemyAim, Object.entries(ST.AIM_SKILL).map(([k, a]) => [k, a.name]));
@@ -65,7 +82,9 @@
       else el.value = s[k];
     }
     updateWeaponInfo();
+    updateBehaviorHint();
     updateBestAndTrend();
+    validateForm();
   }
   function prefs() { return LS.get('st.prefs', {}); }
   function modeDefaults(mode) {
@@ -82,28 +101,47 @@
       `<span>Damage <b>${w.dmg}${pellets}</b></span>`,
       `<span>Fire rate <b>${rpm} rpm</b></span>`,
       `<span>Bullet speed <b>${w.speed} u/s</b></span>`,
-      `<span>Range <b>${w.range}</b></span>`,
-      `<span>Spread <b>${w.spread}° / ${w.moveSpread}° moving</b></span>`,
+      `<span>Range <b>${w.range} units</b></span>`,
+      `<span>Spread <b>${w.spread}° still / ${w.moveSpread}° moving</b></span>`,
       `<span>Mag <b>${w.mag}</b></span>`,
       `<span>Reload <b>${w.reload}s${w.reloadPerShell ? ' per shell' : ''}</b></span>`,
     ].join('');
+  }
+  function updateBehaviorHint() {
+    const b = ST.BEHAVIORS[fields.behavior.value];
+    $('behavior-hint').textContent = b ? b.desc : '';
+  }
+  // Inline validation instead of silent rewriting.
+  function validateForm() {
+    const note = $('form-note');
+    const min = Number(fields.minDist.value), max = Number(fields.maxDist.value);
+    if (max <= min) { note.textContent = `Max spawn distance (${max}) must be greater than min (${min}); it will run as ${min + 1}.`; return; }
+    if (Number(fields.duration.value) < 10) { note.textContent = 'Duration is at least 10 s.'; return; }
+    note.textContent = '';
   }
 
   function currentKey() {
     if (selection.kind === 'routine') return `routine:${selection.item.id}`;
     return drillKey(readSettings());
   }
+  function relDay(day) {
+    const today = ST.history.today();
+    if (day === today) return 'today';
+    const d = Math.round((new Date(today) - new Date(day)) / 86400000);
+    return d === 1 ? 'yesterday' : `${d} days ago`;
+  }
   function updateBestAndTrend() {
     const key = currentKey();
     const runs = ST.history.forKey(key).slice(-40);
-    ST.charts.trend($('trend'), runs, tip);
-    $('trend-title').textContent = selection.kind === 'routine' ? `${selection.item.name} score over runs` : 'Score over runs (this drill + weapon)';
+    const summary = ST.charts.trend($('trend'), runs, tip);
+    $('trend-text').textContent = summary;
+    $('trend-title').textContent = selection.kind === 'routine' ? `${selection.item.name} score over runs` : 'Score over runs, this drill and weapon';
     const b = ST.history.best(key, 'score');
     const el = $('best');
-    if (!b) { el.textContent = runs.length ? 'Only warm-up runs so far. Bests count after the first 40 seconds of practice each day.' : 'No previous runs.'; return; }
-    const parts = [`Best: ${Math.round(b.score)} score`, `${b.hitsPerSec.toFixed(2)} hits/s`, `${(b.accuracy * 100).toFixed(0)}% accuracy`];
-    if (selection.kind === 'routine' && selection.item.id === 'benchmark') parts.push(`avg tier ${tierFromFrac(b.score / 100).name}`);
-    parts.push(`on ${b.day}`);
+    if (!b) { el.textContent = runs.length ? `Only warm-up runs so far. ${WARMUP_COPY}` : 'No previous runs.'; return; }
+    const parts = [`Best ${Math.round(b.score)}`, `${b.hitsPerSec.toFixed(2)} hits/s`, `${(b.accuracy * 100).toFixed(0)}% accuracy`];
+    if (selection.kind === 'routine' && selection.item.id === 'benchmark') parts.push(`average tier ${tierFromFrac(b.score / 100).name}`);
+    parts.push(relDay(b.day));
     el.textContent = parts.join(' · ');
   }
   function tierFromFrac(f) {
@@ -112,12 +150,14 @@
     return t;
   }
 
-  for (const el of Object.values(fields)) el.addEventListener('change', () => { updateWeaponInfo(); updateBestAndTrend(); });
+  for (const el of Object.values(fields)) el.addEventListener('change', () => { updateWeaponInfo(); updateBehaviorHint(); updateBestAndTrend(); validateForm(); });
+  for (const el of [fields.minDist, fields.maxDist, fields.duration]) el.addEventListener('input', validateForm);
 
   // ---------- lists ----------
   function makeButton(container, title, sub, onClick) {
     const b = document.createElement('button');
     b.className = 'mode-btn';
+    b.type = 'button';
     b.innerHTML = `${title}<small>${sub}</small>`;
     b.addEventListener('click', onClick);
     container.appendChild(b);
@@ -131,7 +171,7 @@
   }
 
   function stepSpec(step) {
-    // Resolve a routine step into { label, key, settings, scenario?, mode?, scored }.
+    // Resolve a routine step into { label, key, settings, scenario?, mode?, scored, tip }.
     if (typeof step === 'string') step = { scenario: step };
     const p = prefs();
     const base = { ...ST.DEFAULT_SETTINGS, sound: p.sound ?? true, hitmarker: p.hitmarker ?? true };
@@ -140,17 +180,17 @@
       const settings = normalize({ ...base, ...sc.settings, ...(step.settings || {}), mode: step.scenario, label: sc.name });
       const scored = sc.scored !== false;
       const custom = !!step.settings;
-      return { label: sc.name, key: custom ? `${step.scenario}:${settings.weapon}:${settings.duration}` : step.scenario, settings, scenario: step.scenario, scored, benchmark: !custom };
+      return { label: sc.name, key: custom ? `${step.scenario}:${settings.weapon}:${settings.duration}` : step.scenario, settings, scenario: step.scenario, scored, benchmark: !custom, tip: sc.tip || '' };
     }
     const m = ST.MODES.find(x => x.id === step.mode);
     const settings = normalize({ ...base, ...m.settings, ...(step.settings || {}), mode: m.id, label: m.name });
-    return { label: m.name, key: drillKey(settings), settings, mode: m.id, scored: true };
+    return { label: m.name, key: drillKey(settings), settings, mode: m.id, scored: true, tip: m.tip || '' };
   }
 
   function select(kind, item) {
     selection = { kind, item };
-    for (const x of ST.ROUTINES) x._btn.classList.toggle('active', x === item);
-    for (const x of ST.MODES) x._btn.classList.toggle('active', x === item);
+    for (const x of ST.ROUTINES) { x._btn.classList.toggle('active', x === item); x._btn.setAttribute('aria-current', x === item ? 'true' : 'false'); }
+    for (const x of ST.MODES) { x._btn.classList.toggle('active', x === item); x._btn.setAttribute('aria-current', x === item ? 'true' : 'false'); }
     $('mode-title').textContent = item.name;
     $('mode-desc').textContent = item.desc;
     $('mode-tip').textContent = item.tip || '';
@@ -158,9 +198,10 @@
     $('drill-form').classList.toggle('hidden', isRoutine);
     $('routine-steps').classList.toggle('hidden', !isRoutine);
     $('btn-reset').classList.toggle('hidden', isRoutine);
+    $('form-note').textContent = '';
     if (isRoutine) {
       const steps = item.steps.map(stepSpec);
-      $('routine-steps').innerHTML = `<b>${item.shuffle ? 'Shuffled order' : 'Fixed order'}, ${item.rest}s rest between steps.</b><ol>` +
+      $('routine-steps').innerHTML = `<b>${item.shuffle ? 'Shuffled order' : 'Fixed order'}, ${item.rest} s rest between steps.</b><ol>` +
         steps.map(st => {
           const w = ST.WEAPONS[st.settings.weapon];
           const b = st.scored ? ST.history.best(st.key, 'score') : null;
@@ -170,6 +211,8 @@
     } else {
       const saved = LS.get('st.lastSettings.' + item.id, null);
       writeSettings(saved || modeDefaults(item));
+      // Custom is the one drill whose point is the full parameter set.
+      $('advanced').open = item.id === 'custom';
     }
     LS.set('st.lastSelection', { kind, id: item.id });
   }
@@ -177,19 +220,36 @@
 
   // ---------- screens ----------
   function show(name) {
+    current = name;
     for (const [k, el] of Object.entries(screens)) el.classList.toggle('hidden', k !== name);
-    hud.classList.toggle('hidden', name === 'menu' || name === 'results' || name === 'rest');
+    const inRun = name === null;
+    hud.classList.toggle('hidden', !inRun && name !== 'pause');
+    hud.setAttribute('aria-hidden', inRun ? 'false' : 'true');
     if (name === 'menu') updateSession();
+    if (name === 'pause') { disarmQuit(); $('btn-resume').focus(); }
+    if (name === 'rest') $('btn-rest-skip').focus();
+    if (name === 'results') $('btn-menu').focus();
   }
   function updateSession() {
     const min = ST.history.minutesToday();
     const n = ST.history.runsToday().length;
     const el = $('session-today');
-    el.textContent = `Today: ${Math.round(min)} min · ${n} run${n === 1 ? '' : 's'}${min > 45 ? ' · diminishing returns, consider stopping' : ''}`;
+    el.textContent = `Today: ${Math.round(min)} min · ${n} run${n === 1 ? '' : 's'}${min > 45 ? ' · past 45 min, returns are diminishing' : ''}`;
     el.parentElement.classList.toggle('over', min > 45);
   }
   $('btn-fullscreen').addEventListener('click', () => {
-    if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {});
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => { $('form-note').textContent = 'Fullscreen was blocked by the browser. Press F11 instead.'; });
+  });
+  document.addEventListener('fullscreenchange', () => { $('btn-fullscreen').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen'; });
+
+  // Clear history: two clicks, no modal.
+  let clearArmed = null;
+  $('btn-clear').addEventListener('click', () => {
+    const b = $('btn-clear');
+    if (clearArmed) { clearTimeout(clearArmed); clearArmed = null; ST.history.clear(); b.textContent = 'History cleared'; select(selection.kind, selection.item); updateSession(); setTimeout(() => { b.textContent = 'Clear history'; }, 2000); return; }
+    b.textContent = 'Click again to clear all runs';
+    clearArmed = setTimeout(() => { clearArmed = null; b.textContent = 'Clear history'; }, 4000);
   });
 
   // ---------- sequence runner ----------
@@ -224,7 +284,7 @@
   }
 
   function onStepFinish(step, r) {
-    const entry = { step, result: r, scenario: step.scenario, key: step.key };
+    const entry = { step, result: r, scenario: step.scenario, key: step.key, recorded: false };
     if (r.time >= step.settings.duration * 0.5) {
       const w = ST.WEAPONS[step.settings.weapon];
       if (step.scored) entry.prevBest = ST.history.best(step.key, 'score');
@@ -233,6 +293,7 @@
         score: step.scored ? r.score : null, hitsPerSec: r.hitsPerSec, accuracy: r.accuracy, kills: r.kills, avgTtk: r.avgTtk,
         difficulty: step.settings.adaptive ? r.difficulty : null, warmup: step.warmup, benchmark: !!step.benchmark,
       });
+      entry.recorded = true;
     }
     seq.results.push(entry);
     if (seq.aborted || seq.index >= seq.steps.length - 1) { finishSequence(); return; }
@@ -243,11 +304,13 @@
   function showRest(entry) {
     const next = seq.steps[seq.index];
     const r = entry.result;
-    $('rest-last').textContent = entry.step.scored
-      ? `${entry.step.label}: ${Math.round(r.score)} score · ${r.hitsPerSec.toFixed(2)} hits/s · ${Math.round(r.accuracy * 100)}% acc${entry.step.warmup ? ' (warm-up, not counted)' : ''}`
+    $('rest-step').textContent = `Step ${seq.index} of ${seq.steps.length} done`;
+    $('rest-last').innerHTML = entry.step.scored
+      ? `${entry.step.label}: <b>${Math.round(r.score)}</b> score · ${r.hitsPerSec.toFixed(2)} hits/s · ${Math.round(r.accuracy * 100)}% accuracy${entry.step.warmup ? ' · warm-up, not counted' : ''}`
       : `${entry.step.label} done.`;
     const w = ST.WEAPONS[next.settings.weapon];
     $('rest-next').textContent = `Next: ${next.label} · ${w.name} · ${next.settings.scope} · ${next.settings.duration}s`;
+    $('rest-tip').textContent = next.tip || '';
     let n = (seq.routine && seq.routine.rest) || 15;
     $('rest-count').textContent = n;
     show('rest');
@@ -264,7 +327,6 @@
     if (game) { game.stop(); game = null; }
     const scored = seq.results.filter(e => e.step.scored);
     if (seq.routine && scored.length) {
-      // Routine summary in history: average tier fraction (benchmark) or average score ratio to best.
       const fracs = scored.map(e => e.scenario && ST.SCENARIOS[e.scenario].ref ? e.result.score / ST.SCENARIOS[e.scenario].ref : null).filter(x => x !== null);
       if (fracs.length) {
         const avg = fracs.reduce((a, b) => a + b, 0) / fracs.length;
@@ -278,23 +340,55 @@
     showResults();
   }
 
-  $('btn-start').addEventListener('click', () => {
+  function startFromMenu() {
     if (selection.kind === 'routine') {
       startSequence({ routine: selection.item, steps: selection.item.steps.map(stepSpec) });
     } else {
       const s = readSettings();
       LS.set('st.lastSettings.' + s.mode, s);
-      startSequence({ steps: [{ label: selection.item.name, key: drillKey(s), settings: { ...s, label: selection.item.name }, mode: s.mode, scored: true }] });
+      startSequence({ steps: [{ label: selection.item.name, key: drillKey(s), settings: { ...s, label: selection.item.name }, mode: s.mode, scored: true, tip: selection.item.tip || '' }] });
     }
-  });
+  }
+  $('btn-start').addEventListener('click', startFromMenu);
   $('btn-resume').addEventListener('click', () => game && game.togglePause());
-  $('btn-quit').addEventListener('click', () => { if (game) { seq.aborted = true; game.paused = false; game.finish(); } });
+
+  // Ending a multi-step routine from pause takes two clicks; a single drill ends at once.
+  let quitArmed = null;
+  function disarmQuit() {
+    clearTimeout(quitArmed); quitArmed = null;
+    const b = $('btn-quit');
+    b.classList.remove('armed');
+    b.textContent = seq && seq.steps.length > 1 ? 'End routine' : 'End drill';
+    $('pause-sub').textContent = seq && seq.steps.length > 1 ? `Step ${seq.index + 1} of ${seq.steps.length}. Esc or Resume to continue.` : 'Esc or Resume to continue.';
+  }
+  $('btn-quit').addEventListener('click', () => {
+    if (!game) return;
+    const multi = seq && seq.steps.length > 1;
+    if (multi && !quitArmed) {
+      const b = $('btn-quit');
+      b.classList.add('armed'); b.textContent = 'Click again to end';
+      quitArmed = setTimeout(disarmQuit, 3000);
+      return;
+    }
+    seq.aborted = true; game.paused = false; game.finish();
+  });
   $('btn-menu').addEventListener('click', () => { show('menu'); select(selection.kind, selection.item); });
   $('btn-again').addEventListener('click', () => lastSeqSpec && startSequence(lastSeqSpec));
 
+  // Keyboard accelerators on screens (the game binds its own keys while running).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const t = e.target;
+    const isListItem = t && t.classList && t.classList.contains('mode-btn');
+    if (t && !isListItem && (t.tagName === 'SELECT' || t.tagName === 'BUTTON' || t.tagName === 'A' || t.tagName === 'SUMMARY')) return;
+    if (current === 'menu') { e.preventDefault(); startFromMenu(); }
+    else if (current === 'rest') { e.preventDefault(); clearInterval(restTimer); runStep(); }
+    else if (current === 'results') { e.preventDefault(); $('btn-menu').click(); }
+  });
+
   // ---------- HUD ----------
   const hudEls = {
-    timer: $('hud-timer'), kills: $('hud-kills'), acc: $('hud-acc'), deaths: $('hud-deaths'), step: $('hud-step'),
+    timer: $('hud-timer'), kills: $('hud-kills'), deaths: $('hud-deaths'), step: $('hud-step'),
     health: $('hud-health-fill'), healthText: $('hud-health-text'), weapon: $('hud-weapon'), mag: $('hud-mag'),
     reload: $('hud-reload'), reloadFill: $('hud-reload-fill'), diff: $('hud-diff'),
   };
@@ -304,21 +398,20 @@
     const m = Math.floor(remaining / 60);
     const s = Math.ceil(remaining - m * 60);
     hudEls.timer.textContent = `${m}:${String(s === 60 ? 59 : s).padStart(2, '0')}`;
-    const key = `${h.kills}|${h.hits}|${h.deaths}|${h.accuracy.toFixed(3)}|${h.hp}|${h.ammo}|${h.reloading}|${h.difficulty === null ? '' : h.difficulty.toFixed(2)}`;
+    const key = `${h.kills}|${h.deaths}|${h.hp}|${h.ammo}|${h.reloading}|${h.difficulty === null ? '' : h.difficulty.toFixed(2)}`;
     if (key !== lastHud) {
       lastHud = key;
       hudEls.kills.textContent = h.kills;
-      hudEls.acc.textContent = (h.accuracy * 100).toFixed(0) + '%';
-      hudEls.deaths.textContent = h.deaths ? ` · ${h.deaths} deaths` : '';
-      hudEls.step.textContent = h.label ? `${h.label}${seq && seq.steps.length > 1 ? ` (${seq.index + 1}/${seq.steps.length})` : ''}` : '';
-      hudEls.health.style.width = (100 * h.hp / h.maxHp) + '%';
+      hudEls.deaths.textContent = h.deaths ? ` · ${h.deaths} ${h.deaths === 1 ? 'death' : 'deaths'}` : '';
+      hudEls.step.textContent = h.label ? `${h.label}${seq && seq.steps.length > 1 ? ` · step ${seq.index + 1} of ${seq.steps.length}` : ''}` : '';
+      hudEls.health.style.transform = `scaleX(${Math.max(0, h.hp / h.maxHp)})`;
       hudEls.health.style.background = h.hp > 50 ? '#fff' : h.hp > 25 ? '#ffd35c' : '#ff5b5b';
       hudEls.healthText.textContent = Math.ceil(h.hp);
       hudEls.weapon.textContent = h.weapon;
       hudEls.mag.textContent = h.ammo;
       hudEls.mag.classList.toggle('empty', h.ammo === 0);
       hudEls.reload.style.visibility = h.reloading ? 'visible' : 'hidden';
-      hudEls.diff.textContent = h.difficulty === null ? '' : `difficulty ${Math.round(h.difficulty * 100)}`;
+      hudEls.diff.textContent = h.difficulty === null ? '' : `adaptive difficulty ${Math.round(h.difficulty * 100)} / 100`;
     }
     hudEls.reloadFill.style.width = (h.reloadFrac * 100) + '%';
   }
@@ -330,87 +423,131 @@
     num: (v) => v === null || v === undefined ? '—' : (Math.round(v * 10) / 10).toString(),
     int: (v) => String(v),
   };
-  const tierHtml = (t) => t ? `<span class="tier ${t.name}">${t.name}</span>` : '';
+  const tierHtml = (t) => t ? `<span class="tier ${t.name}" title="Provisional tier: ${Math.round(t.frac * 100)}% of the reference score">${t.name}</span>` : '';
+  const TIER_TITLE = 'Provisional: tiers are fractions of a hand-set reference score until real player data exists.';
+
+  function heroBlock(r, prevBest, warmup, unit) {
+    let delta = '';
+    if (prevBest && !warmup) {
+      const d = r.score - prevBest.score;
+      delta = d >= 0.5 ? `<span class="delta up">▲ +${Math.round(d)} vs best</span>` : d <= -0.5 ? `<span class="delta down">▼ ${Math.round(d)} vs best</span>` : `<span class="delta flat">matches best</span>`;
+    } else if (!warmup) delta = '<span class="delta flat">first counted run</span>';
+    $('hero').innerHTML = `<span class="num ${warmup ? 'muted' : ''}">${Math.round(r.score)}</span><span class="unit">${unit}</span>${delta}`;
+    $('substats').innerHTML = `<div><b>${r.hitsPerSec.toFixed(2)}</b> hits/s</div><div><b>${Math.round(r.accuracy * 100)}%</b> accuracy <small>(${r.hits}/${r.pellets})</small></div><div><b>${r.kills}</b> kills</div>`;
+  }
 
   function showResults() {
     const entries = seq.results;
     const table = $('results-table');
     const insightsEl = $('insights');
     const strategyEl = $('strategy');
+    const warm = $('warmup-note');
     strategyEl.classList.add('hidden');
+    warm.classList.add('hidden');
     insightsEl.innerHTML = '';
+    $('results-note').textContent = '';
     const multi = entries.length > 1;
+    let roseSectors = [];
 
     if (multi) {
       const scored = entries.filter(e => e.step.scored);
+      const fracs = scored.map(e => e.scenario && e.step.benchmark && ST.SCENARIOS[e.scenario].ref ? e.result.score / ST.SCENARIOS[e.scenario].ref : null).filter(x => x !== null);
+      const avgFrac = fracs.length ? fracs.reduce((a, b) => a + b, 0) / fracs.length : null;
+      const avgTier = avgFrac !== null ? tierFromFrac(avgFrac) : null;
+      // Hero: overall tier for a benchmark, otherwise the number of counted steps.
+      if (avgTier) {
+        $('hero').innerHTML = `<span class="num">${Math.round(avgFrac * 100)}</span><span class="unit">% of reference · overall <span class="tier ${avgTier.name}" title="${TIER_TITLE}">${avgTier.name}</span></span>`;
+        $('substats').innerHTML = `<div><b>${scored.length}</b> scored steps</div><div><b>${scored.filter(e => e.prevBest && e.result.score > e.prevBest.score).length}</b> new bests</div><div><b>${Math.round(entries.reduce((a, e) => a + e.result.time, 0) / 60)}</b> min</div>`;
+      } else {
+        $('hero').innerHTML = `<span class="num">${scored.length}</span><span class="unit">steps done</span>`;
+        $('substats').innerHTML = `<div><b>${scored.filter(e => e.prevBest && e.result.score > e.prevBest.score).length}</b> new bests</div><div><b>${Math.round(entries.reduce((a, e) => a + e.result.time, 0) / 60)}</b> min</div>`;
+      }
       table.innerHTML = `<tr><th>Scenario</th><th>Score</th><th>Tier</th><th>vs best</th></tr>` + entries.map(e => {
         const r = e.result;
-        const t = e.scenario && e.step.benchmark ? ST.tierFor(e.scenario, r.score) : null;
-        let delta = '';
-        if (e.step.scored && e.prevBest) {
-          const d = r.score - e.prevBest.score;
-          delta = `<td class="${d >= 0 ? 'delta-up' : 'delta-down'}">${d >= 0 ? '+' : ''}${Math.round(d)}</td>`;
-        } else if (e.step.scored) delta = `<td>${e.step.warmup ? 'warm-up' : 'first'}</td>`;
-        else delta = '<td></td>';
-        return `<tr><td>${e.step.label}${e.step.warmup ? ' <small>(warm-up)</small>' : ''}</td><td>${e.step.scored ? Math.round(r.score) : '—'}<br><small>${r.hitsPerSec.toFixed(2)} hits/s · ${Math.round(r.accuracy * 100)}%</small></td><td>${tierHtml(t)}</td>${delta}</tr>`;
+        const t = e.scenario && e.step.benchmark && !e.step.warmup ? ST.tierFor(e.scenario, r.score) : null;
+        let delta = '<td></td>';
+        if (e.step.scored && e.step.warmup) delta = '<td><small>warm-up</small></td>';
+        else if (e.step.scored && !e.recorded) delta = '<td><small>ended early</small></td>';
+        else if (e.step.scored && e.prevBest) { const d = r.score - e.prevBest.score; delta = `<td class="${d >= 0 ? 'delta-up' : 'delta-down'}">${d >= 0 ? '+' : ''}${Math.round(d)}</td>`; }
+        else if (e.step.scored) delta = '<td><small>first</small></td>';
+        const scoreCell = e.step.scored ? `${Math.round(r.score)}<br><small>${r.hitsPerSec.toFixed(2)} hits/s · ${Math.round(r.accuracy * 100)}%</small>` : `<small>${r.hitsPerSec.toFixed(2)} hits/s · ${Math.round(r.accuracy * 100)}%</small>`;
+        return `<tr><td>${e.step.label}</td><td>${scoreCell}</td><td>${tierHtml(t)}</td>${delta}</tr>`;
       }).join('');
-      const fracs = scored.map(e => e.scenario && e.step.benchmark && ST.SCENARIOS[e.scenario].ref ? e.result.score / ST.SCENARIOS[e.scenario].ref : null).filter(x => x !== null);
-      const avgTier = fracs.length ? tierFromFrac(fracs.reduce((a, b) => a + b, 0) / fracs.length) : null;
-      $('results-sub').innerHTML = `${seq.routine ? seq.routine.name : 'Sequence'} · ${entries.length} steps${avgTier ? ` · overall ${tierHtml(avgTier)} <small>(provisional thresholds)</small>` : ''}`;
+      const hasWarm = scored.some(e => e.step.warmup);
+      if (hasWarm) { warm.textContent = `Rows marked warm-up: ${WARMUP_COPY}`; warm.classList.remove('hidden'); }
+      $('results-sub').innerHTML = `${seq.routine ? seq.routine.name : 'Sequence'} · ${entries.length} steps${avgTier ? ' · <small>tiers are provisional thresholds</small>' : ''}`;
+      if (seq.routine && seq.routine.id === 'benchmark') $('results-note').textContent = 'The Benchmark is a ruler: re-run it in about a week, not today.';
       const strat = ST.strategyCheck(entries);
       if (strat) { strategyEl.textContent = strat.text; strategyEl.className = 'insight ' + (strat.adapted ? 'ok' : ''); }
-      // Insights from the weakest scored step.
       const weakest = scored.filter(e => e.scenario && ST.SCENARIOS[e.scenario].ref).sort((a, b) => a.result.score / ST.SCENARIOS[a.scenario].ref - b.result.score / ST.SCENARIOS[b.scenario].ref)[0] || scored[scored.length - 1];
       if (weakest) {
         const ins = ST.insights(weakest.result, weakest.step.settings);
-        insightsEl.innerHTML = `<div class="insight muted">From ${weakest.step.label}, your weakest step:</div>` + (ins.length ? ins.map(i => `<div class="insight">${i.text}</div>`).join('') : '<div class="insight ok">Nothing stands out. Keep the tempo up.</div>');
-        // Direction map pooled over every scored step (single steps rarely have enough flicks).
-        const pooled = [];
-        for (let i = 0; i < 8; i++) pooled.push({ n: 0, fh: 0, gsum: 0, gn: 0 });
-        for (const e of scored) {
-          const k = e.result.kinematics; if (!k) continue;
-          k.sectors.forEach((sec, i) => { if (sec.n) { pooled[i].n += sec.n; pooled[i].fh += sec.firstHit * sec.n; if (sec.gain !== null) { pooled[i].gsum += sec.gain * sec.n; pooled[i].gn += sec.n; } } });
-        }
-        ST.charts.rose($('rose'), pooled.map(p => ({ n: p.n, firstHit: p.n ? p.fh / p.n : null, gain: p.gn ? p.gsum / p.gn : null })), tip);
+        insightsEl.innerHTML = `<p class="insight-from">From ${weakest.step.label}, your weakest step</p>` + (ins.length ? ins.map(i => `<div class="insight">${i.text}</div>`).join('') : '<div class="insight ok">Nothing stands out. Keep the tempo up.</div>');
       }
+      // Pool flick directions across every step that measured them.
+      roseSectors = mergeSectors(entries.map(e => e.result.kinematics).filter(Boolean));
     } else {
       const e = entries[0];
       const r = e.result, s = e.step.settings;
       const prev = e.prevBest;
-      const better = (k, lower) => prev && prev[k] !== null && prev[k] !== undefined ? (lower ? r[k] < prev[k] : r[k] > prev[k]) : !!e.run;
+      const better = (k, lower) => e.recorded && !e.step.warmup && (prev && prev[k] !== null && prev[k] !== undefined ? (lower ? r[k] < prev[k] : r[k] > prev[k]) : true);
       const prevOf = (k, f) => prev && prev[k] !== null && prev[k] !== undefined ? 'best ' + f(prev[k]) : '';
       const k = r.kinematics;
-      const rows = [
-        ['Score (100 × hits/s × √acc)', fmt.int(Math.round(r.score)), prevOf('score', (v) => Math.round(v)), better('score')],
-        ['Hits per second', r.hitsPerSec.toFixed(2), prevOf('hitsPerSec', (v) => v.toFixed(2)), better('hitsPerSec')],
-        ['Accuracy (hits / bullets)', `${fmt.pct(r.accuracy)}  (${r.hits}/${r.pellets})`, prevOf('accuracy', fmt.pct), better('accuracy')],
-        ['Kills', fmt.int(r.kills), prevOf('kills', fmt.int), better('kills')],
-        ['Avg time to kill', fmt.sec(r.avgTtk), prevOf('avgTtk', fmt.sec), r.avgTtk !== null && better('avgTtk', true)],
-      ];
-      if (s.invincible) rows.push(['Cursor on target', fmt.pct(r.onTargetFrac), '', false]);
+      heroBlock(r, prev, e.step.warmup, 'score');
+      const rows = [];
+      const row = (label, val, best, isNew) => rows.push(`<tr><td>${label}</td><td class="${isNew ? 'new-best' : ''}">${val}</td><td>${best}</td></tr>`);
+      const section = (name) => rows.push(`<tr class="section"><td colspan="3">${name}</td></tr>`);
+      row('Avg time to kill', fmt.sec(r.avgTtk), prevOf('avgTtk', fmt.sec), r.avgTtk !== null && better('avgTtk', true));
+      if (s.invincible) row('Cursor on target', fmt.pct(r.onTargetFrac), '', false);
+      if (s.ttl > 0 && s.behavior !== 'flee') row('Targets escaped', fmt.int(r.expired), '', false);
+      if (s.adaptive) row('Adaptive difficulty reached', `${Math.round(r.difficulty * 100)} / 100`, prevOf('difficulty', (v) => `${Math.round(v * 100)} / 100`), false);
       if (k && k.n >= 3) {
-        rows.push(['Flicks analysed', fmt.int(k.n), '', false]);
-        rows.push(['Reaction (target → move start)', fmt.sec(k.reaction), '', false]);
-        rows.push(['Movement time (move start → hit)', fmt.sec(k.moveTime), '', false]);
-        rows.push(['Overshoot gain (1.0 = exact)', k.gain === null ? '—' : k.gain.toFixed(2), '', false]);
-        rows.push(['Movements per target', fmt.num(k.peaks), '', false]);
+        section('Flick kinematics');
+        row('Flicks analysed', fmt.int(k.n), '', false);
+        row('Reaction (target appears → move starts)', fmt.sec(k.reaction), '', false);
+        row('Movement time (move starts → hit)', fmt.sec(k.moveTime), '', false);
+        row('Overshoot gain', k.gain === null ? '—' : `${k.gain.toFixed(2)} <small>(1.00 = exact)</small>`, '', false);
+        row('Movements per target', fmt.num(k.peaks), '', false);
       }
-      rows.push(['Shots fired while moving', fmt.pct(r.movingShotFrac), '', false]);
-      if (r.accMoving !== null && r.accStill !== null) rows.push(['Accuracy moving / standing', `${fmt.pct(r.accMoving)} / ${fmt.pct(r.accStill)}`, '', false]);
-      if (s.behavior === 'flee') rows.push(['Time spent moving', fmt.pct(r.movingFrac), '', false], ['Enemies got away', fmt.int(r.expired), '', false]);
-      if (s.enemyShoots) rows.push(['Damage taken per minute', fmt.num(r.dmgTakenPerMin), '', false], ['Damage taken while still', r.stillDmgFrac === null ? '—' : fmt.pct(r.stillDmgFrac), '', false]);
-      if (s.adaptive) rows.push(['Difficulty reached', fmt.int(Math.round(r.difficulty * 100)), prevOf('difficulty', (v) => Math.round(v * 100)), false]);
-      if (s.ttl > 0 && s.behavior !== 'flee') rows.push(['Targets escaped', fmt.int(r.expired), '', false]);
-      if (s.enemyShoots) rows.push(['Deaths', fmt.int(r.deaths), '', false], ['Damage taken', fmt.int(Math.round(r.dmgTaken)), '', false]);
-      table.innerHTML = rows.map(([label, val, best, isNew]) =>
-        `<tr><td>${label}</td><td class="${isNew && !e.step.warmup ? 'new-best' : ''}">${val}</td><td>${best}</td></tr>`).join('');
-      const t = e.scenario && e.step.benchmark ? ST.tierFor(e.scenario, r.score) : null;
-      $('results-sub').innerHTML = `${e.step.label} · ${ST.WEAPONS[s.weapon].name} · ${s.scope} · ${Math.round(r.time)}s${e.step.warmup ? ' · <b>warm-up run, not counted toward bests</b>' : ''}${t ? ' · ' + tierHtml(t) : ''}`;
+      section('Movement');
+      row('Shots fired while moving', fmt.pct(r.movingShotFrac), '', false);
+      if (r.accMoving !== null && r.accStill !== null) row('Accuracy moving / standing', `${fmt.pct(r.accMoving)} / ${fmt.pct(r.accStill)}`, '', false);
+      if (s.behavior === 'flee') { row('Time spent moving', fmt.pct(r.movingFrac), '', false); row('Enemies got away', fmt.int(r.expired), '', false); }
+      if (s.enemyShoots) {
+        section('Under fire');
+        row('Deaths', fmt.int(r.deaths), '', false);
+        row('Damage taken per minute', fmt.num(r.dmgTakenPerMin), '', false);
+        row('Damage taken while standing still', r.stillDmgFrac === null ? '—' : fmt.pct(r.stillDmgFrac), '', false);
+      }
+      table.innerHTML = rows.join('');
+      const t = e.scenario && e.step.benchmark && !e.step.warmup ? ST.tierFor(e.scenario, r.score) : null;
+      $('results-sub').innerHTML = `${e.step.label} · ${ST.WEAPONS[s.weapon].name} · ${s.scope} · ${Math.round(r.time)}s${t ? ' · ' + tierHtml(t) : ''}`;
+      if (e.step.warmup) { warm.textContent = `Warm-up run, not counted toward bests. ${WARMUP_COPY}`; warm.classList.remove('hidden'); }
+      if (!e.recorded) $('results-note').textContent = 'Ended before the halfway mark, so this run was not recorded.';
       const ins = ST.insights(r, s);
       insightsEl.innerHTML = ins.length ? ins.map(i => `<div class="insight">${i.text}</div>`).join('') : '<div class="insight ok">Nothing stands out. Keep the tempo up.</div>';
-      ST.charts.rose($('rose'), k ? k.sectors : [], tip);
+      roseSectors = k ? k.sectors : [];
     }
+    // Draw the rose only once the panel is visible so the canvas has real dimensions.
+    const roseValid = roseSectors.filter(s => s.n > 0 && s.firstHit !== null).length >= 2;
+    $('rose-block').classList.toggle('hidden', !roseValid);
     show('results');
+    if (roseValid) requestAnimationFrame(() => { $('rose-text').textContent = ST.charts.rose($('rose'), roseSectors, tip); });
+  }
+
+  function mergeSectors(list) {
+    const out = [];
+    for (let i = 0; i < 8; i++) {
+      let n = 0, fh = 0, fhN = 0, g = 0, gN = 0;
+      for (const k of list) {
+        const s = k.sectors[i]; if (!s || !s.n) continue;
+        n += s.n;
+        if (s.firstHit !== null) { fh += s.firstHit * s.n; fhN += s.n; }
+        if (s.gain !== null) { g += s.gain * s.n; gN += s.n; }
+      }
+      out.push({ n, firstHit: fhN ? fh / fhN : null, gain: gN ? g / gN : null });
+    }
+    return out;
   }
 
   // ---------- boot ----------

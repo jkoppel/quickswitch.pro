@@ -4,25 +4,25 @@ window.ST = window.ST || {};
 // Each scenario is a full settings preset. Scores are throughput: 100 * hits/s * sqrt(accuracy).
 // `ref` is the provisional score that marks the top tier; tiers are fractions of it.
 ST.SCENARIOS = {
-  warmup:         { name: 'Warm-up tracking',   cat: 'Warm-up',   scored: false,
+  warmup:         { name: 'Warm-up tracking',   cat: 'Warm-up',   scored: false, tip: 'Loosen up: hold the trigger and follow the bot. Nothing here counts.',
     settings: { weapon: 'mp5', scope: '1x', duration: 45, enemies: 1, behavior: 'strafe', invincible: true, minDist: 8, maxDist: 14 } },
-  staticClick:    { name: 'Static clicking',    cat: 'Clicking',  ref: 170, condition: 'speed',
+  staticClick:    { name: 'Static clicking',    cat: 'Clicking',  ref: 170, condition: 'speed', tip: 'Three targets, one hit each. Pick the next one before the current one dies.',
     settings: { weapon: 'mk12', scope: '1x', duration: 30, enemies: 3, behavior: 'static', enemyHp: 1, minDist: 6, maxDist: 22 } },
-  precisionClick: { name: 'Precision clicking', cat: 'Clicking',  ref: 120, condition: 'precision',
+  precisionClick: { name: 'Precision clicking', cat: 'Clicking',  ref: 120, condition: 'precision', tip: 'Same drill at 4x: targets are 40% smaller on screen. Slow the last part of the move and land short.',
     settings: { weapon: 'mk12', scope: '4x', duration: 30, enemies: 3, behavior: 'static', enemyHp: 1, minDist: 18, maxDist: 40 } },
-  dynamicClick:   { name: 'Dynamic clicking',   cat: 'Clicking',  ref: 110,
+  dynamicClick:   { name: 'Dynamic clicking',   cat: 'Clicking',  ref: 110, tip: 'Juking targets, one hit each. Fire on the direction change, when they are briefly still.',
     settings: { weapon: 'mk12', scope: '1x', duration: 30, enemies: 2, behavior: 'juke', enemyHp: 1, minDist: 6, maxDist: 18 } },
-  preciseTrack:   { name: 'Precise tracking',   cat: 'Tracking',  ref: 650,
+  preciseTrack:   { name: 'Precise tracking',   cat: 'Tracking',  ref: 650, tip: 'Invincible bot, smooth strafe. Hold the trigger and lead by about a body width.',
     settings: { weapon: 'mp5', scope: '2x', duration: 30, enemies: 1, behavior: 'smooth', invincible: true, minDist: 10, maxDist: 14 } },
-  reactiveTrack:  { name: 'Reactive tracking',  cat: 'Tracking',  ref: 520,
+  reactiveTrack:  { name: 'Reactive tracking',  cat: 'Tracking',  ref: 520, tip: 'Sudden reversals. Move your crosshair with the bot, and reset the instant it flips.',
     settings: { weapon: 'mp5', scope: '1x', duration: 30, enemies: 1, behavior: 'strafe', invincible: true, minDist: 6, maxDist: 10 } },
-  speedSwitch:    { name: 'Speed switching',    cat: 'Switching', ref: 480,
+  speedSwitch:    { name: 'Speed switching',    cat: 'Switching', ref: 480, tip: 'Four bots, two bullets each. Kill, switch, kill. Do not chase misses.',
     settings: { weapon: 'm4a1', scope: '1x', duration: 30, enemies: 4, behavior: 'static', enemyHp: 28, minDist: 5, maxDist: 16 } },
-  evasiveSwitch:  { name: 'Evasive switching',  cat: 'Switching', ref: 380,
+  evasiveSwitch:  { name: 'Evasive switching',  cat: 'Switching', ref: 380, tip: 'Three jukers, three bullets each. Commit to one until it drops.',
     settings: { weapon: 'm4a1', scope: '1x', duration: 30, enemies: 3, behavior: 'juke', enemyHp: 42, minDist: 6, maxDist: 16 } },
-  chase:          { name: 'Chase',              cat: 'Moving',    ref: 300,
+  chase:          { name: 'Chase',              cat: 'Moving',    ref: 300, tip: 'Hold W and shoot in short bursts while closing. Stopping loses the runner.',
     settings: { weapon: 'ak47', scope: '2x', duration: 30, enemies: 1, behavior: 'flee', enemyHp: 100, minDist: 6, maxDist: 12, fleeSpeed: 0.95, leash: 8 } },
-  dodge:          { name: 'Dodge under fire',   cat: 'Moving',    ref: 320,
+  dodge:          { name: 'Dodge under fire',   cat: 'Moving',    ref: 320, tip: 'The bot leads your movement. Break rhythm: short strafes, reversals, brief stops.',
     settings: { weapon: 'ak47', scope: '1x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 100, enemyShoots: true, enemyAim: 'hard', minDist: 8, maxDist: 14 } },
 };
 
@@ -50,6 +50,15 @@ ST.tierFor = function (scenarioId, score) {
 
 // A routine is a list of steps; each step names a scenario or a drill and may override settings.
 ST.ROUTINES = [
+  {
+    id: 'quick', name: 'Quick warm-up', minutes: 5, shuffle: false, rest: 8,
+    desc: 'Five minutes before a match: loosen up, then one tracking, one clicking and one dodge drill. Adaptive, short rests.',
+    steps: ['warmup',
+      { scenario: 'reactiveTrack', settings: { duration: 60, adaptive: true } },
+      { scenario: 'staticClick', settings: { duration: 60, adaptive: true, ttl: 1.6 } },
+      { scenario: 'dodge', settings: { duration: 60, adaptive: true } },
+    ],
+  },
   {
     id: 'benchmark', name: 'Benchmark', minutes: 8, shuffle: false, rest: 12,
     desc: '45-second warm-up plus nine 30-second scored scenarios covering clicking (speed and precision), tracking (precise and reactive), switching (speed and evasive) and moving (chase, dodge under fire). Adaptive difficulty and lead hints are off so scores stay comparable between sessions. Re-run it weekly, not daily.',
