@@ -48,13 +48,13 @@ ST.MODES = [
   {
     id: 'pistol', name: 'Pistol Tap',
     desc: 'M9 against an orbiting enemy. Semi-auto: every click counts.',
-    tip: 'The M9 has 8° standing spread and 14° while moving. Stop to shoot.',
+    tip: 'The M9 has a 3° cone standing and 8° while moving (survev adds moving spread on top). Stop to shoot.',
     settings: { weapon: 'm9', scope: '1x', duration: 60, enemies: 1, behavior: 'orbit', enemyHp: 100, minDist: 6, maxDist: 12 },
   },
   {
     id: 'chase', name: 'Chase',
     desc: 'The enemy runs. Chase with WASD and keep landing shots on the move. If they get more than ~8 units past max range for a second, they got away.',
-    tip: 'Moving spread is real: the AK goes from 2° to 7° while running. Fire in short bursts at the moments you are closing, and never stop long enough to lose them.',
+    tip: 'Moving spread is real: the AK cone grows from 2.5° to 10° while running. Fire in short bursts at the moments you are closing, and never stop long enough to lose them.',
     settings: { weapon: 'ak47', scope: '2x', duration: 60, enemies: 1, behavior: 'flee', enemyHp: 100, minDist: 6, maxDist: 12, fleeSpeed: 0.95, leash: 8 },
   },
   {

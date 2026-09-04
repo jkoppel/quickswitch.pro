@@ -2,8 +2,8 @@
 name: Surviv Aim Trainer
 description: A dark range-card interface laid over surviv's grass field, with one yellow tracer accent.
 colors:
-  field-grass: "#507a32"
-  field-edge: "#3f6128"
+  field-grass: "#80af49"
+  field-edge: "#5c8236"
   night-floor: "#1a1f16"
   panel-moss: "#23291f"
   chart-well: "#1c2118"
@@ -188,9 +188,11 @@ set of reserved status colors that mirror in-game meanings.
 - **Blood** (`{colors.blood}`): in-field hit particles only.
 
 ### Field (canvas only)
-- **Field Grass** (`{colors.field-grass}`) inside the arena, **Field Edge**
-  (`{colors.field-edge}`) outside it, **Skin Tan** (`{colors.skin-tan}`) for every
-  player body. Ammo tracer colors are defined per ammo type in `js/weapons.js`.
+- **Field Grass** (`{colors.field-grass}`) inside the arena is survev's own grass
+  color (baseDefs `0x80af49`), **Field Edge** (`{colors.field-edge}`) outside it,
+  **Skin Tan** (`{colors.skin-tan}`) is survev's `outfitBase` tint for every player
+  body. Tracer colors are survev's `GameConfig.tracerColors` per ammo type; the
+  in-field sprites (players, guns, rocks, splats, casings, crosshair) are survev's.
 
 ### Named Rules
 **The One Tracer Rule.** Yellow appears on at most one action and one selection per

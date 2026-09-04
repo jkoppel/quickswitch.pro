@@ -29,30 +29,34 @@ window.ST = window.ST || {};
   }
 
   function makeGun(def) {
-    return { def, ammo: def.mag, reloading: false, reloadT: 0, cooldown: 0 };
+    return { def, ammo: def.mag, reloading: false, reloadT: 0, cooldown: 0, pullT: 0, recoil: 0, emptyClicked: false };
   }
-  function startReload(g) {
+  function startReload(g, opts) {
     if (g.reloading || g.ammo >= g.def.mag) return;
     g.reloading = true;
     g.reloadT = g.def.reload;
+    ST.audio.reload(g.def, opts);
   }
   // Advances gun timers; fires via fireFn if wantFire and the gun is able. Returns true if it fired.
   function updateGun(g, dt, wantFire, fireFn, minDelay) {
     g.cooldown = Math.max(0, g.cooldown - dt);
+    g.recoil = Math.max(0, g.recoil - g.recoil * dt * 5 - dt); // player.ts recoil decay
+    if (g.pullT > 0) { g.pullT -= dt; if (g.pullT <= 0 && g.def.sound.pull) ST.audio.play(g.def.sound.pull, g.soundOpts); }
     if (g.reloading) {
       g.reloadT -= dt;
       if (g.reloadT <= 0) {
-        if (g.def.reloadPerShell) {
-          g.ammo++;
-          if (g.ammo >= g.def.mag) g.reloading = false; else g.reloadT = g.def.reload;
-        } else {
-          g.ammo = g.def.mag;
-          g.reloading = false;
-        }
+        // survev reloads maxReload rounds per reloadTime; shotguns and the Mosin load one shell at a time.
+        g.ammo = Math.min(g.def.mag, g.ammo + (g.def.reloadCount || g.def.mag));
+        if (g.ammo >= g.def.mag) g.reloading = false;
+        else { g.reloadT = g.def.reload; ST.audio.reload(g.def, g.soundOpts); }
       }
     }
-    if (!wantFire) return false;
-    if (g.ammo <= 0) { startReload(g); return false; }
+    if (!wantFire) { g.emptyClicked = false; return false; }
+    if (g.ammo <= 0) {
+      if (!g.emptyClicked && !g.reloading) { ST.audio.empty(g.def); g.emptyClicked = true; }
+      startReload(g, g.soundOpts);
+      return false;
+    }
     if (g.cooldown > 0) return false;
     if (g.reloading) {
       if (g.def.reloadPerShell) g.reloading = false; // firing interrupts shell-by-shell reloads
@@ -60,6 +64,8 @@ window.ST = window.ST || {};
     }
     g.ammo--;
     g.cooldown = Math.max(g.def.fireDelay, minDelay || 0);
+    g.recoil += g.def.worldImg && g.def.worldImg.recoil ? g.def.worldImg.recoil : 1;
+    if (g.def.pullDelay) g.pullT = g.def.pullDelay;
     fireFn();
     return true;
   }
@@ -70,7 +76,8 @@ window.ST = window.ST || {};
       this.ctx = canvas.getContext('2d');
       this.s = settings;
       this.hooks = hooks || {};
-      this.halfH = ST.SCOPES[settings.scope] || 28;
+      this.zoomRadius = ST.SCOPES[settings.scope] || 28;
+      this.halfH = this.zoomRadius;
 
       this.keys = new Set();
       this.mouse = { x: 0, y: 0, down: false, queued: false };
@@ -139,8 +146,10 @@ window.ST = window.ST || {};
       this.canvas.height = Math.round(this.h * dpr);
       this.canvas.style.width = this.w + 'px';
       this.canvas.style.height = this.h + 'px';
-      this.ppu = this.h / (this.halfH * 2);
+      // survev: camera.targetZoom = (maxScreenDim * 0.5) / (zoomRadius * ppu)  =>  px per unit = maxDim / (2 * zoomRadius)
+      this.ppu = Math.max(this.w, this.h) / (this.zoomRadius * 2);
       this.halfW = this.w / (2 * this.ppu);
+      this.halfH = this.h / (2 * this.ppu);
     }
 
     bindInput() {
@@ -344,7 +353,7 @@ window.ST = window.ST || {};
         behavior: this.s.behavior, timer: 0, dirSign: Math.random() < 0.5 ? -1 : 1,
         wander: rand(0, TAU), stopped: false,
         spawnT: this.time, firstHitT: null, ttl: this.s.ttl > 0 ? this.s.ttl * this.ttlScale() : Infinity, ttlMax: this.s.ttl > 0 ? this.s.ttl * this.ttlScale() : Infinity,
-        gun: makeGun(this.enemyDef), skill, aimErr: 0, aimErrT: 0, reactT: skill.reaction,
+        gun: Object.assign(makeGun(this.enemyDef), { soundOpts: { dist: Math.hypot(pos.x - this.player.pos.x, pos.y - this.player.pos.y) } }), skill, aimErr: 0, aimErrT: 0, reactT: skill.reaction,
         hitFlash: 0,
       };
       this.enemies.push(e);
@@ -620,23 +629,48 @@ window.ST = window.ST || {};
     }
 
     fireGun(shooter, def, aim, moving, owner) {
-      const spread = (moving ? def.moveSpread : def.spread) * DEG;
+      // weaponManager.ts: spread = shotSpread (+ moveSpread while moving); deviation = random(-0.5, 0.5) * spread.
+      const spread = def.spread + (moving ? def.moveSpread : 0);
       const n = def.pellets || 1;
-      const muzzle = PLAYER_R + def.barrel * 0.55;
-      const ox = shooter.pos.x + Math.cos(aim) * muzzle, oy = shooter.pos.y + Math.sin(aim) * muzzle;
+      const jitter = 0.25;
+      const dx = Math.cos(aim), dy = Math.sin(aim);
+      const gx = shooter.pos.x + -dy * def.barrelOffset, gy = shooter.pos.y + dx * def.barrelOffset;
+      const dist = owner === 'enemy' ? Math.hypot(shooter.pos.x - this.player.pos.x, shooter.pos.y - this.player.pos.y) : 0;
       for (let i = 0; i < n; i++) {
-        const a = aim + rand(-spread, spread);
+        const a = aim + rand(-0.5, 0.5) * spread * DEG;
+        let sx = gx + dx * def.barrel, sy = gy + dy * def.barrel;
+        if (i > 0) { sx += rand(-jitter, jitter) * 1.11; sy += rand(-jitter, jitter) * 1.11; }
         this.bullets.push({
-          x: ox, y: oy, sx: ox, sy: oy, dx: Math.cos(a), dy: Math.sin(a),
+          x: sx, y: sy, sx, sy, dx: Math.cos(a), dy: Math.sin(a),
           speed: def.speed, dmg: def.dmg, range: def.range, traveled: 0, owner, ammo: def.ammo, moving,
+          tracerWidth: def.tracerWidth, tracerLength: def.tracerLength, whizzed: false,
         });
         if (owner === 'player') { this.stats.pellets++; this.adaptWindow.pellets++; if (moving) this.stats.movingPellets++; }
       }
       if (owner === 'player' && moving) this.stats.movingShots++;
-      this.particles.push({ x: ox, y: oy, vx: 0, vy: 0, life: 0.05, maxLife: 0.05, r: 0.6, color: 'rgba(255,230,150,0.9)' });
-      if (owner === 'player' || Math.hypot(shooter.pos.x - this.player.pos.x, shooter.pos.y - this.player.pos.y) < 60) {
-        ST.audio.shot(def);
-      }
+      if (def.caseTiming === 'shoot') this.spawnCasing(shooter, def, dx, dy);
+      ST.audio.shot(def, { dist, fallOff: def.sound.fallOff });
+    }
+
+    // shot.ts createCasingParticle: shell flies perpendicular to the aim at 9.5 u/s, +-30 degrees.
+    spawnCasing(shooter, def, dx, dy) {
+      const P = def.particle || {};
+      let shellDx = dy, shellDy = -dx; // rotate(dir, -PI/2)
+      if (P.shellForward) { shellDx = dx * P.shellForward; shellDy = dy * P.shellForward; }
+      let vx = shellDx * 9.5, vy = shellDy * 9.5;
+      const ra = (Math.random() - 0.5) * Math.PI / 3, c = Math.cos(ra), si = Math.sin(ra);
+      [vx, vy] = [vx * c - vy * si, vx * si + vy * c];
+      if (P.shellReverse) { vx = -vx; vy = -vy; }
+      const off = PLAYER_R + (P.shellOffset || 0.45);
+      let x = shooter.pos.x + dx * off, y = shooter.pos.y + dy * off;
+      if (P.shellOffsetY) { x += shellDx * P.shellOffsetY; y += shellDy * P.shellOffsetY; }
+      const C = ST.SURVEV.casing;
+      const life = rand(C.life[0], C.life[1]);
+      this.particles.push({
+        kind: 'casing', x, y, vx, vy, life, maxLife: life, drag: rand(C.drag[0], C.drag[1]),
+        rot: -Math.atan2(shellDy, shellDx), rotVel: C.rotVel * (Math.random() < 0.5 ? -1 : 1),
+        scale: (P.shellScale || 1), sprite: 'part-shell-01.img', r: 0.3, color: '#c9a44a',
+      });
     }
 
     updateBullets(dt) {
@@ -661,12 +695,16 @@ window.ST = window.ST || {};
           if (s.d2 < PLAYER_R * PLAYER_R && s.t < hitT) { hitT = s.t; hitKind = 'player'; hx = s.cx; hy = s.cy; }
         }
 
+        if (b.owner === 'enemy' && !b.whizzed) {
+          const s = segPointDist2(b.x, b.y, nx, ny, p.pos.x, p.pos.y);
+          if (s.d2 < 9 && s.d2 > PLAYER_R * PLAYER_R) { b.whizzed = true; ST.audio.whiz({ volume: 0.7 }); }
+        }
         if (hitKind) {
           b.dead = true;
           b.x = hx; b.y = hy;
           if (hitKind === 'enemy') this.damageEnemy(hitObj, b, hx, hy);
           else if (hitKind === 'player') this.damagePlayer(b, hx, hy);
-          else this.spawnPuff(hx, hy, 'rgba(200,200,200,0.8)', 3);
+          else { this.spawnPuff(hx, hy, 'rgba(200,200,200,0.8)', 3); ST.audio.play('stone_bullet_hit_01', { dist: Math.hypot(hx - p.pos.x, hy - p.pos.y), volume: 0.6 }); }
           continue;
         }
         b.x = nx; b.y = ny;
@@ -686,7 +724,7 @@ window.ST = window.ST || {};
       e.hp -= b.dmg;
       e.hitFlash = 0.08;
       this.hitFlash = 0.12;
-      this.spawnBlood(hx, hy, b.dx, b.dy);
+      this.spawnBlood(hx, hy, b.dx, b.dy, 1, e);
       if (e.firstHitT === null) {
         e.firstHitT = this.time;
         st.reaction.push(this.time - e.spawnT);
@@ -702,7 +740,7 @@ window.ST = window.ST || {};
         st.engage.push(this.time - e.firstHitT);
         this.pushFeed(`Kill  ${ttk.toFixed(2)}s`, '#9cff9c');
         ST.audio.kill();
-        this.spawnBlood(e.pos.x, e.pos.y, b.dx, b.dy, 14);
+        this.spawnBlood(e.pos.x, e.pos.y, b.dx, b.dy, 6);
         this.enemies.splice(this.enemies.indexOf(e), 1);
         this.respawns.push(this.s.respawnDelay);
       } else {
@@ -719,7 +757,7 @@ window.ST = window.ST || {};
       this.adaptWindow.taken++;
       if (!p.moving) { this.stats.dmgTakenStill += dmg; this.stats.hitsTakenStill++; }
       this.dmgFlash = 0.25;
-      this.spawnBlood(hx, hy, b.dx, b.dy);
+      this.spawnBlood(hx, hy, b.dx, b.dy, 1, p);
       ST.audio.hurt();
       if (p.hp <= 0) {
         this.stats.deaths++;
@@ -756,13 +794,21 @@ window.ST = window.ST || {};
     }
 
     // ---------- effects ----------
-    spawnBlood(x, y, dx, dy, n) {
-      n = n || 6;
+    spawnBlood(x, y, dx, dy, n, attach) {
+      // particles.ts bloodSplat: scale 0.04 -> 0.15..0.2 of a 144px sprite (16 px/unit), life 0.5, alpha fades over the last quarter.
+      n = n || 1;
+      const S = ST.SURVEV.bloodSplat;
       for (let i = 0; i < n; i++) {
-        const a = Math.atan2(dy, dx) + gauss() * 0.9;
-        const sp = rand(2, 9);
-        const life = rand(0.25, 0.5);
-        this.particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life, maxLife: life, r: rand(0.15, 0.4), color: '#b8181b' });
+        const v = rand(0.45, 0.8);
+        const color = `rgb(${Math.round(255 * v)},0,0)`;
+        const jx = i ? gauss() * 0.4 : 0, jy = i ? gauss() * 0.4 : 0;
+        const pos = { x: x + jx, y: y + jy };
+        this.particles.push({
+          kind: 'splat', x: pos.x, y: pos.y, vx: 0, vy: 0, life: S.life, maxLife: S.life,
+          rot: Math.random() * TAU, scaleStart: S.scaleStart, scaleEnd: rand(S.scaleEnd[0], S.scaleEnd[1]),
+          sprite: S.sprites[Math.floor(Math.random() * S.sprites.length)], color, r: 0.3,
+          attach: attach || null, ox: attach ? pos.x - attach.pos.x : 0, oy: attach ? pos.y - attach.pos.y : 0,
+        });
       }
     }
     spawnPuff(x, y, color, n) {
@@ -776,7 +822,13 @@ window.ST = window.ST || {};
       if (this.feed.length > 5) this.feed.pop();
     }
     updateEffects(dt) {
-      for (const p of this.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt; }
+      for (const q of this.particles) {
+        if (q.attach) { q.x = q.attach.pos.x + q.ox; q.y = q.attach.pos.y + q.oy; }
+        else { q.x += q.vx * dt; q.y += q.vy * dt; }
+        if (q.drag) { const k = Math.max(0, 1 - q.drag * dt); q.vx *= k; q.vy *= k; } else { q.vx *= 0.9; q.vy *= 0.9; }
+        if (q.rotVel) q.rot += q.rotVel * dt;
+        q.life -= dt;
+      }
       this.particles = this.particles.filter(p => p.life > 0);
       for (const f of this.feed) f.life -= dt;
       this.feed = this.feed.filter(f => f.life > 0);
@@ -789,8 +841,9 @@ window.ST = window.ST || {};
     render() {
       const ctx = this.ctx, W = this.w, H = this.h;
       const p = this.player;
+      const A = ST.assets, SV = ST.SURVEV;
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-      ctx.fillStyle = '#3f6128';
+      ctx.fillStyle = '#5c8236';
       ctx.fillRect(0, 0, W, H);
 
       ctx.save();
@@ -798,15 +851,15 @@ window.ST = window.ST || {};
       ctx.scale(this.ppu, this.ppu);
       ctx.translate(-p.pos.x, -p.pos.y);
 
-      // Arena grass + grid.
-      ctx.fillStyle = '#507a32';
+      // Grass and grid: baseDefs grass color, map.ts grid every GameConfig.map.gridSize units at 15% black.
+      ctx.fillStyle = A.hex(SV.grass);
       ctx.fillRect(-ARENA, -ARENA, ARENA * 2, ARENA * 2);
       const left = p.pos.x - this.halfW, right = p.pos.x + this.halfW;
       const top = p.pos.y - this.halfH, bottom = p.pos.y + this.halfH;
-      ctx.strokeStyle = 'rgba(0,0,0,0.09)';
-      ctx.lineWidth = 0.12;
+      ctx.strokeStyle = `rgba(0,0,0,${SV.gridAlpha})`;
+      ctx.lineWidth = Math.max(1.5 / this.ppu, 0.03);
       ctx.beginPath();
-      const G = 8;
+      const G = SV.gridSize;
       for (let x = Math.floor(Math.max(left, -ARENA) / G) * G; x <= Math.min(right, ARENA); x += G) { ctx.moveTo(x, Math.max(top, -ARENA)); ctx.lineTo(x, Math.min(bottom, ARENA)); }
       for (let y = Math.floor(Math.max(top, -ARENA) / G) * G; y <= Math.min(bottom, ARENA); y += G) { ctx.moveTo(Math.max(left, -ARENA), y); ctx.lineTo(Math.min(right, ARENA), y); }
       ctx.stroke();
@@ -814,57 +867,57 @@ window.ST = window.ST || {};
       ctx.lineWidth = 0.4;
       ctx.strokeRect(-ARENA, -ARENA, ARENA * 2, ARENA * 2);
 
-      // Rocks.
+      // Rocks: map-stone-01 at img.scale 0.4 covers 3.6 units for a 1.6-unit collider.
+      const stone = A.get(SV.stone.sprite);
       for (const r of this.rocks) {
-        if (r.x + r.r < left || r.x - r.r > right || r.y + r.r < top || r.y - r.r > bottom) continue;
-        ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, TAU);
-        ctx.fillStyle = `rgb(${Math.round(125 * r.shade)},${Math.round(125 * r.shade)},${Math.round(125 * r.shade)})`;
-        ctx.fill();
-        ctx.lineWidth = 0.25; ctx.strokeStyle = '#4c4c4c'; ctx.stroke();
-        ctx.beginPath(); ctx.arc(r.x - r.r * 0.25, r.y - r.r * 0.25, r.r * 0.45, 0, TAU);
-        ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill();
+        if (r.x + r.r * 1.3 < left || r.x - r.r * 1.3 > right || r.y + r.r * 1.3 < top || r.y - r.r * 1.3 > bottom) continue;
+        if (stone) {
+          const size = (144 * SV.stone.scale / SV.ppuBase) * (r.r / SV.stone.collision);
+          ctx.drawImage(stone, r.x - size / 2, r.y - size / 2, size, size);
+        } else {
+          ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, TAU);
+          ctx.fillStyle = '#7d7d7d'; ctx.fill(); ctx.lineWidth = 0.25; ctx.strokeStyle = '#4c4c4c'; ctx.stroke();
+        }
       }
 
-      // Particles (blood/puffs).
-      for (const q of this.particles) {
-        ctx.globalAlpha = clamp(q.life / q.maxLife, 0, 1);
-        ctx.fillStyle = q.color;
-        ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, TAU); ctx.fill();
-      }
-      ctx.globalAlpha = 1;
+      // Ground particles (blood splats under bodies, casings on the grass).
+      for (const q of this.particles) this.drawParticle(ctx, q);
 
-      // Bullets: tracer lines.
-      ctx.lineCap = 'round';
+      // Bullets: player-bullet-trail-02 stretched behind the bullet, tinted with the ammo's tracer color.
+      const trail = A.get('player-bullet-trail-02.img');
       for (const b of this.bullets) {
-        const trail = Math.min(b.traveled, 2.5 + b.speed * 0.025);
-        ctx.strokeStyle = ST.AMMO[b.ammo].color;
-        ctx.lineWidth = 0.16;
-        ctx.beginPath();
-        ctx.moveTo(b.x - b.dx * trail, b.y - b.dy * trail);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(b.x, b.y, 0.12, 0, TAU); ctx.fill();
+        const color = ST.TRACER[b.ammo] ? ST.TRACER[b.ammo].color : '#ffffff';
+        // bullet.ts: trailLength = min(tracerLength * 15, dist / 2), sprite scale (0.8, tracerWidth) on a 36px sprite.
+        const L = Math.min(b.tracerLength * 15, b.traveled / 2) * 36 * 0.8 / SV.ppuBase;
+        const Wd = 36 * b.tracerWidth / SV.ppuBase;
+        const ang = Math.atan2(b.dy, b.dx);
+        if (trail && L > 0.05) {
+          const img = A.tint('player-bullet-trail-02.img', color) || trail;
+          ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(ang);
+          ctx.drawImage(img, -L, -Wd / 2, L, Wd);
+          ctx.restore();
+        } else {
+          ctx.strokeStyle = color; ctx.lineWidth = Math.max(Wd, 0.12); ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(b.x - b.dx * Math.max(L, 0.5), b.y - b.dy * Math.max(L, 0.5)); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
       }
 
-      // Enemies.
+      // Enemies, then the player on top.
       for (const e of this.enemies) {
-        this.drawCharacter(e.pos.x, e.pos.y, e.aim, e.gun.def, e.hitFlash > 0 ? '#ffd9c2' : '#f8c574', '#4a3a22');
-        // Health bar.
+        this.drawCharacter(e.pos.x, e.pos.y, e.aim, e.gun, e.hitFlash > 0 ? 0xffd9c2 : SV.skinTint);
         const bw = 2.6, bh = 0.32, bx = e.pos.x - bw / 2, by = e.pos.y - PLAYER_R - 0.9;
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.fillRect(bx - 0.06, by - 0.06, bw + 0.12, bh + 0.12);
         const frac = isFinite(e.maxHp) ? clamp(e.hp / e.maxHp, 0, 1) : 1;
         ctx.fillStyle = !isFinite(e.maxHp) ? '#9fb4ff' : frac > 0.5 ? '#61d15b' : frac > 0.25 ? '#f2c94c' : '#e0473d';
         ctx.fillRect(bx, by, bw * frac, bh);
-        // Lead marker: where a bullet fired now would meet the target. Fades out over the run.
         if (this.s.leadHint) {
           const a = this.leadAlpha();
           if (a > 0) {
             const lp = this.intercept(e);
             if (lp) {
+              const rr = 9 / this.ppu;
               ctx.globalAlpha = a;
-              const rr = 9 / this.ppu; // constant on-screen size regardless of scope
               ctx.beginPath(); ctx.arc(lp.x, lp.y, rr, 0, TAU);
               ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 / this.ppu; ctx.stroke();
               ctx.beginPath(); ctx.arc(lp.x, lp.y, rr * 0.2, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill();
@@ -872,7 +925,6 @@ window.ST = window.ST || {};
             }
           }
         }
-        // Flick targets: shrinking timer ring.
         if (isFinite(e.ttl) && this.s.ttl > 0) {
           ctx.beginPath();
           ctx.arc(e.pos.x, e.pos.y, PLAYER_R + 0.45, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(e.ttl / e.ttlMax, 0, 1));
@@ -880,12 +932,9 @@ window.ST = window.ST || {};
         }
       }
 
-      // Player.
-      this.drawCharacter(p.pos.x, p.pos.y, p.aim, p.gun.def, '#f8c574', '#4a3a22');
+      this.drawCharacter(p.pos.x, p.pos.y, p.aim, p.gun, SV.skinTint);
       if (p.gun.reloading) {
-        const frac = p.gun.def.reloadPerShell
-          ? 1 - p.gun.reloadT / p.gun.def.reload
-          : 1 - p.gun.reloadT / p.gun.def.reload;
+        const frac = 1 - p.gun.reloadT / p.gun.def.reload;
         ctx.beginPath();
         ctx.arc(p.pos.x, p.pos.y, PLAYER_R + 0.5, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(frac, 0, 1));
         ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 0.18; ctx.stroke();
@@ -893,7 +942,6 @@ window.ST = window.ST || {};
 
       ctx.restore();
 
-      // Screen-space overlays.
       if (this.dmgFlash > 0) {
         ctx.fillStyle = `rgba(200,0,0,${0.22 * this.dmgFlash / 0.25})`;
         ctx.fillRect(0, 0, W, H);
@@ -920,8 +968,7 @@ window.ST = window.ST || {};
     intercept(e) {
       const p = this.player;
       const def = p.gun.def;
-      const muzzle = PLAYER_R + def.barrel * 0.55;
-      const ox = p.pos.x + Math.cos(p.aim) * muzzle, oy = p.pos.y + Math.sin(p.aim) * muzzle;
+      const ox = p.pos.x + Math.cos(p.aim) * def.barrel, oy = p.pos.y + Math.sin(p.aim) * def.barrel;
       const rx = e.pos.x - ox, ry = e.pos.y - oy;
       const vx = e.vel.x, vy = e.vel.y, s = def.speed;
       const a = vx * vx + vy * vy - s * s, b = 2 * (rx * vx + ry * vy), c = rx * rx + ry * ry;
@@ -938,29 +985,94 @@ window.ST = window.ST || {};
       return { x: e.pos.x + vx * t, y: e.pos.y + vy * t };
     }
 
-    drawCharacter(x, y, aim, def, skin, outline) {
-      const ctx = this.ctx;
+    drawParticle(ctx, q) {
+      const A = ST.assets, u = 1 - clamp(q.life / q.maxLife, 0, 1);
+      if (q.kind === 'splat') {
+        // scale lerps 0..1 over life; alpha fades over the last quarter (lerp 0.75..1).
+        const scale = lerp(q.scaleStart, q.scaleEnd, u);
+        const size = 144 * scale / ST.SURVEV.ppuBase;
+        const alpha = u < 0.75 ? 1 : 1 - (u - 0.75) / 0.25;
+        const img = A.tint(q.sprite, q.color);
+        ctx.globalAlpha = alpha;
+        if (img) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.drawImage(img, -size / 2, -size / 2, size, size); ctx.restore(); }
+        else { ctx.fillStyle = q.color; ctx.beginPath(); ctx.arc(q.x, q.y, size / 2, 0, TAU); ctx.fill(); }
+        ctx.globalAlpha = 1;
+        return;
+      }
+      if (q.kind === 'casing') {
+        const C = ST.SURVEV.casing;
+        const scale = lerp(C.scaleStart, C.scaleEnd, u) * q.scale;
+        const w = 56 * scale / ST.SURVEV.ppuBase, h = 133 * scale / ST.SURVEV.ppuBase;
+        const alpha = u < 0.95 ? 1 : 1 - (u - 0.95) / 0.05;
+        const img = A.tint(q.sprite, q.color);
+        ctx.globalAlpha = alpha;
+        if (img) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore(); }
+        else { ctx.fillStyle = q.color; ctx.fillRect(q.x - w / 2, q.y - h / 2, w, h); }
+        ctx.globalAlpha = 1;
+        return;
+      }
+      ctx.globalAlpha = clamp(q.life / q.maxLife, 0, 1);
+      ctx.fillStyle = q.color;
+      ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Player rendering per survev client/src/objects/player.ts and animData.ts:
+    // body sprite at scale 0.25 (140px -> 35px = 2.19 units), hands at the idle-pose pivots (16 px per unit),
+    // gun sprite anchored at its bottom center on the right hand offset (-4.25, -1.75), scaled by worldImg.scale * 0.5.
+    drawCharacter(x, y, aim, gun, skinTint) {
+      const ctx = this.ctx, A = ST.assets, SV = ST.SURVEV, U = SV.ppuBase;
+      const def = gun.def;
+      const body = A.tint('player-base-01.img', A.hex(skinTint));
+      const hand = A.tint('player-hands-01.img', A.hex(skinTint));
+      const gunImg = def.worldImg && A.get(def.worldImg.sprite);
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(aim);
-      // Gun.
-      const gunLen = def.barrel;
-      ctx.fillStyle = '#2b2b2b';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 0.08;
-      ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(0.7, -0.17, gunLen, 0.34, 0.08) : ctx.rect(0.7, -0.17, gunLen, 0.34);
-      ctx.fill(); ctx.stroke();
-      // Body.
-      ctx.beginPath(); ctx.arc(0, 0, PLAYER_R, 0, TAU);
-      ctx.fillStyle = skin; ctx.fill();
-      ctx.lineWidth = 0.14; ctx.strokeStyle = outline; ctx.stroke();
-      // Hands: one on the grip, one on the foregrip.
-      ctx.fillStyle = skin;
-      ctx.lineWidth = 0.1;
-      for (const [hx, hy] of [[0.95, 0.38], [0.75 + gunLen * 0.55, -0.05]]) {
-        ctx.beginPath(); ctx.arc(hx, hy, 0.34, 0, TAU); ctx.fill(); ctx.stroke();
+      const pose = def.pistol ? SV.poses.pistol : def.bullpup ? SV.poses.bullpup : SV.poses.rifle;
+      const recoil = (gun.recoil || 0) * 1.125;
+      const handR = { x: (pose.handR[0] - recoil) / U, y: pose.handR[1] / U };
+      const lho = def.worldImg && def.worldImg.leftHandOffset ? def.worldImg.leftHandOffset : { x: 0, y: 0 };
+      const handL = { x: (pose.handL[0] + lho.x - recoil) / U, y: (pose.handL[1] + lho.y) / U };
+      const bodySize = 140 * SV.bodySpriteScale / U;
+      const handSize = 76 * SV.handSpriteScale / U;
+
+      // Backpack (level 1, as most players carry one): a dark circle offset behind the body, player.ts "Backpack".
+      const bag = A.tint('player-circle-base-01.img', A.hex(SV.backpackTint));
+      if (bag) {
+        const lvl = SV.backpack.level;
+        const bagScale = (0.4 + lvl * 0.03) * 0.5;
+        const bagSize = 148 * bagScale * 2 / U; // circle-base sprite is 148px at 2x, like the others
+        const bagOffset = SV.backpack.offsets[Math.min(lvl - 1, 2)] / U;
+        ctx.drawImage(bag, -bagOffset - bagSize / 2, -bagSize / 2, bagSize, bagSize);
       }
+      // Body.
+      if (body) ctx.drawImage(body, -bodySize / 2, -bodySize / 2, bodySize, bodySize);
+      else { ctx.beginPath(); ctx.arc(0, 0, PLAYER_R, 0, TAU); ctx.fillStyle = A.hex(skinTint); ctx.fill(); }
+
+      // Gun, drawn from its stock at the right hand toward the muzzle.
+      const drawGun = () => {
+        if (!def.worldImg) return;
+        const go = def.worldImg.gunOffset || { x: 0, y: 0 };
+        const ax = handR.x + (SV.gunHandOffset[0] + go.x) / U, ay = handR.y + (SV.gunHandOffset[1] + go.y) / U;
+        if (gunImg) {
+          const gw = (gunImg.naturalWidth || gunImg.width) * def.worldImg.scale.x * 0.5 / U;
+          const gl = (gunImg.naturalHeight || gunImg.height) * def.worldImg.scale.y * 0.5 / U;
+          ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.PI / 2);
+          ctx.drawImage(gunImg, -gw / 2, -gl, gw, gl);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = '#2b2b2b';
+          ctx.fillRect(ax, ay - 0.17, def.barrel - ax, 0.34);
+        }
+      };
+      const drawHands = () => {
+        for (const h of [handL, handR]) {
+          if (hand) ctx.drawImage(hand, h.x - handSize / 2, h.y - handSize / 2, handSize, handSize);
+          else { ctx.beginPath(); ctx.arc(h.x, h.y, 0.34, 0, TAU); ctx.fillStyle = A.hex(skinTint); ctx.fill(); }
+        }
+      };
+      if (def.worldImg && def.worldImg.handsBelow) { drawHands(); drawGun(); } else { drawGun(); drawHands(); }
       ctx.restore();
     }
 
@@ -982,26 +1094,25 @@ window.ST = window.ST || {};
     drawCrosshair(ctx) {
       const { x, y } = this.mouse;
       const hit = this.s.hitmarker && this.hitFlash > 0;
-      ctx.lineCap = 'butt';
-      const draw = (color, lw) => {
-        ctx.strokeStyle = color; ctx.lineWidth = lw;
+      const img = ST.assets.get('crosshair000.img');
+      const size = 32;
+      if (img) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 3;
+        ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+        ctx.restore();
+      } else {
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(x, y, 9, 0, TAU);
-        ctx.moveTo(x - 16, y); ctx.lineTo(x - 5, y);
-        ctx.moveTo(x + 5, y); ctx.lineTo(x + 16, y);
-        ctx.moveTo(x, y - 16); ctx.lineTo(x, y - 5);
-        ctx.moveTo(x, y + 5); ctx.lineTo(x, y + 16);
+        ctx.moveTo(x - 14, y); ctx.lineTo(x + 14, y); ctx.moveTo(x, y - 14); ctx.lineTo(x, y + 14);
         ctx.stroke();
-      };
-      draw('rgba(0,0,0,0.7)', 4);
-      draw('#ffffff', 2);
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(x, y, 1.5, 0, TAU); ctx.fill();
+      }
       if (hit) {
         ctx.strokeStyle = '#ff4040'; ctx.lineWidth = 3;
         ctx.beginPath();
         for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-          ctx.moveTo(x + sx * 6, y + sy * 6); ctx.lineTo(x + sx * 13, y + sy * 13);
+          ctx.moveTo(x + sx * 8, y + sy * 8); ctx.lineTo(x + sx * 15, y + sy * 15);
         }
         ctx.stroke();
       }

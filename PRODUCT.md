@@ -13,6 +13,12 @@ server. Confirmed by the user as the preferred shape ("static site would be
 nice"). Data persists in the browser's localStorage only. Opens from `index.html`
 directly or from any static host.
 
+Reuses survev (the open-source surviv.io continuation, GPL-3.0) as much as
+possible, at the user's request: gun and bullet definitions extracted verbatim to
+`vendor/survev/defs/`, the client's sprites, sounds and font under `vendor/survev/`,
+and its camera, spread, hand/gun placement, tracer and particle rules re-implemented
+in plain JavaScript in `js/game.js`. The project is therefore GPL-3.0 (`LICENSE`).
+
 ## Users
 
 Primary user: the author, a surviv.io / survev.io player, practicing aim at a desk

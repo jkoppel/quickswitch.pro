@@ -92,6 +92,8 @@ window.ST = window.ST || {};
   ST.SURVEV = {
     ppuBase: 16,                       // Camera.m_ppu: PIXI world pixels per unit at zoom 1
     skinTint: 0xf8c574,                // outfitBase baseTint / handTint
+    backpackTint: 0x816537,            // outfitBase backpackTint
+    backpack: { level: 1, offsets: [10.25, 11.5, 12.75] }, // player.ts: bag drawn behind the body at (0.4 + level*0.03)*0.5 scale
     grass: 0x80af49,                   // baseDefs biome colors.grass
     gridSize: 16, gridAlpha: 0.15,     // GameConfig.map.gridSize, map.ts grid lineStyle
     bodySpriteScale: 0.25,             // bodySprite.scale
