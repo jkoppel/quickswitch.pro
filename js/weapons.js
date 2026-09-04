@@ -1,49 +1,109 @@
 // Weapon, ammo, scope and enemy-skill definitions.
-// Numbers approximate surviv.io / survev gun defs (units: world units, seconds, degrees).
-// A player has radius 1 world unit and moves at 12 units/s.
+// Gun and bullet numbers come straight from survev's gunDefs/bulletDefs (vendor/survev/defs, GPL-3.0);
+// this file only selects the trainer's weapon list and reshapes fields for the simulation.
+// Units: world units (player radius = 1), seconds, degrees. Player speed is GameConfig.player.moveSpeed = 12.
 window.ST = window.ST || {};
 
-ST.AMMO = {
-  '9mm': { color: '#ffe36e', label: '9mm' },
-  '762': { color: '#5bb2ff', label: '7.62mm' },
-  '556': { color: '#8cff8c', label: '5.56mm' },
-  '12g': { color: '#ff6b6b', label: '12 gauge' },
-  '308': { color: '#c9a3ff', label: '.308' },
-};
+(function () {
+  const G = window.SURVEV_GUN_DEFS || {};
+  const B = window.SURVEV_BULLET_DEFS || {};
 
-ST.WEAPONS = {
-  m9:    { name: 'M9',           ammo: '9mm', auto: false, fireDelay: 0.10,  dmg: 12,   speed: 85,  range: 100, spread: 8,   moveSpread: 14,  mag: 15, reload: 1.6,  barrel: 1.4 },
-  mp5:   { name: 'MP5',          ammo: '9mm', auto: true,  fireDelay: 0.09,  dmg: 11,   speed: 85,  range: 100, spread: 4,   moveSpread: 6,   mag: 30, reload: 2.6,  barrel: 2.0 },
-  vector:{ name: 'Vector',       ammo: '9mm', auto: true,  fireDelay: 0.032, dmg: 7,    speed: 88,  range: 75,  spread: 4,   moveSpread: 7,   mag: 33, reload: 1.6,  barrel: 1.9 },
-  ak47:  { name: 'AK-47',        ammo: '762', auto: true,  fireDelay: 0.10,  dmg: 13.5, speed: 100, range: 150, spread: 2,   moveSpread: 7,   mag: 30, reload: 2.8,  barrel: 2.5 },
-  m4a1:  { name: 'M4A1-S',       ammo: '556', auto: true,  fireDelay: 0.082, dmg: 14,   speed: 102, range: 175, spread: 1.5, moveSpread: 6.5, mag: 30, reload: 2.3,  barrel: 2.5 },
-  scar:  { name: 'SCAR-H',       ammo: '762', auto: true,  fireDelay: 0.09,  dmg: 15,   speed: 108, range: 150, spread: 1,   moveSpread: 7,   mag: 20, reload: 2.7,  barrel: 2.5 },
-  dp28:  { name: 'DP-28',        ammo: '762', auto: true,  fireDelay: 0.115, dmg: 14,   speed: 110, range: 150, spread: 1,   moveSpread: 5,   mag: 60, reload: 3.6,  barrel: 2.8 },
-  mk12:  { name: 'Mk 12 SPR',    ammo: '556', auto: false, fireDelay: 0.14,  dmg: 22,   speed: 132, range: 175, spread: 1,   moveSpread: 3,   mag: 20, reload: 2.4,  barrel: 2.7 },
-  m39:   { name: 'M39 EMR',      ammo: '762', auto: false, fireDelay: 0.14,  dmg: 24,   speed: 130, range: 150, spread: 1,   moveSpread: 3,   mag: 20, reload: 2.4,  barrel: 2.7 },
-  m870:  { name: 'M870',         ammo: '12g', auto: false, fireDelay: 0.9,   dmg: 9,    speed: 66,  range: 27,  spread: 10,  moveSpread: 10,  mag: 5,  reload: 0.75, barrel: 2.5, pellets: 5, reloadPerShell: true },
-  spas12:{ name: 'SPAS-12',      ammo: '12g', auto: false, fireDelay: 0.75,  dmg: 8.75, speed: 88,  range: 50,  spread: 5,   moveSpread: 5,   mag: 9,  reload: 0.75, barrel: 2.5, pellets: 9, reloadPerShell: true },
-  mosin: { name: 'Mosin-Nagant', ammo: '762', auto: false, fireDelay: 1.75,  dmg: 72,   speed: 178, range: 150, spread: 1,   moveSpread: 1,   mag: 5,  reload: 0.9,  barrel: 3.0, reloadPerShell: true },
-  sv98:  { name: 'SV-98',        ammo: '762', auto: false, fireDelay: 1.5,   dmg: 80,   speed: 182, range: 150, spread: 1,   moveSpread: 1,   mag: 10, reload: 2.7,  barrel: 3.0 },
-  awm:   { name: 'AWM-S',        ammo: '308', auto: false, fireDelay: 1.5,   dmg: 180,  speed: 136, range: 150, spread: 1,   moveSpread: 1,   mag: 5,  reload: 3.5,  barrel: 3.0 },
-};
+  // GameConfig.tracerColors (regular tint per ammo type) from survev shared/gameConfig.ts.
+  ST.TRACER = {
+    '9mm': { color: '#fee2c6', label: '9mm' },
+    '762mm': { color: '#c5d6fe', label: '7.62mm' },
+    '556mm': { color: '#a9ff92', label: '5.56mm' },
+    '12gauge': { color: '#fedcdc', label: '12 gauge' },
+    '50AE': { color: '#fff088', label: '.50 AE' },
+    '308sub': { color: '#252b00', label: '.308 Subsonic' },
+    '45acp': { color: '#ecbeff', label: '.45 ACP' },
+  };
+  ST.AMMO = ST.TRACER;
 
-// Scope name -> half of the visible height in world units (surviv "zoom").
-ST.SCOPES = { '1x': 28, '2x': 36, '4x': 48, '8x': 68, '15x': 104 };
+  // The trainer's weapon list, in survev's own ids. AWM-S is "awc" in survev.
+  const LIST = ['m9', 'mp5', 'vector', 'ak47', 'm4a1', 'scar', 'dp28', 'mk12', 'm39', 'm870', 'spas12', 'mosin', 'sv98', 'awc'];
 
-// Enemy aim skill: sigma of aim error in degrees, reaction time after seeing you, whether it leads moving targets.
-ST.AIM_SKILL = {
-  easy:   { name: 'Easy',   sigma: 9,   reaction: 0.6, lead: false },
-  normal: { name: 'Normal', sigma: 6,   reaction: 0.35, lead: false },
-  hard:   { name: 'Hard',   sigma: 4,   reaction: 0.2, lead: true },
-};
+  function build(id) {
+    const g = G[id];
+    const b = g && B[g.bulletType];
+    if (!g || !b) return null;
+    return {
+      id,
+      name: g.name,
+      ammo: b.tracerColor,
+      auto: g.fireMode === 'auto',
+      burst: g.fireMode === 'burst' ? { count: g.burstCount || 3, delay: g.burstDelay || 0.05 } : null,
+      fireDelay: g.fireDelay,
+      dmg: b.damage,
+      speed: b.speed,
+      range: b.distance,
+      falloff: b.falloff,
+      spread: g.shotSpread,
+      moveSpread: g.moveSpread,
+      mag: g.maxClip,
+      reload: g.reloadTime,
+      reloadPerShell: g.maxReload < g.maxClip, // survev reloads maxReload rounds per reloadTime
+      reloadCount: g.maxReload,
+      barrel: g.barrelLength,
+      barrelOffset: g.barrelOffset || 0,
+      pellets: g.bulletCount > 1 ? g.bulletCount : undefined,
+      pistol: !!g.pistol,
+      bullpup: !!g.isBullpup,
+      tracerWidth: b.tracerWidth,
+      tracerLength: b.tracerLength,
+      worldImg: g.worldImg,
+      particle: g.particle,
+      sound: g.sound,
+      caseTiming: g.caseTiming,
+      pullDelay: g.pullDelay || 0,
+    };
+  }
 
-ST.BEHAVIORS = {
-  static: { name: 'Stationary',   desc: 'Does not move.' },
-  strafe: { name: 'Strafe',       desc: 'Runs side to side, flipping direction unpredictably.' },
-  juke:   { name: 'Juke',         desc: 'Random direction changes and stops, like a real player dodging.' },
-  smooth: { name: 'Smooth strafe', desc: 'Predictable side-to-side sweep. Precise tracking.' },
-  orbit:  { name: 'Orbit',        desc: 'Circles you at a constant distance.' },
-  rush:   { name: 'Rush',         desc: 'Charges you and dances at point-blank range.' },
-  flee:   { name: 'Flee',         desc: 'Runs away from you with jukes. You have to chase while shooting.' },
-};
+  ST.WEAPONS = {};
+  for (const id of LIST) {
+    const w = build(id);
+    if (w) ST.WEAPONS[id === 'awc' ? 'awm' : id] = w;
+  }
+  // Legacy key used by drills/scenarios.
+  if (ST.WEAPONS.awm) ST.WEAPONS.awm.id = 'awc';
+
+  // Scope name -> half of the visible height in world units. These are survev's per-scope zoom values
+  // for desktop (shared/gameConfig.ts scopeZoomRadius.desktop).
+  ST.SCOPES = { '1x': 28, '2x': 36, '4x': 48, '8x': 68, '15x': 104 };
+
+  // Enemy aim skill: sigma of aim error in degrees, reaction time after seeing you, whether it leads moving targets.
+  ST.AIM_SKILL = {
+    easy: { name: 'Easy', sigma: 9, reaction: 0.6, lead: false },
+    normal: { name: 'Normal', sigma: 6, reaction: 0.35, lead: false },
+    hard: { name: 'Hard', sigma: 4, reaction: 0.2, lead: true },
+  };
+
+  ST.BEHAVIORS = {
+    static: { name: 'Stationary', desc: 'Does not move.' },
+    strafe: { name: 'Strafe', desc: 'Runs side to side, flipping direction unpredictably.' },
+    smooth: { name: 'Smooth strafe', desc: 'Predictable side-to-side sweep. Precise tracking.' },
+    juke: { name: 'Juke', desc: 'Random direction changes and stops, like a real player dodging.' },
+    orbit: { name: 'Orbit', desc: 'Circles you at a constant distance.' },
+    rush: { name: 'Rush', desc: 'Charges you and dances at point-blank range.' },
+    flee: { name: 'Flee', desc: 'Runs away from you with jukes. You have to chase while shooting.' },
+  };
+
+  // Visual constants lifted from the survev client (player.ts, animData.ts, particles.ts, map.ts).
+  ST.SURVEV = {
+    ppuBase: 16,                       // Camera.m_ppu: PIXI world pixels per unit at zoom 1
+    skinTint: 0xf8c574,                // outfitBase baseTint / handTint
+    grass: 0x80af49,                   // baseDefs biome colors.grass
+    gridSize: 16, gridAlpha: 0.15,     // GameConfig.map.gridSize, map.ts grid lineStyle
+    bodySpriteScale: 0.25,             // bodySprite.scale
+    handSpriteScale: 0.25,             // hands use the same 0.25 (76px sprite -> 19px)
+    poses: {                           // IdlePoses pivots, in PIXI pixels at 16 px per unit
+      rifle: { handL: [28, 5.25], handR: [14, 1.75] },
+      bullpup: { handL: [28, 5.25], handR: [24, 1.75] },
+      pistol: { handL: [14, 1.75], handR: [14, 1.75] },
+    },
+    gunHandOffset: [-4.25, -1.75],     // GunSprites.setType handOffset for single guns
+    stone: { sprite: 'map-stone-01.img', scale: 0.4, collision: 1.6 },
+    bloodSplat: { sprites: ['part-splat-01.img', 'part-splat-02.img', 'part-splat-03.img'], life: 0.5, scaleStart: 0.04, scaleEnd: [0.15, 0.2], color: 0xb70000 },
+    casing: { life: [0.5, 0.75], drag: [3, 4], rotVel: Math.PI * 3, scaleStart: 0.0625, scaleEnd: 0.0325 },
+  };
+})();

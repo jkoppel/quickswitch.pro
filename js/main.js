@@ -102,7 +102,7 @@
       `<span>Fire rate <b>${rpm} rpm</b></span>`,
       `<span>Bullet speed <b>${w.speed} u/s</b></span>`,
       `<span>Range <b>${w.range} units</b></span>`,
-      `<span>Spread <b>${w.spread}° still / ${w.moveSpread}° moving</b></span>`,
+      `<span>Spread <b>${w.spread}° still, +${w.moveSpread}° moving</b></span>`,
       `<span>Mag <b>${w.mag}</b></span>`,
       `<span>Reload <b>${w.reload}s${w.reloadPerShell ? ' per shell' : ''}</b></span>`,
     ].join('');
@@ -272,15 +272,18 @@
     const settings = { ...step.settings };
     LS.set('st.prefs', { sound: settings.sound, hitmarker: settings.hitmarker });
     step.warmup = step.scored ? ST.history.isWarmup() : false;
-    game = new ST.Game(canvas, settings, {
-      onHud: updateHud,
-      onPause: (paused) => show(paused ? 'pause' : null),
-      onFinish: (r) => onStepFinish(step, r),
+    // Sprites are tiny SVGs, but the first run must not start before they exist.
+    ST.assets.load().then(() => {
+      game = new ST.Game(canvas, settings, {
+        onHud: updateHud,
+        onPause: (paused) => show(paused ? 'pause' : null),
+        onFinish: (r) => onStepFinish(step, r),
+      });
+      ST.currentGame = game;
+      show(null);
+      lastHud = '';
+      game.start();
     });
-    ST.currentGame = game;
-    show(null);
-    lastHud = '';
-    game.start();
   }
 
   function onStepFinish(step, r) {
@@ -558,4 +561,5 @@
   if (!initial || !initial[1]) initial = ['routine', ST.ROUTINES[0]];
   select(initial[0], initial[1]);
   show('menu');
+  ST.assets.load();
 })();

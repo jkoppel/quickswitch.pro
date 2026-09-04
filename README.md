@@ -63,12 +63,20 @@ The research behind these choices, including what was cut and why, is in
 - R: reload
 - Esc: pause
 
-## Fidelity notes
+## Fidelity and licensing
 
-Weapon numbers (damage, fire delay, bullet speed, range, standing/moving spread,
-magazine, reload) approximate the survev gun definitions. Player radius is 1 unit,
-movement is 12 units/s, and scope zoom levels use the game's 1x/2x/4x/8x/15x view
-sizes. See `js/weapons.js`.
+Gun and bullet definitions are survev's own, extracted verbatim from
+`shared/defs/gameObjects/gunDefs.ts` and `bulletDefs.ts` into
+`vendor/survev/defs/`. Player and gun sprites, rock and blood-splat sprites, the
+bullet trail, the default crosshair, every gun's fire/reload/cycle sound, the hit and
+bullet-whiz sounds, and the Roboto Condensed font are copied from the survev client
+into `vendor/survev/`. The camera (pixels per unit = half the larger screen dimension
+divided by the scope's zoom radius), the additive standing plus moving spread, hand and
+gun placement, tracer colors, grass color and grid all follow the survev client and
+server code. Player radius is 1 unit and movement is 12 units/s.
+
+survev is licensed under the GNU GPL v3, so this project is too: see `LICENSE` and
+`vendor/survev/attribution.txt` for the third-party icon credits survev carries.
 
 ## Demo bot
 

@@ -1,3 +1,7 @@
+/* Roboto Condensed, the survev client's UI face (vendored from survev, GPL-3.0). */
+@font-face { font-family: "Roboto Condensed"; font-style: normal; font-weight: 400; font-display: swap; src: url("vendor/survev/fonts/roboto-condensed-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Roboto Condensed"; font-style: normal; font-weight: 700; font-display: swap; src: url("vendor/survev/fonts/roboto-condensed-latin-700-normal.woff2") format("woff2"); }
+
 :root {
   --night: #1a1f16;
   --panel: #23291f;
@@ -25,6 +29,7 @@
   --shadow-panel: 0 10px 40px rgba(0, 0, 0, 0.5);
   --text-shadow-field: 0 1px 3px rgba(0, 0, 0, 0.8);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-hud: "Roboto Condensed", system-ui, Arial, sans-serif;
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -39,7 +44,7 @@ canvas#game { position: fixed; inset: 0; display: block; cursor: none; }
 .mode-btn.active:focus-visible, button.primary:focus-visible { outline-color: var(--ink); }
 
 /* ---------- HUD ---------- */
-#hud { position: fixed; inset: 0; pointer-events: none; user-select: none; }
+#hud { position: fixed; inset: 0; pointer-events: none; user-select: none; font-family: var(--font-hud); }
 #hud-top { position: absolute; top: 12px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 #hud-timer { font-size: 28px; font-weight: 800; letter-spacing: 1px; text-shadow: var(--text-shadow-field); }
 #hud-score { font-size: 15px; font-weight: 600; opacity: 0.9; text-shadow: var(--text-shadow-field); }

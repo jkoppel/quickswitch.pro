@@ -1,70 +1,87 @@
-// Tiny synthesized sound effects (no asset files needed).
+// Sound effects from survev (GPL-3.0), vendored under vendor/survev/audio/. Uses HTMLAudio elements so
+// the trainer keeps working from file:// where fetch-based decoding is blocked.
 window.ST = window.ST || {};
 
 ST.audio = (function () {
-  let ctx = null;
+  const BASE = 'vendor/survev/audio/';
+  const FILES = {
+    // guns: <name>_01 / <name>_reload_01 / cycle / pull
+    empty_fire_01: 'guns/empty_fire_01.mp3', empty_fire_02: 'guns/empty_fire_02.mp3', gun_switch_01: 'guns/gun_switch_01.mp3',
+    player_bullet_hit_01: 'hits/player_bullet_hit_01.mp3', player_bullet_hit_02: 'hits/player_bullet_hit_02.mp3',
+    stone_bullet_hit_01: 'hits/stone_bullet_hit_01.mp3',
+    bullet_whiz_01: 'sfx/bullet_whiz_01.mp3', bullet_whiz_02: 'sfx/bullet_whiz_02.mp3', bullet_whiz_03: 'sfx/bullet_whiz_03.mp3',
+  };
+  for (const w of ['m9', 'mp5', 'vector', 'ak47', 'm4a1', 'scar', 'dp28', 'mk12', 'm39', 'm870', 'spas12', 'mosin', 'sv98', 'awc']) {
+    FILES[`${w}_01`] = `guns/${w}_01.mp3`;
+    FILES[`${w}_reload_01`] = `guns/${w}_reload_01.mp3`;
+  }
+  for (const w of ['m870', 'spas12', 'mosin', 'sv98', 'awc']) {
+    FILES[`${w}_cycle_01`] = `guns/${w}_cycle_01.mp3`;
+    FILES[`${w}_pull_01`] = `guns/${w}_pull_01.mp3`;
+  }
+  const GROUPS = {
+    player_bullet_hit: ['player_bullet_hit_01', 'player_bullet_hit_02'],
+    bullet_whiz: ['bullet_whiz_01', 'bullet_whiz_02', 'bullet_whiz_03'],
+  };
+
   let enabled = true;
-  let noiseBuf = null;
+  let unlocked = false;
+  const base = {};   // name -> HTMLAudioElement (template)
+  const pool = {};   // name -> array of clones for overlapping playback
+  const MAX_VOICES = 6;
 
-  function ensure() {
-    if (!ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return null;
-      ctx = new AC();
-      noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
-      const d = noiseBuf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  function ensure(name) {
+    if (base[name] || !FILES[name]) return base[name] || null;
+    const a = new Audio(BASE + FILES[name]);
+    a.preload = 'auto';
+    base[name] = a;
+    pool[name] = [];
+    return a;
+  }
+  function preload() { for (const name of Object.keys(FILES)) ensure(name); }
+
+  // Distance attenuation like survev's positional audio: full volume within a few units, fading with distance.
+  function volumeFor(dist, fallOff) {
+    if (dist === undefined || dist === null) return 1;
+    const range = 45 * (fallOff || 1);
+    return Math.max(0, Math.min(1, 1 - dist / range)) ** 1.5;
+  }
+
+  function play(name, opts) {
+    if (!enabled || !unlocked) return;
+    const src = ensure(name);
+    if (!src) return;
+    const vol = (opts && opts.volume !== undefined ? opts.volume : 1) * volumeFor(opts && opts.dist, opts && opts.fallOff);
+    if (vol <= 0.01) return;
+    let voices = pool[name];
+    let a = voices.find(v => v.paused || v.ended);
+    if (!a) {
+      if (voices.length >= MAX_VOICES) a = voices[0];
+      else { a = src.cloneNode(); voices.push(a); }
     }
-    if (ctx.state === 'suspended') ctx.resume();
-    return ctx;
+    a.volume = vol;
+    a.currentTime = 0;
+    a.play().catch(() => { /* autoplay policy: wait for a gesture */ });
+  }
+  function playGroup(group, opts) {
+    const names = GROUPS[group];
+    if (!names) return;
+    play(names[Math.floor(Math.random() * names.length)], opts);
   }
 
-  function shot(def) {
-    if (!enabled) return;
-    const c = ensure(); if (!c) return;
-    const t = c.currentTime;
-    const big = def.dmg >= 60 || (def.pellets || 1) > 1;
-    const dur = big ? 0.35 : 0.12;
-
-    const src = c.createBufferSource(); src.buffer = noiseBuf;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(big ? 900 : 1800, t);
-    lp.frequency.exponentialRampToValueAtTime(200, t + dur);
-    const g = c.createGain();
-    g.gain.setValueAtTime(big ? 0.5 : 0.25, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(lp); lp.connect(g); g.connect(c.destination);
-    src.start(t); src.stop(t + dur);
-
-    const osc = c.createOscillator(); osc.type = 'sine';
-    osc.frequency.setValueAtTime(big ? 120 : 180, t);
-    osc.frequency.exponentialRampToValueAtTime(40, t + dur);
-    const og = c.createGain();
-    og.gain.setValueAtTime(big ? 0.5 : 0.2, t);
-    og.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.connect(og); og.connect(c.destination);
-    osc.start(t); osc.stop(t + dur);
-  }
-
-  function blip(freq, dur, vol) {
-    if (!enabled) return;
-    const c = ensure(); if (!c) return;
-    const t = c.currentTime;
-    const osc = c.createOscillator(); osc.type = 'square';
-    osc.frequency.setValueAtTime(freq, t);
-    const g = c.createGain();
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.connect(g); g.connect(c.destination);
-    osc.start(t); osc.stop(t + dur);
-  }
+  // Gun helpers driven straight from the survev gun def's sound block.
+  function shot(def, opts) { play(def.sound.shoot, opts); }
+  function empty(def) { play(def.sound.empty); }
+  function reload(def, opts) { play(def.sound.reload, opts); }
+  function cycle(def, opts) { if (def.sound.cycle) play(def.sound.cycle, opts); }
 
   return {
     setEnabled(v) { enabled = !!v; },
-    unlock() { ensure(); },
-    shot,
-    hit() { blip(1400, 0.05, 0.12); },
-    kill() { blip(900, 0.08, 0.15); setTimeout(() => blip(1350, 0.12, 0.15), 70); },
-    hurt() { blip(220, 0.12, 0.2); },
+    unlock() { if (!unlocked) { unlocked = true; preload(); } },
+    play, playGroup, shot, empty, reload, cycle,
+    hit(opts) { playGroup('player_bullet_hit', opts); },
+    whiz(opts) { playGroup('bullet_whiz', opts); },
+    hurt() { play('player_bullet_hit_02', { volume: 0.9 }); },
+    kill() { /* survev has no kill jingle; the hit sound is the feedback */ },
   };
 })();
