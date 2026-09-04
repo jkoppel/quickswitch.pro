@@ -52,6 +52,18 @@ ST.MODES = [
     settings: { weapon: 'm9', scope: '1x', duration: 60, enemies: 1, behavior: 'orbit', enemyHp: 100, minDist: 6, maxDist: 12 },
   },
   {
+    id: 'chase', name: 'Chase',
+    desc: 'The enemy runs. Chase with WASD and keep landing shots on the move. If they get more than ~8 units past max range for a second, they got away.',
+    tip: 'Moving spread is real: the AK goes from 2° to 7° while running. Fire in short bursts at the moments you are closing, and never stop long enough to lose them.',
+    settings: { weapon: 'ak47', scope: '2x', duration: 60, enemies: 1, behavior: 'flee', enemyHp: 100, minDist: 6, maxDist: 12, fleeSpeed: 0.95, leash: 8 },
+  },
+  {
+    id: 'dodge', name: 'Dodge',
+    desc: 'A strafing enemy with hard aim that leads your movement. Juke to avoid bullets while keeping your own shots on target.',
+    tip: 'Predictable strafes get led. Change direction every half second or so, and shoot during the direction changes when you are briefly still.',
+    settings: { weapon: 'ak47', scope: '1x', duration: 60, enemies: 1, behavior: 'strafe', enemyHp: 100, enemyShoots: true, enemyAim: 'hard', minDist: 8, maxDist: 14 },
+  },
+  {
     id: 'custom', name: 'Custom',
     desc: 'Configure everything yourself.',
     tip: '',

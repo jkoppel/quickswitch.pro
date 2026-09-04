@@ -40,6 +40,28 @@ await page.evaluate((sec) => {
   document.body.appendChild(s);
 }, STEP_SECONDS);
 
+if (process.env.MODE === 'moving') {
+  // Short clip: the Chase and Dodge drills only.
+  await page.waitForTimeout(800);
+  for (const [name, dur] of [[/^Chase/, 30], [/^Dodge/, 30]]) {
+    await page.getByRole('button', { name }).click(); await page.waitForTimeout(1200);
+    await page.locator('#f-duration').fill(String(dur));
+    await page.getByRole('button', { name: 'Start' }).click();
+    await waitScreen(page, 'game'); await playStep(page, { movement: 'auto' });
+    await waitScreen(page, 'results'); await page.waitForTimeout(4000);
+    await page.getByRole('button', { name: 'Menu' }).click(); await page.waitForTimeout(600);
+  }
+  const video = page.video();
+  await ctx.close();
+  const webm = await video.path();
+  await browser.close();
+  const mp4 = join(here, 'moving-drills-demo.mp4');
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', webm, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '23', '-movflags', '+faststart', mp4]);
+  renameSync(webm, join(here, 'moving-drills-demo.webm'));
+  console.log(JSON.stringify({ mp4, errors }, null, 2));
+  process.exit(0);
+}
+
 // Browse the menu a little.
 await page.waitForTimeout(1200);
 await page.getByRole('button', { name: /^Daily 15/ }).click(); await page.waitForTimeout(900);

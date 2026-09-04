@@ -94,6 +94,7 @@ window.ST = window.ST || {};
       this.stats = {
         shots: 0, pellets: 0, hits: 0, kills: 0, deaths: 0, dmgDealt: 0, dmgTaken: 0,
         expired: 0, ttk: [], reaction: [], engage: [], movingShots: 0, onTarget: 0, firing: 0,
+        movingTime: 0, movingPellets: 0, movingHits: 0, dmgTakenStill: 0, hitsTaken: 0, hitsTakenStill: 0,
       };
       // Kinematics: cursor samples (screen px) and one record per acquired target.
       this.cursorLog = [];
@@ -102,7 +103,7 @@ window.ST = window.ST || {};
       this.mouseSpeed = 0;
       // Adaptive difficulty (0..1). Staircase tuned for ~75% success.
       this.diff = settings.adaptive ? 0.35 : (settings.difficulty ?? 0.5);
-      this.adaptWindow = { t: 0, pellets: 0, hits: 0 };
+      this.adaptWindow = { t: 0, pellets: 0, hits: 0, taken: 0 };
       this.hitFlash = 0;
       this.dmgFlash = 0;
       this.deathFlash = 0;
@@ -252,6 +253,11 @@ window.ST = window.ST || {};
         hitsPerSec: st.hits / Math.max(this.time, 1),
         score: this.score(),
         movingShotFrac: st.shots ? st.movingShots / st.shots : 0,
+        movingFrac: st.movingTime / Math.max(this.time, 1),
+        accMoving: st.movingPellets ? st.movingHits / st.movingPellets : null,
+        accStill: (st.pellets - st.movingPellets) ? (st.hits - st.movingHits) / (st.pellets - st.movingPellets) : null,
+        dmgTakenPerMin: st.dmgTaken / Math.max(this.time, 1) * 60,
+        stillDmgFrac: st.dmgTaken ? st.dmgTakenStill / st.dmgTaken : null,
         onTargetFrac: st.onTarget / Math.max(this.time, 1),
         firingFrac: st.firing / Math.max(this.time, 1),
         difficulty: this.diff,
@@ -358,20 +364,27 @@ window.ST = window.ST || {};
 
     // ---------- difficulty ----------
     ttlScale() { return lerp(1.6, 0.45, this.diff); }
+    fleeSpeed() { return (this.s.fleeSpeed || 0.95) * (this.s.adaptive ? lerp(0.85, 1.1, this.diff) : 1); }
+    aimScale() { return this.s.adaptive ? lerp(2.2, 0.6, this.diff) : 1; }
     strafeScale() { return lerp(1.5, 0.55, this.diff); }
     bumpDiff(delta) {
       if (!this.s.adaptive) return;
       this.diff = clamp(this.diff + delta, 0, 1);
     }
     updateAdaptive(dt) {
-      if (!this.s.adaptive || !this.s.invincible) return;
-      // Tracking has no kill events, so grade each one-second window on hit ratio.
+      if (!this.s.adaptive) return;
       const w = this.adaptWindow;
       w.t += dt;
-      if (w.t >= 1) {
+      if (w.t < 1) return;
+      if (this.s.enemyShoots) {
+        // Under fire: a good second is landing shots without taking any.
+        if (w.pellets > 0) this.bumpDiff(w.hits / w.pellets >= 0.4 && w.taken === 0 ? 0.03 : -0.06);
+        else if (w.taken > 0) this.bumpDiff(-0.06);
+      } else if (this.s.invincible) {
+        // Tracking has no kill events, so grade each one-second window on hit ratio.
         if (w.pellets > 0) this.bumpDiff(w.hits / w.pellets >= 0.6 ? 0.03 : -0.09);
-        w.t = 0; w.pellets = 0; w.hits = 0;
       }
+      w.t = 0; w.pellets = 0; w.hits = 0; w.taken = 0;
     }
 
     // ---------- kinematics ----------
@@ -452,6 +465,7 @@ window.ST = window.ST || {};
       p.moving = l > 0;
       if (l > 0) { mx /= l; my /= l; }
       p.vel.x = mx * MOVE_SPEED; p.vel.y = my * MOVE_SPEED;
+      if (p.moving) this.stats.movingTime += dt;
       p.pos.x = clamp(p.pos.x + p.vel.x * dt, -ARENA + PLAYER_R, ARENA - PLAYER_R);
       p.pos.y = clamp(p.pos.y + p.vel.y * dt, -ARENA + PLAYER_R, ARENA - PLAYER_R);
       this.pushOutOfRocks(p.pos);
@@ -525,6 +539,22 @@ window.ST = window.ST || {};
             vx -= tx * k; vy -= ty * k;
             break;
           }
+          case 'flee': {
+            // Run away with lateral jukes; steer off walls and rocks; escape if the leash is exceeded.
+            if (e.timer <= 0) { if (Math.random() < 0.7) e.dirSign = -e.dirSign; e.timer = rand(0.35, 0.9) * this.strafeScale(); }
+            vx = -tx + px * e.dirSign * 0.55; vy = -ty + py * e.dirSign * 0.55;
+            const margin = 14;
+            const ex = Math.max(0, Math.abs(e.pos.x) - (ARENA - margin)) * Math.sign(e.pos.x);
+            const ey = Math.max(0, Math.abs(e.pos.y) - (ARENA - margin)) * Math.sign(e.pos.y);
+            vx -= ex * 0.25; vy -= ey * 0.25;
+            for (const r of this.rocks) {
+              const rx = r.x - e.pos.x, ry = r.y - e.pos.y, rd = Math.hypot(rx, ry);
+              if (rd < r.r + 7 && (rx * vx + ry * vy) > 0) { const side = (rx * vy - ry * vx) > 0 ? -1 : 1; const k = 2.2 * (1 - (rd - r.r) / 7); vx += -ry / rd * side * k; vy += rx / rd * side * k; }
+            }
+            const leash = this.s.maxDist + (this.s.leash || 8);
+            if (d > leash) { e.leashT = (e.leashT || 0) + dt; if (e.leashT > 1.2) e.expired = true; } else e.leashT = 0;
+            break;
+          }
           case 'rush': {
             if (e.timer <= 0) { if (Math.random() < 0.6) e.dirSign = -e.dirSign; e.timer = rand(0.25, 0.7); }
             if (d > 3.2) { vx = tx + px * e.dirSign * 0.5; vy = ty + py * e.dirSign * 0.5; }
@@ -533,7 +563,8 @@ window.ST = window.ST || {};
           }
         }
         const vl = Math.hypot(vx, vy);
-        if (vl > 0) { vx = vx / vl * MOVE_SPEED; vy = vy / vl * MOVE_SPEED; }
+        const speed = e.behavior === 'flee' ? MOVE_SPEED * this.fleeSpeed() : MOVE_SPEED;
+        if (vl > 0) { vx = vx / vl * speed; vy = vy / vl * speed; }
         e.vel.x = vx; e.vel.y = vy;
         e.pos.x = clamp(e.pos.x + vx * dt, -ARENA + PLAYER_R, ARENA - PLAYER_R);
         e.pos.y = clamp(e.pos.y + vy * dt, -ARENA + PLAYER_R, ARENA - PLAYER_R);
@@ -547,13 +578,14 @@ window.ST = window.ST || {};
 
         // Aiming and shooting.
         let aimX = p.x, aimY = p.y;
+        e.aimErrT -= dt;
+        if (e.aimErrT <= 0) { e.aimErr = gauss() * e.skill.sigma * this.aimScale() * DEG; e.leadFrac = rand(0.5, 1.1); e.aimErrT = rand(0.15, 0.4); }
         if (e.skill.lead) {
+          // Humans lead imperfectly: the fraction of the true lead is re-rolled with the aim error.
           const flight = d / e.gun.def.speed;
-          aimX += this.player.vel.x * flight; aimY += this.player.vel.y * flight;
+          aimX += this.player.vel.x * flight * (e.leadFrac || 0.8); aimY += this.player.vel.y * flight * (e.leadFrac || 0.8);
         }
         const base = Math.atan2(aimY - e.pos.y, aimX - e.pos.x);
-        e.aimErrT -= dt;
-        if (e.aimErrT <= 0) { e.aimErr = gauss() * e.skill.sigma * DEG; e.aimErrT = rand(0.15, 0.4); }
         e.aim = base + e.aimErr;
 
         if (this.s.enemyShoots) {
@@ -561,7 +593,10 @@ window.ST = window.ST || {};
           const los = !this.rocks.some(r => segPointDist2(e.pos.x, e.pos.y, p.x, p.y, r.x, r.y).d2 < r.r * r.r);
           // Reaction timer counts down only while the enemy can see you; losing sight resets it.
           if (inRange && los) e.reactT -= dt; else e.reactT = Math.max(e.reactT, 0.15);
-          const wantFire = e.reactT <= 0;
+          // Bursts: automatic weapons are fired in 0.4 to 1.0 s bursts with 0.25 to 0.6 s re-aim pauses.
+          e.burstT = (e.burstT || 0) - dt;
+          if (e.burstT <= 0) { e.bursting = !e.bursting; e.burstT = e.bursting ? rand(0.4, 1.0) : rand(0.25, 0.6); }
+          const wantFire = e.reactT <= 0 && (e.bursting || !e.gun.def.auto);
           updateGun(e.gun, dt, wantFire, () => {
             this.fireGun(e, e.gun.def, e.aim, vl > 0, 'enemy');
           }, e.gun.def.auto ? 0 : 0.22);
@@ -576,7 +611,7 @@ window.ST = window.ST || {};
           this.targets.push({ t: this.time, spawnT: e.spawnT, acqT: Math.max(this.lastAcqT, e.spawnT), firstHit: null, reaction: null, moveTime: null, gain: null, peaks: 0, sector: null, distPx: null, killed: false, expired: true });
           this.lastAcqT = this.time;
           this.bumpDiff(-0.09);
-          this.pushFeed('Target escaped', '#ffb080');
+          this.pushFeed(e.behavior === 'flee' ? 'Enemy got away' : 'Target escaped', '#ffb080');
           this.respawns.push(this.s.respawnDelay);
         }
       }
@@ -591,9 +626,9 @@ window.ST = window.ST || {};
         const a = aim + rand(-spread, spread);
         this.bullets.push({
           x: ox, y: oy, sx: ox, sy: oy, dx: Math.cos(a), dy: Math.sin(a),
-          speed: def.speed, dmg: def.dmg, range: def.range, traveled: 0, owner, ammo: def.ammo,
+          speed: def.speed, dmg: def.dmg, range: def.range, traveled: 0, owner, ammo: def.ammo, moving,
         });
-        if (owner === 'player') { this.stats.pellets++; this.adaptWindow.pellets++; }
+        if (owner === 'player') { this.stats.pellets++; this.adaptWindow.pellets++; if (moving) this.stats.movingPellets++; }
       }
       if (owner === 'player' && moving) this.stats.movingShots++;
       this.particles.push({ x: ox, y: oy, vx: 0, vy: 0, life: 0.05, maxLife: 0.05, r: 0.6, color: 'rgba(255,230,150,0.9)' });
@@ -643,6 +678,7 @@ window.ST = window.ST || {};
       const st = this.stats;
       st.hits++;
       this.adaptWindow.hits++;
+      if (b.moving) st.movingHits++;
       const dmg = Math.min(b.dmg, e.hp);
       st.dmgDealt += isFinite(dmg) ? dmg : b.dmg;
       e.hp -= b.dmg;
@@ -677,6 +713,9 @@ window.ST = window.ST || {};
       const dmg = Math.min(b.dmg, p.hp);
       p.hp -= b.dmg;
       this.stats.dmgTaken += dmg;
+      this.stats.hitsTaken++;
+      this.adaptWindow.taken++;
+      if (!p.moving) { this.stats.dmgTakenStill += dmg; this.stats.hitsTakenStill++; }
       this.dmgFlash = 0.25;
       this.spawnBlood(hx, hy, b.dx, b.dy);
       ST.audio.hurt();

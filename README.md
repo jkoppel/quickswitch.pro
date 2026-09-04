@@ -5,7 +5,8 @@ Top-down view, absolute mouse cursor, WASD movement, and bullets that actually t
 so you practice leading targets the way the real game demands.
 
 Demo of a simulated user running the Benchmark, an adaptive Flick drill and the
-Bullet-leads drill: `demo/surviv-trainer-demo.mp4`.
+Bullet-leads drill: `demo/surviv-trainer-demo.mp4`. Chase and Dodge drills:
+`demo/moving-drills-demo.mp4`.
 
 ## Run
 
@@ -22,14 +23,21 @@ Use the Fullscreen button so pixel geometry matches the game.
 
 | Routine | What it is |
 | --- | --- |
-| Benchmark | 45 s warm-up, then seven 30 s scored scenarios: static, precision and dynamic clicking; precise and reactive tracking; speed and evasive switching. Fixed difficulty, no hints, so scores compare across weeks. |
-| Daily 15 | Warm-up plus six 75 s adaptive drills in shuffled order, one per category. |
-| Clicking focus / Tracking focus | Category-specific adaptive sets. |
+| Benchmark | 45 s warm-up, then nine 30 s scored scenarios: static, precision and dynamic clicking; precise and reactive tracking; speed and evasive switching; chase and dodge under fire. Fixed difficulty, no hints, so scores compare across weeks. |
+| Daily 15 | Warm-up plus eight 75 s adaptive drills in shuffled order, one per category. |
+| Clicking focus / Tracking focus / Moving focus | Category-specific adaptive sets. Moving focus is chase, dodge and a hard duel. |
 | Bullet leads | Sniper drills with a lead marker that fades out during each run. |
 
 ## Drills
 
-Tracking, Flick, 1v1 Duel, Shotgun Rush, Sniper Leads, Swarm, Pistol Tap, Custom.
+Tracking, Flick, 1v1 Duel, Shotgun Rush, Sniper Leads, Swarm, Pistol Tap, Chase, Dodge, Custom.
+
+Chase: the enemy flees with jukes at 90% of your speed (faster as adaptive difficulty
+rises) and gets away if you fall more than the leash distance behind, so you have to
+shoot while running with moving spread. Dodge: a strafing enemy with hard aim that leads
+your movement shoots back, so standing still or strafing predictably gets you hit.
+Both report accuracy while moving versus standing, time spent moving, enemies that got
+away, damage taken per minute and the share of damage taken while still.
 Every setting is editable: weapon, scope, enemy count and movement, HP or invincible
 bots, return fire, adaptive difficulty, lead marker, obstacles.
 

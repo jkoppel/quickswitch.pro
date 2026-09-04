@@ -35,7 +35,7 @@ ST.SCOPES = { '1x': 28, '2x': 36, '4x': 48, '8x': 68, '15x': 104 };
 ST.AIM_SKILL = {
   easy:   { name: 'Easy',   sigma: 9,   reaction: 0.6, lead: false },
   normal: { name: 'Normal', sigma: 6,   reaction: 0.35, lead: false },
-  hard:   { name: 'Hard',   sigma: 2.5, reaction: 0.2, lead: true },
+  hard:   { name: 'Hard',   sigma: 4,   reaction: 0.2, lead: true },
 };
 
 ST.BEHAVIORS = {
@@ -45,4 +45,5 @@ ST.BEHAVIORS = {
   smooth: { name: 'Smooth strafe', desc: 'Predictable side-to-side sweep. Precise tracking.' },
   orbit:  { name: 'Orbit',        desc: 'Circles you at a constant distance.' },
   rush:   { name: 'Rush',         desc: 'Charges you and dances at point-blank range.' },
+  flee:   { name: 'Flee',         desc: 'Runs away from you with jukes. You have to chase while shooting.' },
 };

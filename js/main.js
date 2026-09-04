@@ -100,7 +100,7 @@
     $('trend-title').textContent = selection.kind === 'routine' ? `${selection.item.name} score over runs` : 'Score over runs (this drill + weapon)';
     const b = ST.history.best(key, 'score');
     const el = $('best');
-    if (!b) { el.textContent = runs.length ? 'Only warm-up runs so far. Bests count after the first 90 seconds of practice each day.' : 'No previous runs.'; return; }
+    if (!b) { el.textContent = runs.length ? 'Only warm-up runs so far. Bests count after the first 40 seconds of practice each day.' : 'No previous runs.'; return; }
     const parts = [`Best: ${Math.round(b.score)} score`, `${b.hitsPerSec.toFixed(2)} hits/s`, `${(b.accuracy * 100).toFixed(0)}% accuracy`];
     if (selection.kind === 'routine' && selection.item.id === 'benchmark') parts.push(`avg tier ${tierFromFrac(b.score / 100).name}`);
     parts.push(`on ${b.day}`);
@@ -396,8 +396,11 @@
         rows.push(['Movements per target', fmt.num(k.peaks), '', false]);
       }
       rows.push(['Shots fired while moving', fmt.pct(r.movingShotFrac), '', false]);
+      if (r.accMoving !== null && r.accStill !== null) rows.push(['Accuracy moving / standing', `${fmt.pct(r.accMoving)} / ${fmt.pct(r.accStill)}`, '', false]);
+      if (s.behavior === 'flee') rows.push(['Time spent moving', fmt.pct(r.movingFrac), '', false], ['Enemies got away', fmt.int(r.expired), '', false]);
+      if (s.enemyShoots) rows.push(['Damage taken per minute', fmt.num(r.dmgTakenPerMin), '', false], ['Damage taken while still', r.stillDmgFrac === null ? '—' : fmt.pct(r.stillDmgFrac), '', false]);
       if (s.adaptive) rows.push(['Difficulty reached', fmt.int(Math.round(r.difficulty * 100)), prevOf('difficulty', (v) => Math.round(v * 100)), false]);
-      if (s.ttl > 0) rows.push(['Targets escaped', fmt.int(r.expired), '', false]);
+      if (s.ttl > 0 && s.behavior !== 'flee') rows.push(['Targets escaped', fmt.int(r.expired), '', false]);
       if (s.enemyShoots) rows.push(['Deaths', fmt.int(r.deaths), '', false], ['Damage taken', fmt.int(Math.round(r.dmgTaken)), '', false]);
       table.innerHTML = rows.map(([label, val, best, isNew]) =>
         `<tr><td>${label}</td><td class="${isNew && !e.step.warmup ? 'new-best' : ''}">${val}</td><td>${best}</td></tr>`).join('');

@@ -8,11 +8,13 @@ ST.insights = function (r, s) {
   const DIRS = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
   const pct = (v) => Math.round(v * 100);
 
-  if (k.n >= 6 && k.gain !== null) {
+  const mustMove = s.behavior === 'flee' || s.enemyShoots;
+  // Flick kinematics are measured in screen space; when the player runs, the camera moves the target too, so skip them.
+  if (!mustMove && k.n >= 6 && k.gain !== null) {
     if (k.gain > 1.12) out.push({ sev: 3, text: `You overshoot flicks by ${pct(k.gain - 1)}% on average. Aim to land just short and finish with a small correction; experts land hypometric on precision tasks.` });
     else if (k.gain < 0.82) out.push({ sev: 3, text: `Your first movement stops ${pct(1 - k.gain)}% short of the target and you finish with corrections. Commit to a larger initial move.` });
   }
-  if (k.n >= 6 && k.sectors.length) {
+  if (!mustMove && k.n >= 6 && k.sectors.length) {
     const valid = k.sectors.map((sec, i) => ({ ...sec, i })).filter(sec => sec.n >= 2 && sec.firstHit !== null);
     if (valid.length >= 3 && k.firstHit) {
       const worst = valid.reduce((a, b) => (b.firstHit > a.firstHit ? b : a));
@@ -25,13 +27,13 @@ ST.insights = function (r, s) {
       }
     }
   }
-  if (k.n >= 6 && k.peaks !== null && k.peaks > 2.2) {
+  if (!mustMove && k.n >= 6 && k.peaks !== null && k.peaks > 2.2) {
     out.push({ sev: 2, text: `Averaging ${k.peaks.toFixed(1)} separate movements per target. A flick should be one ballistic move plus at most one correction. Slow down the first move slightly and trust it.` });
   }
-  if (k.n >= 6 && k.reaction !== null && k.reaction > 0.42) {
+  if (!mustMove && k.n >= 6 && k.reaction !== null && k.reaction > 0.42) {
     out.push({ sev: 2, text: `You take ${k.reaction.toFixed(2)}s to start moving after a target appears. That is decision time, not reflexes: pick the next target before the current one dies.` });
   }
-  if (w && r.shots >= 10 && w.moveSpread > w.spread * 1.5 && r.movingShotFrac > 0.4) {
+  if (!mustMove && w && r.shots >= 10 && w.moveSpread > w.spread * 1.5 && r.movingShotFrac > 0.4) {
     out.push({ sev: 3, text: `${pct(r.movingShotFrac)}% of your shots were fired while moving. The ${w.name} spreads ${w.moveSpread}° moving vs ${w.spread}° standing. Stop for the shot, then move.` });
   }
   if (s.invincible && r.firingFrac <= 0.1) {
@@ -40,6 +42,17 @@ ST.insights = function (r, s) {
   if (s.invincible && r.firingFrac > 0.1) {
     if (r.onTargetFrac < 0.45) out.push({ sev: 3, text: `Cursor was on the target only ${pct(r.onTargetFrac)}% of the time. Track the body, not the gun, and move with the target rather than chasing it.` });
     else if (r.accuracy < r.onTargetFrac - 0.2) out.push({ sev: 2, text: `Your cursor was on target ${pct(r.onTargetFrac)}% of the time but only ${pct(r.accuracy)}% of bullets hit: you are aiming where the target is, not where it will be. Lead by about ${(s.maxDist / w.speed).toFixed(2)}s at this range.` });
+  }
+  if (s.behavior === 'flee') {
+    if (r.expired >= 2) out.push({ sev: 3, text: `${r.expired} enemies got away. Keep W held and let the crosshair do the work; stopping to line up a shot costs more distance than the shot is worth.` });
+    if (r.movingFrac < 0.5) out.push({ sev: 2, text: `You were moving only ${pct(r.movingFrac)}% of the time in a chase. The runner is nearly as fast as you, so every pause is distance lost.` });
+  }
+  if (r.accMoving !== null && r.accStill !== null && r.movingPellets >= 10 && r.pellets - r.movingPellets >= 10 && r.accMoving < r.accStill - 0.25) {
+    out.push({ sev: 2, text: `Accuracy drops from ${pct(r.accStill)}% standing to ${pct(r.accMoving)}% moving. Close the distance before firing while running, or fire in short bursts at direction changes.` });
+  }
+  if (s.enemyShoots && r.dmgTaken >= 40) {
+    if (r.stillDmgFrac !== null && r.stillDmgFrac > 0.5) out.push({ sev: 3, text: `${pct(r.stillDmgFrac)}% of the damage you took landed while you were standing still. A hard bot leads movement but cannot lead a stop-start juke; keep changing direction.` });
+    else if (r.movingFrac > 0.85 && r.deaths > 0) out.push({ sev: 2, text: `You moved ${pct(r.movingFrac)}% of the time and still died ${r.deaths}×: constant motion in one direction is predictable. Break rhythm with short stops and reversals.` });
   }
   if (s.ttl > 0 && r.expired >= 3 && r.expired > r.kills * 0.3) {
     out.push({ sev: 2, text: `${r.expired} targets timed out. Snap and commit; a missed flick reset to center costs less than a slow approach.` });

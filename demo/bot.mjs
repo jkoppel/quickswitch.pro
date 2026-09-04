@@ -26,7 +26,7 @@ export async function installProbe(page) {
           st.time = g.time; st.w = g.w; st.h = g.h; st.r = g.ppu;
           st.auto = g.player.gun.def.auto; st.fireDelay = g.player.gun.def.fireDelay;
           st.bulletSpeed = g.player.gun.def.speed * g.ppu; st.ammo = g.player.gun.ammo; st.reloading = g.player.gun.reloading;
-          st.hp = g.player.hp; st.shoots = !!g.s.enemyShoots;
+          st.hp = g.player.hp; st.shoots = !!g.s.enemyShoots; st.flee = g.s.behavior === 'flee';
           st.enemies = g.enemies.map(e => { const p = g.worldToScreen(e.pos.x, e.pos.y); return { id: e.spawnT, x: p.x, y: p.y, vx: e.vel.x * g.ppu, vy: e.vel.y * g.ppu, hp: e.hp, spawnT: e.spawnT }; });
         }
         document.body.dataset.bot = JSON.stringify(st);
@@ -53,8 +53,16 @@ export async function playStep(page, skill = {}) {
     leadSkill: 0.95,           // fraction of the true lead applied
     trackLag: 0.45,            // exponential approach rate per tick when tracking
     jitter: 1.2,               // px jitter while tracking
+    movement: null,            // null | 'chase' | 'dodge' | 'auto'
     ...skill,
   };
+  const held = new Set();
+  let moveKeys = new Set();
+  let nextMoveChange = 0;
+  async function setKeys(want) {
+    for (const k of held) if (!want.has(k)) { await page.keyboard.up(k); held.delete(k); }
+    for (const k of want) if (!held.has(k)) { await page.keyboard.down(k); held.add(k); }
+  }
   let cur = null;               // cursor position (screen px)
   let move = null;              // active ballistic movement {x0,y0,x1,y1,t0,dur,correction}
   let waitUntil = 0;            // reaction gate
@@ -69,6 +77,7 @@ export async function playStep(page, skill = {}) {
     const st = await readState(page);
     if (st.screen !== 'game' || !st.enemies) {
       if (down) { await page.mouse.up(); down = false; }
+      await setKeys(new Set());
       return lastState;
     }
     lastState = st;
@@ -129,10 +138,30 @@ export async function playStep(page, skill = {}) {
       nextShot = t + st.fireDelay + rand(0.08, 0.2);
     }
     if (st.ammo === 0 && !st.reloading) await page.keyboard.press('r');
-    // Dodge a little when the enemy shoots back.
-    if (st.shoots && Math.random() < 0.03) {
-      const key = Math.random() < 0.5 ? 'a' : 'd';
-      await page.keyboard.down(key); setTimeout(() => page.keyboard.up(key).catch(() => {}), rand(200, 500));
+    // Movement: chase a runner, or juke when the enemy shoots back.
+    const mode = S.movement === 'auto' || S.movement === null ? (st.flee ? 'chase' : st.shoots ? 'dodge' : null) : S.movement;
+    if (mode === 'chase') {
+      const dx = target.x - st.w / 2, dy = target.y - st.h / 2;
+      const want = new Set();
+      if (Math.hypot(dx, dy) > 5 * r) {
+        if (Math.abs(dx) > 0.3 * Math.abs(dy)) want.add(dx > 0 ? 'd' : 'a');
+        if (Math.abs(dy) > 0.3 * Math.abs(dx)) want.add(dy > 0 ? 's' : 'w');
+      }
+      if (t >= nextMoveChange) { moveKeys = want; nextMoveChange = t + rand(0.15, 0.3); }
+      await setKeys(moveKeys);
+    } else if (mode === 'dodge') {
+      if (t >= nextMoveChange) {
+        // Strafe roughly perpendicular to the enemy, reversing at irregular intervals, with brief stops.
+        const dx = target.x - st.w / 2, dy = target.y - st.h / 2, len = Math.hypot(dx, dy) || 1;
+        const px = -dy / len, py = dx / len, sgn = Math.random() < 0.5 ? -1 : 1;
+        const want = new Set();
+        if (Math.random() > 0.15) {
+          if (Math.abs(px) > 0.4) want.add(px * sgn > 0 ? 'd' : 'a');
+          if (Math.abs(py) > 0.4) want.add(py * sgn > 0 ? 's' : 'w');
+        }
+        moveKeys = want; nextMoveChange = t + rand(0.25, 0.6);
+      }
+      await setKeys(moveKeys);
     }
     await page.waitForTimeout(14);
   }

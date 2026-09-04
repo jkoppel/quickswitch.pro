@@ -20,6 +20,10 @@ ST.SCENARIOS = {
     settings: { weapon: 'm4a1', scope: '1x', duration: 30, enemies: 4, behavior: 'static', enemyHp: 28, minDist: 5, maxDist: 16 } },
   evasiveSwitch:  { name: 'Evasive switching',  cat: 'Switching', ref: 380,
     settings: { weapon: 'm4a1', scope: '1x', duration: 30, enemies: 3, behavior: 'juke', enemyHp: 42, minDist: 6, maxDist: 16 } },
+  chase:          { name: 'Chase',              cat: 'Moving',    ref: 300,
+    settings: { weapon: 'ak47', scope: '2x', duration: 30, enemies: 1, behavior: 'flee', enemyHp: 100, minDist: 6, maxDist: 12, fleeSpeed: 0.95, leash: 8 } },
+  dodge:          { name: 'Dodge under fire',   cat: 'Moving',    ref: 320,
+    settings: { weapon: 'ak47', scope: '1x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 100, enemyShoots: true, enemyAim: 'hard', minDist: 8, maxDist: 14 } },
 };
 
 // Benchmark scenarios are a ruler: no adaptive difficulty, no lead hints, fixed difficulty.
@@ -47,13 +51,13 @@ ST.tierFor = function (scenarioId, score) {
 // A routine is a list of steps; each step names a scenario or a drill and may override settings.
 ST.ROUTINES = [
   {
-    id: 'benchmark', name: 'Benchmark', minutes: 6, shuffle: false, rest: 12,
-    desc: '45-second warm-up plus seven 30-second scored scenarios covering clicking (speed and precision), tracking (precise and reactive) and switching (speed and evasive). Adaptive difficulty and lead hints are off so scores stay comparable between sessions. Re-run it weekly, not daily.',
-    steps: ['warmup', 'staticClick', 'precisionClick', 'dynamicClick', 'preciseTrack', 'reactiveTrack', 'speedSwitch', 'evasiveSwitch'],
+    id: 'benchmark', name: 'Benchmark', minutes: 8, shuffle: false, rest: 12,
+    desc: '45-second warm-up plus nine 30-second scored scenarios covering clicking (speed and precision), tracking (precise and reactive), switching (speed and evasive) and moving (chase, dodge under fire). Adaptive difficulty and lead hints are off so scores stay comparable between sessions. Re-run it weekly, not daily.',
+    steps: ['warmup', 'staticClick', 'precisionClick', 'dynamicClick', 'preciseTrack', 'reactiveTrack', 'speedSwitch', 'evasiveSwitch', 'chase', 'dodge'],
   },
   {
-    id: 'daily', name: 'Daily 15', minutes: 15, shuffle: true, rest: 20,
-    desc: 'One warm-up, then six 75-second adaptive drills in shuffled order, one per aim category. Short and daily beats long and weekly.',
+    id: 'daily', name: 'Daily 15', minutes: 17, shuffle: true, rest: 20,
+    desc: 'One warm-up, then eight 75-second adaptive drills in shuffled order, one per aim category including chase and dodge. Short and daily beats long and weekly.',
     steps: ['warmup',
       { scenario: 'staticClick', settings: { duration: 75, adaptive: true, ttl: 1.6 } },
       { scenario: 'dynamicClick', settings: { duration: 75, adaptive: true, ttl: 2.0 } },
@@ -61,6 +65,18 @@ ST.ROUTINES = [
       { scenario: 'reactiveTrack', settings: { duration: 75, adaptive: true } },
       { scenario: 'speedSwitch', settings: { duration: 75, adaptive: true } },
       { scenario: 'evasiveSwitch', settings: { duration: 75, adaptive: true } },
+      { scenario: 'chase', settings: { duration: 75, adaptive: true } },
+      { scenario: 'dodge', settings: { duration: 75, adaptive: true } },
+    ],
+  },
+  {
+    id: 'moving', name: 'Moving focus', minutes: 9, shuffle: true, rest: 15,
+    desc: 'Accuracy on the move: chase a fleeing enemy, dodge one that shoots back, then a full duel. Adaptive: the runner gets faster and the shooter gets sharper as you succeed.',
+    steps: ['warmup',
+      { scenario: 'chase', settings: { duration: 75, adaptive: true } },
+      { scenario: 'dodge', settings: { duration: 75, adaptive: true } },
+      { scenario: 'chase', settings: { duration: 75, adaptive: true, weapon: 'mp5', scope: '1x', minDist: 5, maxDist: 10 } },
+      { mode: 'duel', settings: { duration: 75, enemyAim: 'hard' } },
     ],
   },
   {
