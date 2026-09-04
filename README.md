@@ -1,8 +1,11 @@
 # surviv-trainer
 
 A browser aim trainer for [surviv.io](https://surviv.io) / [survev.io](https://survev.io).
-Top-down view, mouse aim, WASD movement, and bullets that actually travel, so you
-practice leading targets the way the real game demands.
+Top-down view, absolute mouse cursor, WASD movement, and bullets that actually travel,
+so you practice leading targets the way the real game demands.
+
+Demo of a simulated user running the Benchmark, an adaptive Flick drill and the
+Bullet-leads drill: `demo/surviv-trainer-demo.mp4`.
 
 ## Run
 
@@ -13,22 +16,38 @@ python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
+Use the Fullscreen button so pixel geometry matches the game.
+
+## Routines
+
+| Routine | What it is |
+| --- | --- |
+| Benchmark | 45 s warm-up, then seven 30 s scored scenarios: static, precision and dynamic clicking; precise and reactive tracking; speed and evasive switching. Fixed difficulty, no hints, so scores compare across weeks. |
+| Daily 15 | Warm-up plus six 75 s adaptive drills in shuffled order, one per category. |
+| Clicking focus / Tracking focus | Category-specific adaptive sets. |
+| Bullet leads | Sniper drills with a lead marker that fades out during each run. |
+
 ## Drills
 
-| Drill | What it trains |
-| --- | --- |
-| Tracking | Keeping an SMG/AR stream on a strafing enemy |
-| Flick | Snapping to targets that pop up and vanish after 1.5 s |
-| 1v1 Duel | Hitting a juking enemy who shoots back while you dodge |
-| Shotgun Rush | Point-blank M870 timing against chargers |
-| Sniper Leads | Mosin at 8x against long-range strafers |
-| Swarm | Target selection against three jukers |
-| Pistol Tap | Semi-auto click discipline with the M9 |
-| Custom | Anything: weapon, scope, enemy count, movement, HP, return fire |
+Tracking, Flick, 1v1 Duel, Shotgun Rush, Sniper Leads, Swarm, Pistol Tap, Custom.
+Every setting is editable: weapon, scope, enemy count and movement, HP or invincible
+bots, return fire, adaptive difficulty, lead marker, obstacles.
 
-Every drill's settings can be tweaked before starting. Results show accuracy,
-time-to-kill, reaction time, and damage per second, with per-drill bests saved
-in the browser.
+## What you get after a run
+
+- Score = 100 × hits per second × √accuracy. Hit rate plateaus within days while
+  speed keeps improving for months, so the score follows throughput.
+- Flick kinematics from the cursor path: reaction time, movement time, overshoot
+  gain, movements per target, and a direction rose of time-to-first-hit.
+- One or two insights derived from that data (overshoot, weak directions, shooting
+  while moving, aiming where the target is instead of where it will be).
+- Benchmark tiers (provisional thresholds), a strategy check comparing your speed
+  and precision conditions, and a per-scenario trend chart over runs.
+- Warm-up handling: the first 40 s of practice each day is flagged and excluded
+  from bests. A session counter turns amber after 45 minutes.
+
+The research behind these choices, including what was cut and why, is in
+`docs/RESEARCH.md`.
 
 ## Controls
 
@@ -40,6 +59,13 @@ in the browser.
 ## Fidelity notes
 
 Weapon numbers (damage, fire delay, bullet speed, range, standing/moving spread,
-magazine, reload) are approximations of the survev gun definitions. Player radius
-is 1 unit, movement is 12 units/s, and scope zoom levels use the game's 1x/2x/4x/8x/15x
-view sizes. See `js/weapons.js`.
+magazine, reload) approximate the survev gun definitions. Player radius is 1 unit,
+movement is 12 units/s, and scope zoom levels use the game's 1x/2x/4x/8x/15x view
+sizes. See `js/weapons.js`.
+
+## Demo bot
+
+`demo/bot.mjs` is a simulated human player (reaction delay, Fitts-style movement
+time, minimum-jerk flicks with endpoint noise and overshoot, corrective
+submovements, partial lead). `demo/record.mjs` drives it through the trainer in
+headless Chrome and writes the video.

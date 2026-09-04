@@ -823,9 +823,10 @@ window.ST = window.ST || {};
             const lp = this.intercept(e);
             if (lp) {
               ctx.globalAlpha = a;
-              ctx.beginPath(); ctx.arc(lp.x, lp.y, 0.5, 0, TAU);
-              ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.12; ctx.stroke();
-              ctx.beginPath(); ctx.arc(lp.x, lp.y, 0.08, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill();
+              const rr = 9 / this.ppu; // constant on-screen size regardless of scope
+              ctx.beginPath(); ctx.arc(lp.x, lp.y, rr, 0, TAU);
+              ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 / this.ppu; ctx.stroke();
+              ctx.beginPath(); ctx.arc(lp.x, lp.y, rr * 0.2, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill();
               ctx.globalAlpha = 1;
             }
           }
