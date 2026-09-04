@@ -100,7 +100,7 @@
     $('trend-title').textContent = selection.kind === 'routine' ? `${selection.item.name} score over runs` : 'Score over runs (this drill + weapon)';
     const b = ST.history.best(key, 'score');
     const el = $('best');
-    if (!b) { el.textContent = runs.length ? 'Only warm-up runs so far. Bests count from the third run of a day.' : 'No previous runs.'; return; }
+    if (!b) { el.textContent = runs.length ? 'Only warm-up runs so far. Bests count after the first 90 seconds of practice each day.' : 'No previous runs.'; return; }
     const parts = [`Best: ${Math.round(b.score)} score`, `${b.hitsPerSec.toFixed(2)} hits/s`, `${(b.accuracy * 100).toFixed(0)}% accuracy`];
     if (selection.kind === 'routine' && selection.item.id === 'benchmark') parts.push(`avg tier ${tierFromFrac(b.score / 100).name}`);
     parts.push(`on ${b.day}`);
@@ -225,12 +225,12 @@
 
   function onStepFinish(step, r) {
     const entry = { step, result: r, scenario: step.scenario, key: step.key };
-    if (step.scored && r.time >= step.settings.duration * 0.5) {
+    if (r.time >= step.settings.duration * 0.5) {
       const w = ST.WEAPONS[step.settings.weapon];
-      entry.prevBest = ST.history.best(step.key, 'score');
+      if (step.scored) entry.prevBest = ST.history.best(step.key, 'score');
       entry.run = ST.history.add({
         key: step.key, label: step.label, weapon: w.name, scope: step.settings.scope, duration: r.time,
-        score: r.score, hitsPerSec: r.hitsPerSec, accuracy: r.accuracy, kills: r.kills, avgTtk: r.avgTtk,
+        score: step.scored ? r.score : null, hitsPerSec: r.hitsPerSec, accuracy: r.accuracy, kills: r.kills, avgTtk: r.avgTtk,
         difficulty: step.settings.adaptive ? r.difficulty : null, warmup: step.warmup, benchmark: !!step.benchmark,
       });
     }
@@ -364,8 +364,14 @@
       if (weakest) {
         const ins = ST.insights(weakest.result, weakest.step.settings);
         insightsEl.innerHTML = `<div class="insight muted">From ${weakest.step.label}, your weakest step:</div>` + (ins.length ? ins.map(i => `<div class="insight">${i.text}</div>`).join('') : '<div class="insight ok">Nothing stands out. Keep the tempo up.</div>');
-        const rose = weakest.result.kinematics;
-        ST.charts.rose($('rose'), rose ? rose.sectors : [], tip);
+        // Direction map pooled over every scored step (single steps rarely have enough flicks).
+        const pooled = [];
+        for (let i = 0; i < 8; i++) pooled.push({ n: 0, fh: 0, gsum: 0, gn: 0 });
+        for (const e of scored) {
+          const k = e.result.kinematics; if (!k) continue;
+          k.sectors.forEach((sec, i) => { if (sec.n) { pooled[i].n += sec.n; pooled[i].fh += sec.firstHit * sec.n; if (sec.gain !== null) { pooled[i].gsum += sec.gain * sec.n; pooled[i].gn += sec.n; } } });
+        }
+        ST.charts.rose($('rose'), pooled.map(p => ({ n: p.n, firstHit: p.n ? p.fh / p.n : null, gain: p.gn ? p.gsum / p.gn : null })), tip);
       }
     } else {
       const e = entries[0];

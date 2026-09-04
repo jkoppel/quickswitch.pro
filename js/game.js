@@ -379,7 +379,10 @@ window.ST = window.ST || {};
       const log = this.cursorLog;
       const last = log[log.length - 1];
       const sample = { t: this.time, x: this.mouse.x, y: this.mouse.y, v: 0 };
-      if (last && dt > 0) sample.v = Math.hypot(sample.x - last.x, sample.y - last.y) / dt;
+      // Speed over a ~50 ms window: mouse events arrive slower than frames, so per-frame speed is noisy.
+      let j = log.length - 1;
+      while (j > 0 && sample.t - log[j].t < 0.05) j--;
+      if (j >= 0 && sample.t - log[j].t > 0) sample.v = Math.hypot(sample.x - log[j].x, sample.y - log[j].y) / (sample.t - log[j].t);
       this.mouseSpeed = sample.v;
       log.push(sample);
       while (log.length && log[0].t < this.time - 5) log.shift();
@@ -405,17 +408,21 @@ window.ST = window.ST || {};
       rec.distPx = dist;
       rec.sector = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
       const thresh = this.h * 0.35; // px/s: movement onset
-      let onset = null, peak = 0, peaks = 0, rising = false, primaryEnd = null;
+      let onset = null, peak = 0, peaks = 0, primaryEnd = null, localPeak = 0, armed = true;
       for (let i = 1; i < log.length; i++) {
         const c = log[i];
         if (onset === null && c.v > thresh) onset = c.t;
         if (onset === null) continue;
         if (c.v > peak) peak = c.v;
-        const prev = log[i - 1].v;
-        if (c.v > prev && c.v > thresh) rising = true;
-        else if (rising && c.v < prev) { peaks++; rising = false; }
-        if (primaryEnd === null && peaks >= 1 && c.v < peak * 0.15) primaryEnd = c;
+        // A submovement = speed rises above threshold, then falls below half its local peak.
+        if (armed && c.v > thresh) { armed = false; localPeak = c.v; }
+        else if (!armed) {
+          if (c.v > localPeak) localPeak = c.v;
+          else if (c.v < localPeak * 0.5) { peaks++; armed = true; }
+        }
+        if (primaryEnd === null && peaks >= 1 && c.v < peak * 0.2) primaryEnd = c;
       }
+      if (!armed) peaks++; // movement still in progress at the hit
       if (onset !== null) {
         rec.reaction = onset - t0;
         rec.moveTime = now - onset;

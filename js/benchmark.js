@@ -5,7 +5,7 @@ window.ST = window.ST || {};
 // `ref` is the provisional score that marks the top tier; tiers are fractions of it.
 ST.SCENARIOS = {
   warmup:         { name: 'Warm-up tracking',   cat: 'Warm-up',   scored: false,
-    settings: { weapon: 'mp5', scope: '1x', duration: 30, enemies: 1, behavior: 'strafe', invincible: true, minDist: 8, maxDist: 14 } },
+    settings: { weapon: 'mp5', scope: '1x', duration: 45, enemies: 1, behavior: 'strafe', invincible: true, minDist: 8, maxDist: 14 } },
   staticClick:    { name: 'Static clicking',    cat: 'Clicking',  ref: 170, condition: 'speed',
     settings: { weapon: 'mk12', scope: '1x', duration: 30, enemies: 3, behavior: 'static', enemyHp: 1, minDist: 6, maxDist: 22 } },
   precisionClick: { name: 'Precision clicking', cat: 'Clicking',  ref: 120, condition: 'precision',
@@ -48,7 +48,7 @@ ST.tierFor = function (scenarioId, score) {
 ST.ROUTINES = [
   {
     id: 'benchmark', name: 'Benchmark', minutes: 6, shuffle: false, rest: 12,
-    desc: 'Warm-up plus seven 30-second scored scenarios covering clicking (speed and precision), tracking (precise and reactive) and switching (speed and evasive). Adaptive difficulty and lead hints are off so scores stay comparable between sessions. Re-run it weekly, not daily.',
+    desc: '45-second warm-up plus seven 30-second scored scenarios covering clicking (speed and precision), tracking (precise and reactive) and switching (speed and evasive). Adaptive difficulty and lead hints are off so scores stay comparable between sessions. Re-run it weekly, not daily.',
     steps: ['warmup', 'staticClick', 'precisionClick', 'dynamicClick', 'preciseTrack', 'reactiveTrack', 'speedSwitch', 'evasiveSwitch'],
   },
   {

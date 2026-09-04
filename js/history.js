@@ -21,8 +21,9 @@ ST.history = (function () {
   function runsToday() { return load().filter(r => r.day === today()); }
   function minutesToday() { return runsToday().reduce((a, r) => a + (r.duration || 0), 0) / 60; }
 
-  // First two runs of a calendar day are warm-up: excluded from bests (Listman et al. 2021 warm-up effect).
-  function isWarmup() { return runsToday().length < 2; }
+  // The first ~40 s of practice each day is warm-up: excluded from bests (Listman et al. 2021 warm-up effect).
+  // Every routine starts with a 45 s warm-up scenario, so scored steps after it count.
+  function isWarmup() { return minutesToday() < 0.65; }
 
   function add(run) {
     const list = load();
@@ -33,7 +34,7 @@ ST.history = (function () {
     return entry;
   }
 
-  function forKey(key) { return load().filter(r => r.key === key); }
+  function forKey(key) { return load().filter(r => r.key === key && r.score !== null && r.score !== undefined); }
 
   function best(key, metric, lower) {
     const runs = forKey(key).filter(r => !r.warmup && r[metric] !== null && r[metric] !== undefined);
