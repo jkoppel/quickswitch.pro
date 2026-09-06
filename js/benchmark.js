@@ -5,38 +5,39 @@ window.ST = window.ST || {};
 // against new ones. v2 fixed every scenario's scope: several of them spawned targets further away
 // than the scope could show on the short screen axis, which biased both difficulty and flick
 // direction. v3 retired invincible bots for 500 HP ones that do take damage, and merged the old
-// "smooth" movement into `orbit`.
-ST.BENCHMARK_VERSION = 3;
+// "smooth" movement into `orbit`. v4 gave every scenario's bots a weapon: nothing in the trainer
+// stands there and takes it any more.
+ST.BENCHMARK_VERSION = 4;
 
 // Each scenario is a full settings preset. Scores are throughput: 100 * hits/s * sqrt(accuracy).
 // `ref` is the provisional score that marks the top tier; tiers are fractions of it.
 // Scopes follow ST.scopeForDistance: the smallest scope that still shows maxDist in every direction.
 ST.SCENARIOS = {
   warmup:         { name: 'Warm-up tracking',   cat: 'Warm-up',   scored: false, tip: 'Loosen up: hold the trigger and follow the bot. Nothing here counts.',
-    settings: { weapon: 'mp5', scope: '2x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 500, minDist: 8, maxDist: 14 } },
+    settings: { weapon: 'mp5', scope: '2x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 500, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 8, maxDist: 14 } },
   staticClick:    { name: 'Static clicking',    cat: 'Clicking',  ref: 170, condition: 'speed', tip: 'Three targets, one hit each. Pick the next one before the current one dies.',
-    settings: { weapon: 'mk12', scope: '4x', duration: 30, enemies: 3, behavior: 'hold', enemyHp: 1, minDist: 6, maxDist: 22 } },
+    settings: { weapon: 'mk12', scope: '4x', duration: 30, enemies: 3, behavior: 'hold', enemyHp: 1, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 6, maxDist: 22 } },
   precisionClick: { name: 'Precision clicking', cat: 'Clicking',  ref: 120, condition: 'precision', tip: 'Same drill at 8x: targets are far smaller on screen. Slow the last part of the move and land short.',
-    settings: { weapon: 'mk12', scope: '8x', duration: 30, enemies: 3, behavior: 'hold', enemyHp: 1, minDist: 18, maxDist: 32 } },
+    settings: { weapon: 'mk12', scope: '8x', duration: 30, enemies: 3, behavior: 'hold', enemyHp: 1, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 18, maxDist: 32 } },
   dynamicClick:   { name: 'Dynamic clicking',   cat: 'Clicking',  ref: 110, tip: 'Juking targets, one hit each. Fire on the direction change, when they are briefly still.',
-    settings: { weapon: 'mk12', scope: '2x', duration: 30, enemies: 2, behavior: 'juke', enemyHp: 1, minDist: 6, maxDist: 17 } },
+    settings: { weapon: 'mk12', scope: '2x', duration: 30, enemies: 2, behavior: 'juke', enemyHp: 1, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 6, maxDist: 17 } },
   preciseTrack:   { name: 'Precise tracking',   cat: 'Tracking',  ref: 650, tip: 'Invincible bot, smooth strafe. Hold the trigger and lead by about a body width.',
-    settings: { weapon: 'mp5', scope: '2x', duration: 30, enemies: 1, behavior: 'orbit', enemyHp: 500, minDist: 10, maxDist: 14 } },
+    settings: { weapon: 'mp5', scope: '2x', duration: 30, enemies: 1, behavior: 'orbit', enemyHp: 500, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 10, maxDist: 14 } },
   reactiveTrack:  { name: 'Reactive tracking',  cat: 'Tracking',  ref: 520, tip: 'Sudden reversals. Move your crosshair with the bot, and reset the instant it flips.',
-    settings: { weapon: 'mp5', scope: '1x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 500, minDist: 6, maxDist: 10 } },
+    settings: { weapon: 'mp5', scope: '1x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 500, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 6, maxDist: 10 } },
   speedSwitch:    { name: 'Speed switching',    cat: 'Switching', ref: 480, tip: 'Four bots, two bullets each. Kill, switch, kill. Do not chase misses.',
-    settings: { weapon: 'm4a1', scope: '2x', duration: 30, enemies: 4, behavior: 'hold', enemyHp: 28, minDist: 5, maxDist: 16 } },
+    settings: { weapon: 'm4a1', scope: '2x', duration: 30, enemies: 4, behavior: 'hold', enemyHp: 28, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 5, maxDist: 16 } },
   evasiveSwitch:  { name: 'Evasive switching',  cat: 'Switching', ref: 380, tip: 'Three jukers, three bullets each. Commit to one until it drops.',
-    settings: { weapon: 'm4a1', scope: '2x', duration: 30, enemies: 3, behavior: 'juke', enemyHp: 42, minDist: 6, maxDist: 16 } },
+    settings: { weapon: 'm4a1', scope: '2x', duration: 30, enemies: 3, behavior: 'juke', enemyHp: 42, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 6, maxDist: 16 } },
   chase:          { name: 'Chase',              cat: 'Moving',    ref: 300, tip: 'Hold W and shoot in short bursts while closing. Stopping loses the runner.',
-    settings: { weapon: 'ak47', scope: '2x', duration: 30, enemies: 1, behavior: 'flee', enemyHp: 100, minDist: 6, maxDist: 12, fleeSpeed: 0.95, leash: 6 } },
+    settings: { weapon: 'ak47', scope: '2x', duration: 30, enemies: 1, behavior: 'flee', enemyHp: 100, enemyShoots: true, enemyAim: 'easy', minDist: 6, maxDist: 12, fleeSpeed: 0.95, leash: 6 } },
   dodge:          { name: 'Dodge under fire',   cat: 'Moving',    ref: 320, tip: 'The bot leads your movement. Break rhythm: short strafes, reversals, brief stops.',
     settings: { weapon: 'ak47', scope: '2x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 100, enemyShoots: true, enemyAim: 'hard', minDist: 8, maxDist: 14 } },
   // Utility scenarios: scored like the rest, but not part of the Benchmark ruler (no `ref`).
   quickSwitch:    { name: 'Quick switching',    cat: 'Utility',   tip: 'Shell, switch, tap, switch. One free 0.25 s switch per second is the whole trick.',
     settings: { weapon: 'm870', secondary: 'm9', enemyWeapon: 'mp5', scope: '1x', duration: 30, enemies: 1, behavior: 'juke', enemyHp: 100, enemyShoots: true, enemyAim: 'normal', minDist: 6, maxDist: 12 } },
   fragLob:        { name: 'Frag lobbing',       cat: 'Utility',   tip: 'Cursor distance is throw strength. Lead the throw and cook so it lands live.',
-    settings: { weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '4x', duration: 30, enemies: 2, behavior: 'strafe', enemyHp: 100, minDist: 12, maxDist: 20, stones: 8 } },
+    settings: { weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '4x', duration: 30, enemies: 2, behavior: 'strafe', enemyHp: 100, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 12, maxDist: 20, stones: 8 } },
   bankShot:       { name: 'Bank shots',         cat: 'Utility',   tip: 'Metal bunker walls are flat mirrors. Aim as far past the corner as the enemy is behind it.',
     settings: { weapon: 'm4a1', arena: 'bunker', scope: '2x', duration: 30, enemies: 1, behavior: 'cover', enemyHp: 100, enemyShoots: true, enemyAim: 'normal', minDist: 7, maxDist: 16 } },
   spinDodge:      { name: 'Spin dodge',         cat: 'Utility',   tip: 'Whirl while you cross open ground, settle to shoot. Spinning costs your aim, so it has to be paid back.',

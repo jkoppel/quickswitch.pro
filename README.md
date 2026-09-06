@@ -90,9 +90,16 @@ away, damage taken per minute and the share of damage taken while still.
 
 ## Enemy movement and aim
 
-Every bot in every drill moves with one of eight patterns and aims with one of three skills, defined
-once in `js/behaviors.js`. Drills pick them by name and never define their own, so a change to how
-bots dodge or lead lands everywhere at once.
+Nothing in the trainer stands there and takes it. Every bot is armed, in every drill and every
+benchmark scenario. Where the drill is about your aim rather than a duel — tracking, flicks, the
+swarm, pistol taps, the grenade drills — the bots carry a sidearm and aim loosely, which is enough to
+punish standing in the open without deleting you while you work. Where the drill is a fight, they
+carry what the fight calls for. Against a simulated player who moves and shoots back, that lands at
+zero to nine deaths a minute across the aim drills.
+
+Every bot moves with one of eight patterns and aims with one of three skills, defined once in
+`js/behaviors.js`. Drills pick them by name and never define their own, so a change to how bots dodge
+or lead lands everywhere at once.
 
 | Pattern | What it does |
 | --- | --- |
@@ -167,7 +174,8 @@ The research behind these choices, including what was cut and why, is in
 
 - Mouse: aim, left click: shoot (hold for automatic weapons)
 - WASD / arrows: move
-- 1 / 2: primary and secondary weapon, 4 or G: throwable, Q: last weapon
+- Right click or Q: swap to your last weapon
+- 1 / 2: primary and secondary weapon, 4 or G: throwable
 - With a throwable out, hold left mouse to cook and release to throw; cursor distance is throw strength
 - R: reload
 - Esc: pause
@@ -213,6 +221,8 @@ Wrong, now fixed:
 | Stone size | random radius 1.6–3.2 | `stone_01` is a 1.6-unit collider scaled 1.0–1.2. |
 | Sprite world sizes | every sprite assumed to be 144 px | each sprite's own pixel size at the client's scale, at 16 px per unit. |
 | Gun artwork | `worldImg.tint` never applied, so the AK-47, Mk 12, M39 and M870 all drew the same untinted `gun-long-01` | most guns share a generic silhouette and are told apart only by their tint, which the client applies as a PIXI tint. Guns with their own artwork carry `0xffffff`, so one code path covers both. The DP-28's pan magazine (`worldImg.magImg`) was also never drawn. |
+| Passive bots | eight of fifteen drills had enemies that never fired a shot: they ran around as targets rather than opponents | every drill and scenario now returns fire, sized to the drill (see above). |
+| Stale saved settings | a setting saved by an older version that named something since renamed — a movement pattern, say — was assigned to its dropdown, which silently went blank, and the blank was then saved back as the real setting | selects reject values they do not have and keep the drill's own preset instead, and known renames are migrated. |
 | Invincible bots | tracking drills used bots that could not be damaged at all | there is no such mode any more. Tracking bots have 500 HP: enough that the drill is about holding the stream on them, but they take damage and they die. |
 | Respawn timing | every bot respawned 0.5 s after dying, including in drills where they shoot back, so the next fight started while you were still reloading | drills with return fire now wait for a full reload of your own weapon — 2.9 s behind an AK, 4.2 s behind an M870, which reloads a shell at a time. |
 | Drill settings | `readSettings()` read only the form fields, so any setting without a control — `arena`, `throwableCount`, `enemyWeapon`, `fleeSpeed`, `leash` — was dropped when a drill was started from the menu | the form now overrides the drill's preset instead of replacing it. |

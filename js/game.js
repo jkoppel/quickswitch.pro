@@ -400,6 +400,9 @@ window.ST = window.ST || {};
       this.onKeyUp = (e) => this.keys.delete(e.key.toLowerCase());
       this.onMouseMove = (e) => { this.mouse.x = e.clientX; this.mouse.y = e.clientY; };
       this.onMouseDown = (e) => {
+        // Right click swaps to the last weapon, the same as Q: with a shotgun in hand the switch is
+        // part of the shot, and reaching for a number key mid-fight is not.
+        if (e.button === 2) { this.equip(this.player.lastIdx); e.preventDefault(); return; }
         if (e.button !== 0) return;
         ST.audio.unlock();
         this.mouse.down = true;
@@ -440,7 +443,13 @@ window.ST = window.ST || {};
     //   between two shotguns to skip the pump.
     equip(idx) {
       const p = this.player;
-      if (idx === p.curIdx) return;
+      // Asked to swap to the slot already in hand: take the next usable slot instead, so right
+      // click and Q always do something.
+      if (idx === p.curIdx) {
+        const alt = p.weapons.findIndex((w, i) => w && i !== p.curIdx && (!w.throwable || w.count > 0));
+        if (alt < 0) return;
+        idx = alt;
+      }
       const next = p.weapons[idx];
       const cur = p.weapons[p.curIdx];
       if (!next || !cur) return;

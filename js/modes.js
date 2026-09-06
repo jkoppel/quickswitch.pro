@@ -14,8 +14,11 @@ ST.DEFAULT_SETTINGS = {
 // next one arriving while you are still cycling. A drill may override it by setting respawnDelay.
 ST.respawnDelayFor = function (s) {
   if (s.ttl > 0) return 0.2;                       // flick targets are meant to keep popping
-  const w = ST.WEAPONS[s.weapon];
   if (!s.enemyShoots) return 0.5;
+  // A one-shot target costs you nothing to kill, so there is nothing to reload for; a real fight
+  // costs most of a magazine, and the next one should not start while you are still loading.
+  if (s.enemyHp < 50) return 1;
+  const w = ST.WEAPONS[s.weapon];
   const full = w ? (w.reloadPerShell ? w.reload * w.mag : w.reload) : 2;
   return Math.max(2, full + 0.4);
 };
@@ -31,13 +34,13 @@ ST.MODES = [
     id: 'tracking', name: 'Tracking',
     desc: 'One enemy strafes at mid range. Keep your stream on them: SMG/AR spray control.',
     tip: 'Move your crosshair with the target, not to where it was. Reset your aim on every direction flip.',
-    settings: { weapon: 'mp5', scope: '2x', duration: 60, enemies: 1, behavior: 'strafe', enemyHp: 500, minDist: 8, maxDist: 16 },
+    settings: { weapon: 'mp5', scope: '2x', duration: 60, enemies: 1, behavior: 'strafe', enemyHp: 500, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 8, maxDist: 16 },
   },
   {
     id: 'flick', name: 'Flick',
     desc: 'Targets pop up one at a time anywhere on screen and vanish after 1.5 s. One hit kills.',
     tip: 'Snap, confirm, click. Chasing a missed shot is slower than resetting.',
-    settings: { weapon: 'mk12', scope: '4x', duration: 60, enemies: 1, behavior: 'hold', enemyHp: 1, minDist: 6, maxDist: 22, ttl: 1.5, respawnDelay: 0.2 },
+    settings: { weapon: 'mk12', scope: '4x', duration: 60, enemies: 1, behavior: 'hold', enemyHp: 1, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 6, maxDist: 22, ttl: 1.5, respawnDelay: 0.2 },
   },
   {
     id: 'duel', name: '1v1 Duel',
@@ -61,25 +64,25 @@ ST.MODES = [
     id: 'sniper', name: 'Sniper Leads',
     desc: 'Long-range strafing targets on a 15x scope. Bullets take time to arrive: lead your shots.',
     tip: 'A Mosin round covers 178 units a second. At 40 units it is in the air for 0.22 s, and a running target moves almost three body widths in that time.',
-    settings: { weapon: 'mosin', scope: '15x', duration: 90, enemies: 1, behavior: 'strafe', enemyHp: 1, minDist: 30, maxDist: 49, leadHint: true },
+    settings: { weapon: 'mosin', scope: '15x', duration: 90, enemies: 1, behavior: 'strafe', enemyHp: 1, enemyShoots: true, enemyAim: 'easy', minDist: 30, maxDist: 49, leadHint: true },
   },
   {
     id: 'swarm', name: 'Swarm',
     desc: 'Three enemies running lines across the field at once. Pick a target, finish it, switch.',
     tip: 'They are not circling you, they are crossing you, so the lead changes sign as they pass. Commit to one until it dies; splitting damage kills nobody.',
-    settings: { weapon: 'm4a1', scope: '2x', duration: 90, enemies: 3, behavior: 'cross', enemyHp: 100, minDist: 8, maxDist: 17 },
+    settings: { weapon: 'm4a1', scope: '2x', duration: 90, enemies: 3, behavior: 'cross', enemyHp: 100, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 8, maxDist: 17 },
   },
   {
     id: 'pistol', name: 'Pistol Tap',
     desc: 'M9 against an orbiting enemy. Semi-auto: every click counts.',
     tip: 'The M9 has a 3° cone standing and 8° while moving (survev adds moving spread on top). Stop to shoot.',
-    settings: { weapon: 'm9', scope: '1x', duration: 60, enemies: 1, behavior: 'orbit', enemyHp: 100, minDist: 6, maxDist: 12 },
+    settings: { weapon: 'm9', scope: '1x', duration: 60, enemies: 1, behavior: 'orbit', enemyHp: 100, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 6, maxDist: 12 },
   },
   {
     id: 'chase', name: 'Chase',
     desc: 'The enemy runs. Chase with WASD and keep landing shots on the move. If they get more than ~6 units past max range for a second, they got away.',
     tip: 'Moving spread is real: the AK cone grows from 2.5° to 10° while running. Fire in short bursts at the moments you are closing, and never stop long enough to lose them.',
-    settings: { weapon: 'ak47', scope: '2x', duration: 60, enemies: 1, behavior: 'flee', enemyHp: 100, minDist: 6, maxDist: 12, fleeSpeed: 0.95, leash: 6 },
+    settings: { weapon: 'ak47', scope: '2x', duration: 60, enemies: 1, behavior: 'flee', enemyHp: 100, enemyShoots: true, enemyAim: 'easy', minDist: 6, maxDist: 12, fleeSpeed: 0.95, leash: 6 },
   },
   {
     id: 'dodge', name: 'Dodge',
@@ -99,7 +102,7 @@ ST.MODES = [
     tip: 'Full strength needs the cursor 18 units out, which is about 19 units of flight. Aim the cursor past the target, not at it, and remember the 4 s fuse gives them time to walk away.',
     settings: {
       weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '4x', duration: 60,
-      enemies: 2, behavior: 'strafe', enemyHp: 100, minDist: 12, maxDist: 20, stones: 8,
+      enemies: 2, behavior: 'strafe', enemyHp: 100, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 12, maxDist: 20, stones: 8,
     },
   },
   {
@@ -108,7 +111,7 @@ ST.MODES = [
     tip: 'Cook about 2.5 s for a full-strength throw: roughly a second of flight plus the time they need to notice it. Hold too long and it goes off in your hand, which is survev’s own safety behaviour, not a bug.',
     settings: {
       weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '4x', duration: 60,
-      enemies: 2, behavior: 'juke', enemyHp: 100, minDist: 12, maxDist: 20, stones: 8,
+      enemies: 2, behavior: 'juke', enemyHp: 100, enemyShoots: true, enemyAim: 'easy', enemyWeapon: 'm9', minDist: 12, maxDist: 20, stones: 8,
     },
   },
   {

@@ -99,11 +99,21 @@
     }
     return normalize(s);
   }
+  // Settings saved by an older version can name things that no longer exist. Assigning one of those
+  // to a <select> silently leaves it blank, and the blank then gets saved back as the real setting,
+  // so a stale value quietly becomes a broken drill. Map what we can, and reject the rest.
+  const RENAMED = { behavior: { static: 'hold', rush: 'push', smooth: 'orbit' } };
   function writeSettings(s) {
     for (const [k, el] of Object.entries(fields)) {
       if (!(k in s)) continue;
-      if (el.type === 'checkbox') el.checked = !!s[k];
-      else el.value = s[k];
+      if (el.type === 'checkbox') { el.checked = !!s[k]; continue; }
+      let v = s[k];
+      if (el.tagName === 'SELECT') {
+        if (RENAMED[k] && RENAMED[k][v]) v = RENAMED[k][v];
+        const known = [...el.options].some(o => o.value === String(v));
+        if (!known) continue;                    // leave the preset's value in place
+      }
+      el.value = v;
     }
     updateWeaponInfo();
     updateBehaviorHint();
@@ -264,7 +274,8 @@
       updateBestAndTrend();
     } else {
       const saved = LS.get('st.lastSettings.' + item.id, null);
-      writeSettings(saved || modeDefaults(item));
+      writeSettings(modeDefaults(item));         // the drill's own preset is the floor
+      if (saved) writeSettings(saved);           // then whatever of the saved run still makes sense
       // Custom is the one drill whose point is the full parameter set.
       $('advanced').open = item.id === 'custom';
     }
