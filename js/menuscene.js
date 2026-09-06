@@ -136,11 +136,13 @@ ST.menuScene = (function () {
     }
     if (body) ctx.drawImage(body, -bodySize / 2, -bodySize / 2, bodySize, bodySize);
     if (gunImg) {
+      const wi = def.worldImg;
       const ax = handR.x + SV.gunHandOffset[0] / U, ay = handR.y + SV.gunHandOffset[1] / U;
-      const gw = gunImg.naturalWidth * def.worldImg.scale.x * 0.5 / U;
-      const gl = gunImg.naturalHeight * def.worldImg.scale.y * 0.5 / U;
+      const gw = gunImg.naturalWidth * wi.scale.x * 0.5 / U;
+      const gl = gunImg.naturalHeight * wi.scale.y * 0.5 / U;
+      const tinted = A.tint(wi.sprite, A.hex(wi.tint === undefined ? 0xffffff : wi.tint)) || gunImg;
       ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.PI / 2);
-      ctx.drawImage(gunImg, -gw / 2, -gl, gw, gl);
+      ctx.drawImage(tinted, -gw / 2, -gl, gw, gl);
       ctx.restore();
     }
     if (hand) for (const p of [handL, handR]) ctx.drawImage(hand, p.x - handSize / 2, p.y - handSize / 2, handSize, handSize);

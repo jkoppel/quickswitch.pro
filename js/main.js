@@ -87,7 +87,11 @@
     return s;
   }
   function readSettings() {
-    const s = { mode: selection.item.id };
+    // Start from the drill's own preset so settings with no form control survive — the arena a drill
+    // is set in, how many grenades it hands you, what the bots carry, chase leash and flee speed.
+    // The form fields then override whatever they do expose.
+    const preset = selection.kind === 'mode' ? selection.item.settings : {};
+    const s = { ...preset, mode: selection.item.id };
     for (const [k, el] of Object.entries(fields)) {
       if (el.type === 'checkbox') s[k] = el.checked;
       else if (el.type === 'number') s[k] = Number(el.value);
@@ -614,12 +618,12 @@
         row('Average cook time', fmt.sec(r.avgCookTime), '', false);
         row('Damage you took from your own grenades', fmt.num(r.nadeSelfDmg), '', false);
       }
-      if (s.barrels > 0) {
-        section('Barrels');
-        row('Rounds that bounced off a barrel', fmt.int(r.ricochetPellets), '', false);
+      if (s.barrels > 0 || s.arena) {
+        section(s.arena ? 'Ricochet' : 'Barrels');
+        row('Rounds that bounced off metal', fmt.int(r.ricochetPellets), '', false);
         row('Bounced rounds that hit', `${fmt.int(r.ricochetHits)}${r.ricochetRate !== null ? ` <small>(${fmt.pct(r.ricochetRate)})</small>` : ''}`, '', false);
         row('Damage dealt by bounced rounds', fmt.num(r.ricochetDmg), '', false);
-        row('Barrels detonated', fmt.int(r.barrelsPopped), '', false);
+        row('Barrels and panels detonated', fmt.int(r.barrelsPopped), '', false);
         row('Damage you took from your own ricochets', fmt.num(r.ricochetSelfDmg), '', false);
       }
       if (r.headshots) row('Headshots landed', `${fmt.int(r.headshots)} <small>(survev rolls 15% per hit)</small>`, '', false);

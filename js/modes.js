@@ -5,7 +5,7 @@ ST.DEFAULT_SETTINGS = {
   weapon: 'mp5', secondary: '', throwable: '', throwableCount: 3,
   scope: '2x', duration: 60, enemies: 1, behavior: 'strafe',
   enemyHp: 100, enemyShoots: false, enemyAim: 'normal', minDist: 8, maxDist: 16,
-  ttl: 0, respawnDelay: 0.5, obstacles: true, stones: 14, barrels: 0, hugCover: false,
+  ttl: 0, respawnDelay: 0.5, obstacles: true, stones: 14, barrels: 0, hugCover: false, arena: '',
   sound: true, hitmarker: true,
   adaptive: true, leadHint: false, invincible: false,
 };
@@ -99,11 +99,11 @@ ST.MODES = [
   },
   {
     id: 'ricochet', name: 'Ricochet',
-    desc: 'A normal fight in a barrel field. You can shoot the enemy straight; the point is learning what the barrels do — scatter your rounds into someone hugging cover, and throw them back at you when you fire through one.',
-    tip: 'A barrel is a round mirror: it throws rounds back into your own half of the field, so it reaches a target beside the barrel, never one hidden behind it. Hit the edge on the target\u2019s side. A bounced round does half damage and will happily come back and hit you, so never shoot a barrel at point-blank range.',
+    desc: 'Inside the Hydra bunker. Its walls are metal, and metal is the one material in the game that bounces bullets: bank shots off them to reach an enemy down the corridor or around the corner.',
+    tip: 'A flat wall reflects at the mirror angle, so aim at the wall as far past the corner as the enemy is behind it and the round comes back out on their side. Bounced rounds do half damage, ignore the wall they came off, and will hit you if you bank one straight back down your own line. The control panels are metal too, and they detonate.',
     settings: {
-      weapon: 'm4a1', scope: '2x', duration: 75, enemies: 1, behavior: 'strafe', enemyHp: 100,
-      minDist: 8, maxDist: 17, barrels: 18, stones: 8, hugCover: true,
+      weapon: 'm4a1', arena: 'bunker_hydra_compartment_02', scope: '2x', duration: 75,
+      enemies: 1, behavior: 'strafe', enemyHp: 100, minDist: 8, maxDist: 17,
     },
   },
   {

@@ -45,6 +45,86 @@ window.ST = window.ST || {};
     return { t, px, py, nx: (px - cx) / nl, ny: (py - cy) / nl };
   }
 
+  // Where a segment first enters an axis-aligned box, and the outward normal of the face it hits.
+  // Flat walls are the interesting mirror: unlike a barrel, a plane can bank a shot around a corner.
+  function segRectEntry(ax, ay, bx, by, cx, cy, hw, hh) {
+    const dx = bx - ax, dy = by - ay;
+    let tmin = 0, tmax = 1, nx = 0, ny = 0;
+    // x slab
+    if (Math.abs(dx) < 1e-12) {
+      if (ax < cx - hw || ax > cx + hw) return null;
+    } else {
+      let t1 = (cx - hw - ax) / dx, t2 = (cx + hw - ax) / dx;
+      const sign = dx > 0 ? -1 : 1;          // the face you enter through faces back at you
+      if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+      if (t1 > tmin) { tmin = t1; nx = sign; ny = 0; }
+      if (t2 < tmax) tmax = t2;
+      if (tmin > tmax) return null;
+    }
+    // y slab
+    if (Math.abs(dy) < 1e-12) {
+      if (ay < cy - hh || ay > cy + hh) return null;
+    } else {
+      let t1 = (cy - hh - ay) / dy, t2 = (cy + hh - ay) / dy;
+      const sign = dy > 0 ? -1 : 1;
+      if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+      if (t1 > tmin) { tmin = t1; nx = 0; ny = sign; }
+      if (t2 < tmax) tmax = t2;
+      if (tmin > tmax) return null;
+    }
+    if (tmax < 0 || tmin > 1) return null;
+    const t = Math.max(tmin, 0);
+    return { t, px: ax + dx * t, py: ay + dy * t, nx, ny };
+  }
+
+  // Whichever shape the obstacle is, where does this segment first touch it?
+  function obstacleEntry(o, ax, ay, bx, by) {
+    return o.shape === 'rect'
+      ? segRectEntry(ax, ay, bx, by, o.x, o.y, o.hw, o.hh)
+      : segCircleEntry(ax, ay, bx, by, o.x, o.y, o.r);
+  }
+
+  // Push a circle of `rad` out of an obstacle it has sunk into.
+  function pushOut(pos, o, rad) {
+    if (o.shape === 'rect') {
+      const cx = clamp(pos.x, o.x - o.hw, o.x + o.hw);
+      const cy = clamp(pos.y, o.y - o.hh, o.y + o.hh);
+      const dx = pos.x - cx, dy = pos.y - cy;
+      const d = Math.hypot(dx, dy);
+      if (d > 1e-9) {
+        if (d < rad) { pos.x = cx + dx / d * rad; pos.y = cy + dy / d * rad; }
+        return;
+      }
+      // Dead centre inside the box: leave by the nearest face.
+      const l = pos.x - (o.x - o.hw), r = (o.x + o.hw) - pos.x;
+      const u = pos.y - (o.y - o.hh), dn = (o.y + o.hh) - pos.y;
+      const m = Math.min(l, r, u, dn);
+      if (m === l) pos.x = o.x - o.hw - rad;
+      else if (m === r) pos.x = o.x + o.hw + rad;
+      else if (m === u) pos.y = o.y - o.hh - rad;
+      else pos.y = o.y + o.hh + rad;
+      return;
+    }
+    const dx = pos.x - o.x, dy = pos.y - o.y;
+    const d = Math.hypot(dx, dy), min = o.r + rad;
+    if (d < min && d > 0) { pos.x = o.x + dx / d * min; pos.y = o.y + dy / d * min; }
+  }
+
+  // Outward normal at the point of an obstacle nearest to (x, y). Used for grenade bounces.
+  function normalAt(o, x, y) {
+    if (o.shape === 'rect') {
+      const cx = clamp(x, o.x - o.hw, o.x + o.hw);
+      const cy = clamp(y, o.y - o.hh, o.y + o.hh);
+      const dx = x - cx, dy = y - cy;
+      const d = Math.hypot(dx, dy);
+      if (d > 1e-9) return { nx: dx / d, ny: dy / d, cx, cy, d };
+      return { nx: 0, ny: -1, cx, cy, d: 0 };
+    }
+    const dx = x - o.x, dy = y - o.y;
+    const d = Math.hypot(dx, dy) || 1e-9;
+    return { nx: dx / d, ny: dy / d, cx: o.x, cy: o.y, d };
+  }
+
   // Distance from segment ab to point p (squared), and where along the segment it lands.
   function segPointDist2(ax, ay, bx, by, px, py) {
     const dx = bx - ax, dy = by - ay;
@@ -149,7 +229,14 @@ window.ST = window.ST || {};
       this.respawns = [];
       this.markers = [];
       this.feed = [];
-      this.obstacles = settings.obstacles ? this.makeObstacles() : [];
+      this.bunker = null;
+      this.obstacles = settings.arena
+        ? this.makeBunker(settings.arena)
+        : (settings.obstacles ? this.makeObstacles() : []);
+      if (this.bunker) {
+        this.player.pos.x = this.bunker.spawn.x;
+        this.player.pos.y = this.bunker.spawn.y;
+      }
       this.stats = {
         shots: 0, pellets: 0, hits: 0, kills: 0, deaths: 0, dmgDealt: 0, dmgTaken: 0,
         expired: 0, ttk: [], reaction: [], engage: [], movingShots: 0, onTarget: 0, firing: 0,
@@ -203,7 +290,7 @@ window.ST = window.ST || {};
           if (Math.hypot(x, y) < 9) continue;
           if (out.some(o => Math.hypot(o.x - x, o.y - y) < o.r + r + minGap)) continue;
           out.push({
-            x, y, r, scale, def, defId, hp: def.health, maxHp: def.health,
+            x, y, r, shape: 'circle', scale, def, defId, hp: def.health, maxHp: def.health,
             reflect: !!def.reflectBullets, dead: false, hitFlash: 0, id: out.length + 1,
           });
           placed++;
@@ -211,6 +298,66 @@ window.ST = window.ST || {};
       };
       place('barrel_01', wantBarrels, 4);
       place('stone_01', wantStones, 6);
+      return out;
+    }
+
+    // One of survev's own bunkers, laid out from its mapObjects list (vendor/survev/defs/bunkerDefs.js).
+    // survev's y axis points up and the trainer's points down, so the layout is mirrored on import;
+    // `ori` is a quarter turn, which for an axis-aligned box just swaps its extents.
+    makeBunker(id) {
+      const B = window.SURVEV_BUNKER_DEFS;
+      const layout = B[id];
+      if (!layout) return [];
+      const out = [];
+      for (const obj of layout.objects) {
+        const raw = B.obstacles[obj.type] || ST.OBSTACLES[obj.type];
+        if (!raw) continue;
+        const def = Object.assign({
+          collidable: true,
+          sound: { bullet: raw.reflectBullets ? 'barrel_bullet' : 'stone_bullet', explode: 'barrel_break_01' },
+        }, raw);
+        const x = obj.pos[0], y = -obj.pos[1];
+        const item = {
+          x, y, scale: 1, def, defId: obj.type, hp: def.health, maxHp: def.health,
+          reflect: !!def.reflectBullets, dead: false, hitFlash: 0, id: out.length + 1,
+          material: def.material || 'stone',
+        };
+        if (raw.shape === 'rect') {
+          const swap = obj.ori % 2 === 1;
+          item.shape = 'rect';
+          item.hw = swap ? raw.extents[1] : raw.extents[0];
+          item.hh = swap ? raw.extents[0] : raw.extents[1];
+          item.r = Math.hypot(item.hw, item.hh);
+        } else {
+          item.shape = 'circle';
+          item.r = raw.collisionRad;
+        }
+        out.push(item);
+      }
+      // Bounds, rooms and a spawn point are derived from the walls when the layout does not name
+      // them, so a new bunker only has to supply survev's own object list.
+      let bounds;
+      if (layout.bounds) {
+        bounds = { x: layout.bounds.center[0], y: -layout.bounds.center[1], hw: layout.bounds.extents[0], hh: layout.bounds.extents[1] };
+      } else {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const o of out) {
+          const hw = o.hw || o.r, hh = o.hh || o.r;
+          minX = Math.min(minX, o.x - hw); maxX = Math.max(maxX, o.x + hw);
+          minY = Math.min(minY, o.y - hh); maxY = Math.max(maxY, o.y + hh);
+        }
+        bounds = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, hw: (maxX - minX) / 2, hh: (maxY - minY) / 2 };
+      }
+      this.bunker = {
+        rooms: layout.rooms
+          ? layout.rooms.map(r => ({ x: r.center[0], y: -r.center[1], hw: r.extents[0], hh: r.extents[1] }))
+          : [bounds],
+        bounds,
+        name: layout.name,
+        spawn: layout.playerSpawn ? { x: layout.playerSpawn[0], y: -layout.playerSpawn[1] } : null,
+      };
+      this.obstacles = out;   // clearAt needs them in place before it can look for open floor
+      if (!this.bunker.spawn) this.bunker.spawn = this.openestPoint(bounds);
       return out;
     }
 
@@ -468,7 +615,51 @@ window.ST = window.ST || {};
     }
 
     // ---------- spawning ----------
+    // The most open spot in a region: where a player can stand furthest from anything solid.
+    openestPoint(b) {
+      let best = { x: b.x, y: b.y }, bestClear = -1;
+      for (let i = 0; i < 3000; i++) {
+        const x = rand(b.x - b.hw, b.x + b.hw), y = rand(b.y - b.hh, b.y + b.hh);
+        let clear = Infinity;
+        for (const o of this.obstacles) {
+          if (o.dead || !o.def.collidable) continue;
+          clear = Math.min(clear, normalAt(o, x, y).d);
+          if (clear <= bestClear) break;
+        }
+        if (clear > bestClear) { bestClear = clear; best = { x, y }; }
+      }
+      return best;
+    }
+
+    // Is there room for a body at (x, y) without clipping anything solid?
+    clearAt(x, y, margin) {
+      const pad = PLAYER_R + (margin === undefined ? 0.6 : margin);
+      return !this.obstacles.some(o => !o.dead && o.def.collidable && normalAt(o, x, y).d < pad);
+    }
+
+    // In a bunker the enemy has to come from somewhere you could actually walk: pick a room, pick a
+    // spot in it that is clear, in range and in sight, so the drill always opens with a fair shot.
+    bunkerSpawn() {
+      const p = this.player.pos;
+      const rooms = this.bunker.rooms;
+      let best = null;
+      for (let i = 0; i < 200; i++) {
+        const rm = rooms[Math.floor(Math.random() * rooms.length)];
+        const x = rand(rm.x - rm.hw, rm.x + rm.hw);
+        const y = rand(rm.y - rm.hh, rm.y + rm.hh);
+        if (!this.clearAt(x, y)) continue;
+        const d = Math.hypot(x - p.x, y - p.y);
+        if (d < 4) continue;
+        best = best || { x, y };
+        if (d < this.s.minDist || d > this.s.maxDist) continue;
+        if (this.blocked(p.x, p.y, x, y)) continue;
+        return { x, y };
+      }
+      return best || { x: p.x + 6, y: p.y };
+    }
+
     randomSpawn() {
+      if (this.bunker) return this.bunkerSpawn();
       const p = this.player.pos;
       const minD = this.s.minDist, maxD = this.s.maxDist;
       // Keep spawns on screen so every target is reachable by aim alone.
@@ -482,7 +673,7 @@ window.ST = window.ST || {};
         best = best || cand;
         if (Math.abs(x - p.x) > bx || Math.abs(y - p.y) > by) continue;
         if (Math.hypot(x - p.x, y - p.y) < Math.min(minD, 4)) continue;
-        if (this.liveObstacles().some(r => Math.hypot(r.x - x, r.y - y) < r.r + 2.5)) continue;
+        if (!this.clearAt(x, y, 1.5)) continue;
         // hugCover: the ricochet drill only works if targets stand beside a barrel, because a round
         // barrel throws bullets back into the shooter's own half of the field and can never bend
         // them around behind itself.
@@ -633,9 +824,9 @@ window.ST = window.ST || {};
       const speed = MOVE_SPEED - (cooking ? GC.player.cookSpeedPenalty : 0);
       p.vel.x = mx * speed; p.vel.y = my * speed;
       if (p.moving) this.stats.movingTime += dt;
-      const A = this.arena;
-      p.pos.x = clamp(p.pos.x + p.vel.x * dt, -A + PLAYER_R, A - PLAYER_R);
-      p.pos.y = clamp(p.pos.y + p.vel.y * dt, -A + PLAYER_R, A - PLAYER_R);
+      p.pos.x += p.vel.x * dt;
+      p.pos.y += p.vel.y * dt;
+      this.clampToBounds(p.pos);
       this.pushOutOfObstacles(p.pos);
 
       const m = this.mouseWorld();
@@ -788,17 +979,17 @@ window.ST = window.ST || {};
         const nx = q.x + q.vx * dt, ny = q.y + q.vy * dt;
         // Bounce off obstacles that stand taller than the grenade currently flies.
         let bounced = false;
+        const rad = q.def.rad * 0.5;
         for (const o of this.obstacles) {
           if (o.dead || q.z > o.def.height) continue;
-          const d = Math.hypot(nx - o.x, ny - o.y), min = o.r + q.def.rad * 0.5;
-          if (d < min && d > 0) {
-            const nrx = (nx - o.x) / d, nry = (ny - o.y) / d;
+          const n = normalAt(o, nx, ny);
+          if (n.d < rad) {
             const vl = Math.hypot(q.vx, q.vy) || 0.0001;
-            const dot = (q.vx / vl) * nrx + (q.vy / vl) * nry;
-            const rx = q.vx / vl - 2 * dot * nrx, ry = q.vy / vl - 2 * dot * nry;
+            const dot = (q.vx / vl) * n.nx + (q.vy / vl) * n.ny;
+            const rx = q.vx / vl - 2 * dot * n.nx, ry = q.vy / vl - 2 * dot * n.ny;
             const scale = Math.max(1 + dot, 0.15);   // survev projectile.ts
             q.vx = rx * vl * scale; q.vy = ry * vl * scale;
-            q.x = o.x + nrx * (min + 0.1); q.y = o.y + nry * (min + 0.1);
+            q.x = n.cx + n.nx * (rad + 0.1); q.y = n.cy + n.ny * (rad + 0.1);
             bounced = true;
             break;
           }
@@ -850,7 +1041,7 @@ window.ST = window.ST || {};
     // Line of sight: any solid obstacle taller than a bullet between the two points blocks.
     blocked(ax, ay, bx, by) {
       return this.obstacles.some(o => !o.dead && o.def.height >= GC.bullet.height
-        && segPointDist2(ax, ay, bx, by, o.x, o.y).d2 < o.r * o.r);
+        && obstacleEntry(o, ax, ay, bx, by));
     }
     distToPlayer(q) { return Math.hypot(q.x - this.player.pos.x, q.y - this.player.pos.y); }
 
@@ -938,8 +1129,9 @@ window.ST = window.ST || {};
         const speed = e.behavior === 'flee' ? MOVE_SPEED * this.fleeSpeed() : MOVE_SPEED;
         if (vl > 0) { vx = vx / vl * speed; vy = vy / vl * speed; }
         e.vel.x = vx; e.vel.y = vy;
-        e.pos.x = clamp(e.pos.x + vx * dt, -this.arena + PLAYER_R, this.arena - PLAYER_R);
-        e.pos.y = clamp(e.pos.y + vy * dt, -this.arena + PLAYER_R, this.arena - PLAYER_R);
+        e.pos.x += vx * dt;
+        e.pos.y += vy * dt;
+        this.clampToBounds(e.pos);
         this.pushOutOfObstacles(e.pos);
         // Keep enemies from overlapping each other.
         for (const o of this.enemies) {
@@ -1102,7 +1294,7 @@ window.ST = window.ST || {};
         for (const r of this.obstacles) {
           if (r.dead || r.def.height < GC.bullet.height) continue;
           if (r.id === b.reflectObjId) continue;      // never bounce twice off the same object
-          const s = segCircleEntry(b.x, b.y, nx, ny, r.x, r.y, r.r);
+          const s = obstacleEntry(r, b.x, b.y, nx, ny);
           if (s && s.t < hitT) { hitT = s.t; hitKind = 'obstacle'; hitObj = r; hx = s.px; hy = s.py; hitNormal = s; }
         }
         if (b.owner === 'player' || b.damageSelf) {
@@ -1151,16 +1343,17 @@ window.ST = window.ST || {};
         o.hp -= dmg;
         if (o.hp <= 0 && !o.dead) this.destroyObstacle(o);
       }
-      const snd = o.def.sound.bullet === 'barrel_bullet' ? (Math.random() < 0.5 ? 'metal_bullet_hit_01' : 'metal_bullet_hit_02') : 'stone_bullet_hit_01';
+      const snd = o.reflect ? (Math.random() < 0.5 ? 'metal_bullet_hit_01' : 'metal_bullet_hit_02') : 'stone_bullet_hit_01';
       ST.audio.play(snd, { dist: Math.hypot(hx - p.x, hy - p.y), volume: 0.6 });
       this.spawnPuff(hx, hy, o.reflect ? 'rgba(255,225,150,0.9)' : 'rgba(200,200,200,0.8)', 3);
       if (!o.reflect || o.dead) return null;
       if (b.reflected || b.reflectCount >= GC.bullet.maxReflect) return null;
       b.reflected = true;
-      // Mirror the direction about the surface normal, which on a barrel is the radius through the
-      // impact point: where you hit the barrel decides where the round goes.
-      const ux = normal ? normal.nx : (hx - o.x) / (o.r || 1);
-      const uy = normal ? normal.ny : (hy - o.y) / (o.r || 1);
+      // Mirror the direction about the surface normal. On a barrel that is the radius through the
+      // impact point, so a bounce can only come back into your own half of the field; on a flat metal
+      // wall it is the face normal, which is what lets a shot turn a corner in a bunker.
+      const n = normal || normalAt(o, hx, hy);
+      const ux = n.nx, uy = n.ny;
       const dot = b.dx * ux + b.dy * uy;
       if (dot >= 0) return null;   // already leaving the surface
       const rx = b.dx - 2 * dot * ux, ry = b.dy - 2 * dot * uy;
@@ -1288,13 +1481,23 @@ window.ST = window.ST || {};
       }
     }
 
+    // Inside a bunker the walkable world is the building's own footprint, not the grass field.
+    clampToBounds(pos) {
+      const b = this.bunker && this.bunker.bounds;
+      if (b) {
+        pos.x = clamp(pos.x, b.x - b.hw + PLAYER_R, b.x + b.hw - PLAYER_R);
+        pos.y = clamp(pos.y, b.y - b.hh + PLAYER_R, b.y + b.hh - PLAYER_R);
+        return;
+      }
+      pos.x = clamp(pos.x, -this.arena + PLAYER_R, this.arena - PLAYER_R);
+      pos.y = clamp(pos.y, -this.arena + PLAYER_R, this.arena - PLAYER_R);
+    }
+
     liveObstacles() { return this.obstacles.filter(o => !o.dead); }
     pushOutOfObstacles(pos) {
       for (const r of this.obstacles) {
         if (r.dead || !r.def.collidable) continue;
-        const dx = pos.x - r.x, dy = pos.y - r.y;
-        const d = Math.hypot(dx, dy), min = r.r + PLAYER_R;
-        if (d < min && d > 0) { pos.x = r.x + dx / d * min; pos.y = r.y + dy / d * min; }
+        pushOut(pos, r, PLAYER_R);
       }
     }
 
@@ -1394,12 +1597,24 @@ window.ST = window.ST || {};
       ctx.lineWidth = 0.4 / this.ppu * 16;
       ctx.strokeRect(-AR, -AR, AR * 2, AR * 2);
 
+      // A bunker replaces the grass with its own concrete floor.
+      if (this.bunker) {
+        // The floor runs a little past the walls so the outside of the structure never shows grass
+        // through a doorway; a bunker should read as fully enclosed.
+        const b = this.bunker.bounds, m = 5;
+        ctx.fillStyle = '#3f3b36';
+        ctx.fillRect(b.x - b.hw - m, b.y - b.hh - m, (b.hw + m) * 2, (b.hh + m) * 2);
+        ctx.fillStyle = '#4b4640';
+        ctx.fillRect(b.x - b.hw, b.y - b.hh, b.hw * 2, b.hh * 2);
+      }
+
       // Obstacles: each survev sprite is 144 px drawn at its own img.scale on a 16 px/unit world,
       // then stretched by how much the instance's collider was scaled up.
       for (const r of this.obstacles) {
         if (r.dead) continue;
         if (r.x + r.r * 1.6 < left || r.x - r.r * 1.6 > right || r.y + r.r * 1.6 < top || r.y - r.r * 1.6 > bottom) continue;
-        const img = A.get(r.def.img.sprite);
+        if (r.shape === 'rect') { this.drawWall(ctx, r); continue; }
+        const img = A.get(r.def.img && r.def.img.sprite);
         if (img) {
           const size = this.spriteSize(img, r.def.img.scale) * r.scale;
           if (r.hitFlash > 0) ctx.globalAlpha = 0.75;
@@ -1410,7 +1625,7 @@ window.ST = window.ST || {};
           ctx.fillStyle = r.reflect ? '#9a5b2e' : '#7d7d7d'; ctx.fill();
           ctx.lineWidth = 0.25; ctx.strokeStyle = '#4c4c4c'; ctx.stroke();
         }
-        // Barrels are the only thing here that bounces bullets, so they get a health ring while damaged.
+        // Damaged props get a health ring so you can see what is about to go off.
         if (r.def.destructible && r.hp < r.maxHp) {
           ctx.beginPath();
           ctx.arc(r.x, r.y, r.r + 0.3, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(r.hp / r.maxHp, 0, 1));
@@ -1563,6 +1778,27 @@ window.ST = window.ST || {};
       return { x: e.pos.x + vx * t, y: e.pos.y + vy * t };
     }
 
+    // Walls and crates are boxes. survev draws bunker interiors with one big floor-and-wall image per
+    // building rather than a sprite per wall, so these are painted from the material instead: metal
+    // reads cool and bright with a highlight, because metal is the only thing in here that bounces a
+    // bullet and you need to pick it out at a glance.
+    drawWall(ctx, o) {
+      const x = o.x - o.hw, y = o.y - o.hh, w = o.hw * 2, h = o.hh * 2;
+      const mat = o.material || (o.reflect ? 'metal' : 'concrete');
+      const fill = mat === 'metal' ? '#8d99a6' : mat === 'wood' ? '#8a6234' : '#6f6a62';
+      const edge = mat === 'metal' ? '#d8e4ee' : mat === 'wood' ? '#5c3f20' : '#514d47';
+      ctx.fillStyle = fill;
+      ctx.fillRect(x, y, w, h);
+      if (o.hitFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x, y, w, h); }
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = mat === 'metal' ? 0.22 : 0.14;
+      ctx.strokeRect(x + 0.07, y + 0.07, w - 0.14, h - 0.14);
+      if (o.def.destructible && o.hp < o.maxHp) {
+        ctx.fillStyle = 'rgba(255,120,80,0.6)';
+        ctx.fillRect(x, o.y + o.hh - 0.22, w * clamp(o.hp / o.maxHp, 0, 1), 0.22);
+      }
+    }
+
     // World size of a survev sprite: its own pixel size at the client's scale, at 16 px per unit.
     spriteSize(img, scale) {
       return (img ? (img.naturalWidth || img.width) : 144) * scale / ST.SURVEV.ppuBase;
@@ -1646,6 +1882,10 @@ window.ST = window.ST || {};
       else { ctx.beginPath(); ctx.arc(0, 0, PLAYER_R, 0, TAU); ctx.fillStyle = A.hex(skinTint); ctx.fill(); }
 
       // Gun, drawn from its stock at the right hand toward the muzzle.
+      // Most guns share a generic silhouette (gun-short/med/long) and are told apart only by
+      // worldImg.tint, which the client applies as a PIXI tint: without it an AK, an Mk 12, an M39
+      // and an M870 are the same white shape. Guns with their own artwork carry tint 0xffffff, so
+      // tinting them is a no-op and the same code path covers both.
       const drawGun = () => {
         if (throwing) {
           // The grenade sits in the throwing hand, at handImg's own pivot and scale.
@@ -1660,13 +1900,25 @@ window.ST = window.ST || {};
           return;
         }
         if (!def.worldImg) return;
-        const go = def.worldImg.gunOffset || { x: 0, y: 0 };
+        const wi = def.worldImg;
+        const go = wi.gunOffset || { x: 0, y: 0 };
         const ax = handR.x + (SV.gunHandOffset[0] + go.x) / U, ay = handR.y + (SV.gunHandOffset[1] + go.y) / U;
         if (gunImg) {
-          const gw = (gunImg.naturalWidth || gunImg.width) * def.worldImg.scale.x * 0.5 / U;
-          const gl = (gunImg.naturalHeight || gunImg.height) * def.worldImg.scale.y * 0.5 / U;
+          const tinted = A.tint(wi.sprite, A.hex(wi.tint === undefined ? 0xffffff : wi.tint)) || gunImg;
+          const gw = (gunImg.naturalWidth || gunImg.width) * wi.scale.x * 0.5 / U;
+          const gl = (gunImg.naturalHeight || gunImg.height) * wi.scale.y * 0.5 / U;
+          // The magazine is a separate sprite at its own pivot, drawn under or over the barrel
+          // depending on magImg.top. The DP-28's pan sits on top of the gun.
+          const mag = wi.magImg && A.get(wi.magImg.sprite);
+          const drawMag = () => {
+            if (!mag) return;
+            const ms = this.spriteSize(mag, 0.25);
+            ctx.drawImage(mag, wi.magImg.pos.x / U - ms / 2, wi.magImg.pos.y / U - ms / 2, ms, ms);
+          };
           ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.PI / 2);
-          ctx.drawImage(gunImg, -gw / 2, -gl, gw, gl);
+          if (mag && !wi.magImg.top) drawMag();
+          ctx.drawImage(tinted, -gw / 2, -gl, gw, gl);
+          if (mag && wi.magImg.top) drawMag();
           ctx.restore();
         } else {
           ctx.fillStyle = '#2b2b2b';
@@ -1726,6 +1978,8 @@ window.ST = window.ST || {};
     }
   }
 
+  // Sample a point inside a room rect; used by the headless tests.
+  ST.__r = (rm) => ({ x: rand(rm.x - rm.hw, rm.x + rm.hw), y: rand(rm.y - rm.hh, rm.y + rm.hh) });
   ST.Game = Game;
   ST.ARENA = ARENA;
   ST.arenaFor = arenaFor;

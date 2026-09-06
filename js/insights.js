@@ -122,9 +122,9 @@ ST.utilityInsights = function (r, s) {
     else if (r.avgCookTime !== null && r.avgCookTime < 0.5) out.push({ sev: 2, text: `You threw with an average cook of ${r.avgCookTime.toFixed(2)}s, so each frag sat live for about ${(t.fuseTime - r.avgCookTime).toFixed(1)}s before going off. Anyone who sees it simply walks away; hold the pin longer.` });
   }
   // Ricochet: report it as what it is, a low-percentage tool and a real hazard.
-  if (s.barrels > 0 && (r.ricochetPellets > 0 || r.ricochetSelfDmg > 0)) {
+  if ((s.barrels > 0 || s.arena) && (r.ricochetPellets > 0 || r.ricochetSelfDmg > 0)) {
     if (r.ricochetSelfDmg > 15) out.push({ sev: 3, text: `Your own ricochets did ${Math.round(r.ricochetSelfDmg)} damage to you. A barrel is a round mirror pointed back at you: stop firing through one at close range.` });
-    else if (r.ricochetHits > 0) out.push({ sev: 1, text: `${r.ricochetHits} of ${r.ricochetPellets} bounced rounds connected for ${Math.round(r.ricochetDmg)} damage, at half damage each. That is about the ceiling for ricochet; treat it as a bonus, not a plan.` });
+    else if (r.ricochetHits > 0) out.push({ sev: 1, text: `${r.ricochetHits} of ${r.ricochetPellets} bounced rounds connected for ${Math.round(r.ricochetDmg)} damage, at half damage each. Off a flat metal wall that is a real angle you can aim; off a barrel it is mostly luck.` });
   }
   out.sort((a, b) => b.sev - a.sev);
   return out;

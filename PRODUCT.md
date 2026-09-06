@@ -65,7 +65,7 @@ confirmed this as the claim future work should protect.
 
 - Drills: Tracking, Flick, 1v1 Duel, Shotgun Rush, Quick Switch, Sniper Leads,
   Swarm, Pistol Tap, Chase, Dodge, Spin Dodge, Frag Lob, Cooked Frag, Ricochet,
-  Barrel Trap, Custom. Routines: Daily 5, Benchmark, Clicking focus, Tracking focus,
+  Barrel Trap, Custom. Ricochet is played inside survev's Hydra bunker. Routines: Daily 5, Benchmark, Clicking focus, Tracking focus,
   Moving focus, Utility focus, Bullet leads. Every routine but the Benchmark is five
   minutes end to end including rests, computed from the steps rather than written down.
 - Analytics: throughput score, flick kinematics from the cursor path (reaction,
@@ -111,9 +111,14 @@ player circles, weapon tracers) for fidelity, not as a binding brand.
   survev-style menu.
 - The spinning model's effect size was measured in the headless harness, not assumed:
   against a hard-aim bot and a target juking every 0.45 s it cut the bot's hit rate from
-  28% to 20%, and against a target running straight it did nothing. Ricochet was measured
-  the same way and is a low-percentage tool: roughly one firing angle in ten connects for
-  a target standing beside a barrel, and none at all for one standing behind it.
+  28% to 20%, and against a target running straight it did nothing.
+- Ricochet was measured the same way, and the mirror's shape decides its worth. Off a
+  convex barrel roughly one firing angle in ten reaches a target beside it and none at all
+  reaches one behind it. Off the flat metal walls of a bunker it turns corners properly:
+  in `bunker_hydra_compartment_02`, five of eight sampled positions with no line of sight
+  were reachable, in three-to-eighteen-degree windows. That measurement is why the Ricochet
+  drill is set in that bunker and not in an open barrel field; eight survev bunkers were
+  scored the same way before it was chosen.
 - No real player data, testimonials, or transfer-to-game results exist. Do not
   fabricate improvement claims, user counts, or comparisons.
 
