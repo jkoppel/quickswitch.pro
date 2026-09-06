@@ -24,6 +24,7 @@ ST.assets = (function () {
     'gun-sv98-01.img': 'guns/gun-sv98-01.svg',
     'gun-awc-01.img': 'guns/gun-awc-01.svg',
     'map-stone-01.img': 'map/map-stone-01.svg',
+    'map-barrel-01.img': 'map/map-barrel-01.svg',
     'map-stone-03.img': 'map/map-stone-03.svg',
     'map-bush-01.img': 'map/map-bush-01.svg',
     'part-splat-01.img': 'particles/part-splat-01.svg',
@@ -33,6 +34,15 @@ ST.assets = (function () {
     'part-shell-02.img': 'particles/part-shell-02.svg',
     'part-shell-03.img': 'particles/part-shell-03.svg',
     'part-shell-04.img': 'particles/part-shell-04.svg',
+    'part-frag-burst-01.img': 'particles/part-frag-burst-01.svg',
+    'part-frag-burst-02.img': 'particles/part-frag-burst-02.svg',
+    'part-frag-burst-03.img': 'particles/part-frag-burst-03.svg',
+    'part-smoke-01.img': 'particles/part-smoke-01.svg',
+    'part-smoke-02.img': 'particles/part-smoke-02.svg',
+    'part-smoke-03.img': 'particles/part-smoke-03.svg',
+    'proj-frag-pin-01.img': 'proj/proj-frag-pin-01.svg',
+    'proj-frag-nopin-nolever-01.img': 'proj/proj-frag-nopin-nolever-01.svg',
+    'map-tree-01.img': 'map/map-tree-01.svg',
     'crosshair000.img': 'crosshairs/crosshair000.svg',
   };
   // survev rasterizes SVGs at 2x; the "0.5" in the client's sprite scales undoes that. We load the

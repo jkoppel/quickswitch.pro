@@ -4,14 +4,20 @@ window.ST = window.ST || {};
 (function () {
   const TAU = Math.PI * 2;
   const DEG = Math.PI / 180;
-  const PLAYER_R = 1;
-  const MOVE_SPEED = 12;
-  const ARENA = 100;               // arena is [-ARENA, ARENA] on both axes
-  const PLAYER_MAX_HP = 100;
+  const GC = ST.GC;                          // survev's GameConfig, verbatim
+  const PLAYER_R = GC.player.radius;
+  const MOVE_SPEED = GC.player.moveSpeed;
+  const ARENA = 100;               // default arena half-size; scopes past 4x widen it (see arenaFor)
+  const PLAYER_MAX_HP = GC.player.health;
 
   const rand = (a, b) => a + Math.random() * (b - a);
+  const randInt = (a, b) => Math.floor(rand(a, b + 1));
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
+  // math.remap from survev: map v from [a,b] onto [c,d].
+  const remap = (v, a, b, c, d) => c + (clamp(v, Math.min(a, b), Math.max(a, b)) - a) / (b - a) * (d - c);
+  // The field has to be bigger than the view or a high scope shows the edge of the world.
+  const arenaFor = (zoomRadius) => Math.max(ARENA, Math.ceil(zoomRadius * 2.2));
   function gauss() {
     let u = 0, v = 0;
     while (!u) u = Math.random();
@@ -29,7 +35,14 @@ window.ST = window.ST || {};
   }
 
   function makeGun(def) {
-    return { def, ammo: def.mag, reloading: false, reloadT: 0, cooldown: 0, pullT: 0, recoil: 0, emptyClicked: false };
+    return {
+      def, ammo: def.mag, reloading: false, reloadT: 0, cooldown: 0, pullT: 0, recoil: 0,
+      emptyClicked: false, recoilTicker: 0,
+    };
+  }
+  // A throwable occupies a weapon slot like a gun does, but holds a count instead of a magazine.
+  function makeThrowable(def, count) {
+    return { def, throwable: true, count: count === undefined ? 3 : count, cooldown: 0, cooking: false, cookT: 0 };
   }
   function startReload(g, opts) {
     if (g.reloading || g.ammo >= g.def.mag) return;
@@ -40,6 +53,7 @@ window.ST = window.ST || {};
   // Advances gun timers; fires via fireFn if wantFire and the gun is able. Returns true if it fired.
   function updateGun(g, dt, wantFire, fireFn, minDelay) {
     g.cooldown = Math.max(0, g.cooldown - dt);
+    g.recoilTicker += dt;
     g.recoil = Math.max(0, g.recoil - g.recoil * dt * 5 - dt); // player.ts recoil decay
     if (g.pullT > 0) { g.pullT -= dt; if (g.pullT <= 0 && g.def.sound.pull) ST.audio.play(g.def.sound.pull, g.soundOpts); }
     if (g.reloading) {
@@ -63,10 +77,13 @@ window.ST = window.ST || {};
       else return false;
     }
     g.ammo--;
+    // weaponManager.ts: a gun idle for longer than recoilTime fires its next shot with no spread.
+    const firstShot = g.recoilTicker >= g.def.recoilTime;
+    g.recoilTicker = 0;
     g.cooldown = Math.max(g.def.fireDelay, minDelay || 0);
     g.recoil += g.def.worldImg && g.def.worldImg.recoil ? g.def.worldImg.recoil : 1;
     if (g.def.pullDelay) g.pullT = g.def.pullDelay;
-    fireFn();
+    fireFn(firstShot);
     return true;
   }
 
@@ -78,6 +95,7 @@ window.ST = window.ST || {};
       this.hooks = hooks || {};
       this.zoomRadius = ST.SCOPES[settings.scope] || 28;
       this.halfH = this.zoomRadius;
+      this.arena = arenaFor(this.zoomRadius);
 
       this.keys = new Set();
       this.mouse = { x: 0, y: 0, down: false, queued: false };
@@ -86,23 +104,45 @@ window.ST = window.ST || {};
       this.paused = false;
       this.finished = false;
 
+      // Weapon slots, as in survev: two guns, plus a throwable. Slot 0 is always the drill's weapon.
+      const secondary = settings.secondary && ST.WEAPONS[settings.secondary] ? ST.WEAPONS[settings.secondary] : null;
+      const throwable = settings.throwable && ST.THROWABLES[settings.throwable] ? ST.THROWABLES[settings.throwable] : null;
       this.player = {
-        pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 }, hp: PLAYER_MAX_HP, aim: 0, moving: false,
-        gun: makeGun(ST.WEAPONS[settings.weapon]),
+        pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 }, hp: PLAYER_MAX_HP, aim: 0, aimVel: 0, moving: false,
+        weapons: [
+          makeGun(ST.WEAPONS[settings.weapon]),
+          secondary ? makeGun(secondary) : null,
+          throwable ? makeThrowable(throwable, settings.throwableCount) : null,
+        ],
+        curIdx: 0, lastIdx: secondary ? 1 : 0,
+        freeSwitchTimer: 0,     // < 0 means the next weapon switch only costs baseSwitchDelay
+        visualLog: [],          // recent perceived-centroid samples, for enemy perception latency
       };
+      Object.defineProperty(this.player, 'gun', { get: () => this.player.weapons[this.player.curIdx] || this.player.weapons[0] });
       this.enemyDef = ST.WEAPONS[settings.enemyWeapon || settings.weapon];
       this.enemies = [];
       this.bullets = [];
+      this.projectiles = [];
+      this.explosions = [];
       this.particles = [];
       this.respawns = [];
       this.markers = [];
       this.feed = [];
-      this.rocks = settings.obstacles ? this.makeRocks() : [];
+      this.obstacles = settings.obstacles ? this.makeObstacles() : [];
       this.stats = {
         shots: 0, pellets: 0, hits: 0, kills: 0, deaths: 0, dmgDealt: 0, dmgTaken: 0,
         expired: 0, ttk: [], reaction: [], engage: [], movingShots: 0, onTarget: 0, firing: 0,
         movingTime: 0, movingPellets: 0, movingHits: 0, dmgTakenStill: 0, hitsTaken: 0, hitsTakenStill: 0,
+        headshots: 0,
+        // Spinning: time spent whirling the cursor, and how it changed what you and the bots hit.
+        spinTime: 0, spinPellets: 0, spinHits: 0, dmgTakenSpinning: 0, spinDodges: 0,
+        // Quick switching: switches that beat the primary's own fire delay, and the gaps they produced.
+        switches: 0, quickSwitchShots: 0, switchGaps: [],
+        // Throwables and ricochet.
+        nadesThrown: 0, nadeHits: 0, nadeDmg: 0, nadeKills: 0, nadeSelfDmg: 0, cookTimes: [],
+        ricochetPellets: 0, ricochetHits: 0, ricochetDmg: 0, ricochetSelfDmg: 0, barrelsPopped: 0,
       };
+      this.lastFireT = -99;      // when the last shot left any weapon, for quick-switch timing
       // Kinematics: cursor samples (screen px) and one record per acquired target.
       this.cursorLog = [];
       this.targets = [];
@@ -124,17 +164,33 @@ window.ST = window.ST || {};
     }
 
     // ---------- setup ----------
-    makeRocks() {
-      const rocks = [];
-      let tries = 0;
-      while (rocks.length < 14 && tries++ < 400) {
-        const r = rand(1.6, 3.2);
-        const x = rand(-ARENA + 6, ARENA - 6), y = rand(-ARENA + 6, ARENA - 6);
-        if (Math.hypot(x, y) < 9) continue;
-        if (rocks.some(o => Math.hypot(o.x - x, o.y - y) < o.r + r + 6)) continue;
-        rocks.push({ x, y, r, shade: rand(0.85, 1.1) });
-      }
-      return rocks;
+    // Stones and barrels with survev's own colliders, health and reflectBullets flags
+    // (vendor/survev/defs/obstacleDefs.js). Barrels bounce bullets and blow up when destroyed.
+    makeObstacles() {
+      const out = [];
+      const A = this.arena;
+      const wantBarrels = this.s.barrels === undefined ? 0 : this.s.barrels;
+      const wantStones = this.s.stones === undefined ? 14 : this.s.stones;
+      const place = (defId, n, minGap) => {
+        const def = ST.OBSTACLES[defId];
+        let tries = 0;
+        let placed = 0;
+        while (placed < n && tries++ < 500) {
+          const scale = rand(def.scale.createMin, def.scale.createMax);
+          const r = def.collisionRad * scale;
+          const x = rand(-A + 6, A - 6), y = rand(-A + 6, A - 6);
+          if (Math.hypot(x, y) < 9) continue;
+          if (out.some(o => Math.hypot(o.x - x, o.y - y) < o.r + r + minGap)) continue;
+          out.push({
+            x, y, r, scale, def, defId, hp: def.health, maxHp: def.health,
+            reflect: !!def.reflectBullets, dead: false, hitFlash: 0, id: out.length + 1,
+          });
+          placed++;
+        }
+      };
+      place('barrel_01', wantBarrels, 4);
+      place('stone_01', wantStones, 6);
+      return out;
     }
 
     resize() {
@@ -146,8 +202,10 @@ window.ST = window.ST || {};
       this.canvas.height = Math.round(this.h * dpr);
       this.canvas.style.width = this.w + 'px';
       this.canvas.style.height = this.h + 'px';
-      // survev: camera.targetZoom = (maxScreenDim * 0.5) / (zoomRadius * ppu)  =>  px per unit = maxDim / (2 * zoomRadius)
-      this.ppu = Math.max(this.w, this.h) / (this.zoomRadius * 2);
+      // survev client/src/game.ts: maxScreenDim = max(minDim * 16/9, maxDim);
+      // targetZoom = (maxScreenDim * 0.5) / (zoomRadius * ppu). A window narrower than 16:9 is treated
+      // as 16:9, so the world is the same size on screen as it is in the real game.
+      this.ppu = ST.pixelsPerUnit(this.w, this.h, this.zoomRadius);
       this.halfW = this.w / (2 * this.ppu);
       this.halfH = this.h / (2 * this.ppu);
     }
@@ -159,7 +217,11 @@ window.ST = window.ST || {};
         const k = e.key.toLowerCase();
         if (k === 'escape') { this.togglePause(); e.preventDefault(); return; }
         if (this.paused) return;
-        if (k === 'r') { startReload(this.player.gun); return; }
+        if (k === 'r') { const g = this.player.gun; if (g && !g.throwable) startReload(g); return; }
+        // Weapon slots, as in survev: 1 and 2 are the guns, 4 (or G) the throwable, Q the last weapon.
+        if (k === '1' || k === '2') { this.equip(Number(k) - 1); e.preventDefault(); return; }
+        if (k === '4' || k === 'g') { this.equip(2); e.preventDefault(); return; }
+        if (k === 'q') { this.equip(this.player.lastIdx); e.preventDefault(); return; }
         this.keys.add(k);
         if (['w', 'a', 's', 'd', ' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
       };
@@ -196,6 +258,41 @@ window.ST = window.ST || {};
       window.removeEventListener('blur', this.onBlur);
       c.removeEventListener('contextmenu', this.onCtx);
       window.removeEventListener('resize', this.onResize);
+    }
+
+    // ---------- weapons ----------
+    // survev weaponManager.setCurWeapIndex, verbatim in behaviour:
+    //   the switch costs the new gun's switchDelay, except that a switch is "free" (baseSwitchDelay,
+    //   0.25 s) once every freeSwitchCooldown (1 s); and two guns that share a non-zero deployGroup
+    //   pay the full switchDelay while the old gun is still on cooldown, so you cannot quick-switch
+    //   between two shotguns to skip the pump.
+    equip(idx) {
+      const p = this.player;
+      if (idx === p.curIdx) return;
+      const next = p.weapons[idx];
+      const cur = p.weapons[p.curIdx];
+      if (!next || !cur) return;
+      if (next.throwable && next.count <= 0) return;
+      if (cur.throwable && cur.cooking) this.throwGrenade(true);   // switching away lobs the cooked nade
+      if (cur.reloading) { cur.reloading = false; cur.reloadT = 0; }
+
+      const swappingToGun = !next.throwable;
+      let delay = swappingToGun ? next.def.switchDelay : 0;
+      if (p.freeSwitchTimer < 0) {
+        delay = GC.player.baseSwitchDelay;
+        p.freeSwitchTimer = GC.player.freeSwitchCooldown;
+      }
+      const sameGroup = swappingToGun && !cur.throwable
+        && cur.def.deployGroup !== undefined && cur.def.deployGroup === next.def.deployGroup;
+      if (sameGroup && cur.cooldown > 0) delay = next.def.switchDelay;
+
+      next.cooldown = delay;
+      if (!next.throwable) next.recoilTicker = 0;
+      p.lastIdx = p.curIdx;
+      p.curIdx = idx;
+      this.stats.switches++;
+      this.pendingSwitchShot = true;   // the next shot closes a switch, for quick-switch timing
+      ST.audio.play('gun_switch_01', { volume: 0.5 });
     }
 
     // ---------- lifecycle ----------
@@ -271,6 +368,28 @@ window.ST = window.ST || {};
         stillDmgFrac: st.dmgTaken ? st.dmgTakenStill / st.dmgTaken : null,
         onTargetFrac: st.onTarget / Math.max(this.time, 1),
         firingFrac: st.firing / Math.max(this.time, 1),
+        headshots: st.headshots,
+        // Spinning: what it cost you and what it bought you.
+        spinFrac: st.spinTime / Math.max(this.time, 1),
+        accSpinning: st.spinPellets ? st.spinHits / st.spinPellets : null,
+        accNotSpinning: (st.pellets - st.spinPellets) ? (st.hits - st.spinHits) / (st.pellets - st.spinPellets) : null,
+        dmgTakenPerMinSpinning: st.spinTime > 3 ? st.dmgTakenSpinning / st.spinTime * 60 : null,
+        dmgTakenPerMinSteady: (this.time - st.spinTime) > 3 ? (st.dmgTaken - st.dmgTakenSpinning) / (this.time - st.spinTime) * 60 : null,
+        // Quick switching.
+        switches: st.switches,
+        quickSwitchShots: st.quickSwitchShots,
+        avgSwitchGap: avg(st.switchGaps),
+        switchesPerMin: st.switches / minutes,
+        // Throwables.
+        nadesThrown: st.nadesThrown, nadeHits: st.nadeHits, nadeKills: st.nadeKills,
+        nadeDmg: st.nadeDmg, nadeSelfDmg: st.nadeSelfDmg,
+        nadeDmgPerThrow: st.nadesThrown ? st.nadeDmg / st.nadesThrown : null,
+        avgCookTime: avg(st.cookTimes),
+        // Ricochet.
+        ricochetPellets: st.ricochetPellets, ricochetHits: st.ricochetHits,
+        ricochetDmg: st.ricochetDmg, ricochetSelfDmg: st.ricochetSelfDmg,
+        ricochetRate: st.ricochetPellets ? st.ricochetHits / st.ricochetPellets : null,
+        barrelsPopped: st.barrelsPopped,
         difficulty: this.diff,
         targets: this.targets,
         kinematics: this.kinematics(),
@@ -304,13 +423,21 @@ window.ST = window.ST || {};
     }
 
     hudState() {
-      const g = this.player.gun;
+      const p = this.player;
+      const g = p.gun;
+      const slots = p.weapons.map((w, i) => w ? {
+        idx: i, key: i === 2 ? '4' : String(i + 1), name: w.def.name, active: i === p.curIdx,
+        ammo: w.throwable ? w.count : w.ammo, mag: w.throwable ? null : w.def.mag,
+        throwable: !!w.throwable, ready: w.cooldown <= 0,
+      } : null).filter(Boolean);
       return {
         time: this.time, duration: this.s.duration,
-        hp: this.player.hp, maxHp: PLAYER_MAX_HP,
-        ammo: g.ammo, mag: g.def.mag, reloading: g.reloading,
-        reloadFrac: g.reloading ? 1 - g.reloadT / g.def.reload : 0,
+        hp: p.hp, maxHp: PLAYER_MAX_HP,
+        ammo: g.throwable ? g.count : g.ammo, mag: g.throwable ? null : g.def.mag,
+        reloading: !g.throwable && g.reloading,
+        reloadFrac: !g.throwable && g.reloading ? 1 - g.reloadT / g.def.reload : 0,
         weapon: g.def.name,
+        slots, spin: this.spinFrac(), cooking: !!(g.throwable && g.cooking),
         kills: this.stats.kills, deaths: this.stats.deaths,
         accuracy: this.stats.pellets ? this.stats.hits / this.stats.pellets : 0,
         hits: this.stats.hits,
@@ -328,16 +455,16 @@ window.ST = window.ST || {};
       let best = null;
       for (let i = 0; i < 60; i++) {
         const a = rand(0, TAU), d = rand(minD, maxD);
-        const x = clamp(p.x + Math.cos(a) * d, -ARENA + 2, ARENA - 2);
-        const y = clamp(p.y + Math.sin(a) * d, -ARENA + 2, ARENA - 2);
+        const x = clamp(p.x + Math.cos(a) * d, -this.arena + 2, this.arena - 2);
+        const y = clamp(p.y + Math.sin(a) * d, -this.arena + 2, this.arena - 2);
         const cand = { x, y };
         best = best || cand;
         if (Math.abs(x - p.x) > bx || Math.abs(y - p.y) > by) continue;
         if (Math.hypot(x - p.x, y - p.y) < Math.min(minD, 4)) continue;
-        if (this.rocks.some(r => Math.hypot(r.x - x, r.y - y) < r.r + 2.5)) continue;
+        if (this.liveObstacles().some(r => Math.hypot(r.x - x, r.y - y) < r.r + 2.5)) continue;
         if (this.enemies.some(e => Math.hypot(e.pos.x - x, e.pos.y - y) < 3)) continue;
         // Skip spawns whose line of sight to the player is blocked.
-        if (this.rocks.some(r => segPointDist2(p.x, p.y, x, y, r.x, r.y).d2 < r.r * r.r)) continue;
+        if (this.s.coverSpawn !== true && this.blocked(p.x, p.y, x, y)) continue;
         return cand;
       }
       return best;
@@ -367,6 +494,7 @@ window.ST = window.ST || {};
       this.sampleCursor(dt);
       this.updatePlayer(dt);
       this.updateEnemies(dt);
+      this.updateProjectiles(dt);
       this.updateBullets(dt);
       this.updateEffects(dt);
       this.updateRespawns(dt);
@@ -475,23 +603,226 @@ window.ST = window.ST || {};
       const l = Math.hypot(mx, my);
       p.moving = l > 0;
       if (l > 0) { mx /= l; my /= l; }
-      p.vel.x = mx * MOVE_SPEED; p.vel.y = my * MOVE_SPEED;
+      // Cooking a grenade slows you the way it does in survev (GameConfig.player.cookSpeedPenalty).
+      const cooking = p.gun && p.gun.throwable && p.gun.cooking;
+      const speed = MOVE_SPEED - (cooking ? GC.player.cookSpeedPenalty : 0);
+      p.vel.x = mx * speed; p.vel.y = my * speed;
       if (p.moving) this.stats.movingTime += dt;
-      p.pos.x = clamp(p.pos.x + p.vel.x * dt, -ARENA + PLAYER_R, ARENA - PLAYER_R);
-      p.pos.y = clamp(p.pos.y + p.vel.y * dt, -ARENA + PLAYER_R, ARENA - PLAYER_R);
-      this.pushOutOfRocks(p.pos);
+      const A = this.arena;
+      p.pos.x = clamp(p.pos.x + p.vel.x * dt, -A + PLAYER_R, A - PLAYER_R);
+      p.pos.y = clamp(p.pos.y + p.vel.y * dt, -A + PLAYER_R, A - PLAYER_R);
+      this.pushOutOfObstacles(p.pos);
 
       const m = this.mouseWorld();
+      const prevAim = p.aim;
       p.aim = Math.atan2(m.y - p.pos.y, m.x - p.pos.x);
+      this.updateSpin(dt, prevAim);
+      this.sampleVisual();
+
+      p.freeSwitchTimer -= dt;
 
       const g = p.gun;
+      if (!g) return;
+      if (g.throwable) { this.updateThrowable(dt, g); return; }
       const wantFire = g.def.auto ? this.mouse.down : this.mouse.queued;
-      updateGun(g, dt, wantFire, () => {
+      updateGun(g, dt, wantFire, (firstShot) => {
         this.mouse.queued = false;
         this.stats.shots++;
-        this.fireGun(p, g.def, p.aim, p.moving, 'player');
+        // A shot that lands sooner than the gun it followed could have fired is a quick switch.
+        const gap = this.time - this.lastFireT;
+        if (this.pendingSwitchShot) {
+          this.pendingSwitchShot = false;
+          if (gap < this.slowestFireDelay()) { this.stats.quickSwitchShots++; this.stats.switchGaps.push(gap); }
+        }
+        this.lastFireT = this.time;
+        this.fireGun(p, g.def, p.aim, p.moving, 'player', { firstShot });
       });
     }
+
+    // The fire delay you would have waited had you not switched: the slowest of the two guns.
+    slowestFireDelay() {
+      let d = 0;
+      for (const w of this.player.weapons) {
+        if (!w || w.throwable) continue;
+        d = Math.max(d, w.def.fireDelay + (w.def.pullDelay || 0));
+      }
+      return d;
+    }
+
+    // ---------- spinning ----------
+    // How fast you are whirling your aim, in radians per second, smoothed over ~150 ms.
+    // Spinning is a real survev habit: it costs you your own aim, and it denies the enemy both a
+    // stable silhouette to track and the facing cue they use to predict your next strafe.
+    updateSpin(dt, prevAim) {
+      const p = this.player;
+      let d = p.aim - prevAim;
+      while (d > Math.PI) d -= TAU;
+      while (d < -Math.PI) d += TAU;
+      const inst = dt > 0 ? Math.abs(d) / dt : 0;
+      const a = clamp(dt / 0.15, 0, 1);
+      p.aimVel = lerp(p.aimVel, inst, a);
+      if (this.spinFrac() > 0.5) this.stats.spinTime += dt;
+    }
+    // 0 at rest, 1 at a full revolution per second and beyond. Two revolutions per second is what a
+    // player doing this on purpose reaches; casual tracking sits well under a quarter of it.
+    spinFrac() { return clamp((this.player.aimVel - 2.5) / (TAU - 2.5), 0, 1); }
+
+    // Enemies see a silhouette, not a hitbox: body, hands and a gun sticking out in front. The point
+    // they actually shoot at is the centre of that silhouette, which swings around you as you turn.
+    visualCentroid() {
+      const p = this.player;
+      const g = p.gun;
+      const barrel = g && !g.throwable ? g.def.barrel : 1.5;
+      const off = clamp(barrel * 0.15, 0, 0.6);
+      return { x: p.pos.x + Math.cos(p.aim) * off, y: p.pos.y + Math.sin(p.aim) * off, t: this.time };
+    }
+    sampleVisual() {
+      const log = this.player.visualLog;
+      log.push(this.visualCentroid());
+      while (log.length > 1 && log[0].t < this.time - 1.2) log.shift();
+    }
+    // Where an enemy with `latency` seconds of perception delay believes your silhouette is.
+    // Spin fast enough and that stale point is uncorrelated with the current one, which is exactly
+    // the miss distance spinning buys you: at most the gun's own offset, never more.
+    perceivedPos(latency) {
+      const log = this.player.visualLog;
+      if (!log.length) return { x: this.player.pos.x, y: this.player.pos.y };
+      const want = this.time - latency;
+      for (let i = log.length - 1; i >= 0; i--) if (log[i].t <= want) return log[i];
+      return log[0];
+    }
+
+    // ---------- throwables ----------
+    // survev: holding fire pulls the pin and starts the fuse; releasing throws. Throw strength is the
+    // cursor's distance from you over GameConfig.player.throwableMaxMouseDist, so a nade at your feet
+    // is a short lob and a nade at the edge of the screen is a full throw.
+    updateThrowable(dt, w) {
+      w.cooldown = Math.max(0, w.cooldown - dt);
+      if (w.cooldown > 0) return;
+      if (this.mouse.down && !w.cooking && w.count > 0) {
+        w.cooking = true;
+        w.cookT = 0;
+        ST.audio.play(w.def.sound.pullPin, { volume: 0.8 });
+      }
+      if (!w.cooking) return;
+      w.cookT += dt;
+      // A cooked frag goes off in your hand: survev's own safety check throws it at fuseTime.
+      if (!this.mouse.down && w.cookT >= GC.player.cookTime) this.throwGrenade(false);
+      else if (w.def.cookable && w.cookT > w.def.fuseTime) this.throwGrenade(false);
+    }
+
+    throwGrenade(noSpeed) {
+      const p = this.player;
+      const w = p.weapons[2];
+      if (!w || !w.cooking || w.count <= 0) return;
+      if (w.cookT < GC.player.cookTime) return;
+      const def = w.def;
+      w.cooking = false;
+      w.count--;
+      w.cooldown = GC.player.throwTime;
+      this.stats.nadesThrown++;
+      this.stats.cookTimes.push(w.cookT);
+
+      const m = this.mouseWorld();
+      const mouseLen = Math.hypot(m.x - p.pos.x, m.y - p.pos.y);
+      const mult = noSpeed ? 0 : clamp(mouseLen, 0, GC.player.throwableMaxMouseDist) / GC.player.throwableMaxMouseDist;
+      const strength = mult * def.speed;
+      const dx = Math.cos(p.aim), dy = Math.sin(p.aim);
+      // Thrown from the right hand: survev offsets the spawn by (0.5, -1) rotated into aim space.
+      const hx = p.pos.x + 0.5 * dx - -1 * dy, hy = p.pos.y + 0.5 * dy + -1 * dx;
+      this.projectiles.push({
+        def, x: hx, y: hy, z: 0.5,
+        vx: dx * strength + p.vel.x * def.playerVelMult,
+        vy: dy * strength + p.vel.y * def.playerVelMult,
+        vz: def.velZ,
+        // A cooked grenade keeps the fuse it already burned.
+        fuse: Math.max(0, def.fuseTime - (def.cookable ? w.cookT : 0)),
+        rot: p.aim, rotVel: def.spinVel * (Math.random() < 0.5 ? -1 : 1),
+        owner: 'player', cookT: w.cookT,
+      });
+      ST.audio.play(def.sound.throwing, { volume: 0.8 });
+    }
+
+    updateProjectiles(dt) {
+      const G = GC.projectile;
+      for (const q of this.projectiles) {
+        // Height first: drag only applies once the grenade is rolling on the ground.
+        q.vz -= G.gravity * dt;
+        q.z += q.vz * dt;
+        if (q.z <= 0) {
+          q.z = 0;
+          if (q.vz < 0) { q.vz = -q.vz * 0.35; if (q.vz < 1.2) q.vz = 0; ST.audio.play('frag_ground_01', { dist: this.distToPlayer(q), volume: 0.5 }); }
+          const k = 1 / (1 + dt * G.groundDrag);
+          q.vx *= k; q.vy *= k;
+        }
+        const nx = q.x + q.vx * dt, ny = q.y + q.vy * dt;
+        // Bounce off obstacles that stand taller than the grenade currently flies.
+        let bounced = false;
+        for (const o of this.obstacles) {
+          if (o.dead || q.z > o.def.height) continue;
+          const d = Math.hypot(nx - o.x, ny - o.y), min = o.r + q.def.rad * 0.5;
+          if (d < min && d > 0) {
+            const nrx = (nx - o.x) / d, nry = (ny - o.y) / d;
+            const vl = Math.hypot(q.vx, q.vy) || 0.0001;
+            const dot = (q.vx / vl) * nrx + (q.vy / vl) * nry;
+            const rx = q.vx / vl - 2 * dot * nrx, ry = q.vy / vl - 2 * dot * nry;
+            const scale = Math.max(1 + dot, 0.15);   // survev projectile.ts
+            q.vx = rx * vl * scale; q.vy = ry * vl * scale;
+            q.x = o.x + nrx * (min + 0.1); q.y = o.y + nry * (min + 0.1);
+            bounced = true;
+            break;
+          }
+        }
+        if (!bounced) { q.x = nx; q.y = ny; }
+        q.x = clamp(q.x, -this.arena + 0.5, this.arena - 0.5);
+        q.y = clamp(q.y, -this.arena + 0.5, this.arena - 0.5);
+        q.rot += q.rotVel * dt;
+        q.rotVel *= 1 / (1 + dt);
+        q.fuse -= dt;
+        if (q.fuse <= 0) { q.done = true; this.explode(q); }
+      }
+      this.projectiles = this.projectiles.filter(q => !q.done);
+    }
+
+    // survev explosion.ts: everything inside rad.min takes the full damage; past that the damage
+    // ramps linearly to zero at rad.max, and an obstacle between you and the blast eats it entirely.
+    explode(q) {
+      const def = q.def;
+      const x = q.x, y = q.y;
+      this.explosions.push({ x, y, life: 0.5, maxLife: 0.5, radMax: def.radMax });
+      ST.audio.play(Math.random() < 0.5 ? 'explosion_01' : 'explosion_02', { dist: this.distToPlayer(q), volume: 0.9 });
+      this.spawnFragBurst(x, y);
+      if (def.dmg > 0) {
+        const targets = [{ o: this.player, kind: 'player' }].concat(this.enemies.map(e => ({ o: e, kind: 'enemy' })));
+        for (const t of targets) {
+          const o = t.o;
+          const dx = o.pos.x - x, dy = o.pos.y - y;
+          const dist = Math.max(0, Math.hypot(dx, dy) - PLAYER_R);
+          if (dist > def.radMax) continue;
+          if (this.blocked(x, y, o.pos.x, o.pos.y)) continue;
+          const dmg = dist <= def.radMin ? def.dmg : remap(dist, 0, def.radMax, def.dmg, 0);
+          if (dmg <= 0) continue;
+          if (t.kind === 'enemy') this.damageEnemy(o, { dmg, dx: dx, dy: dy, source: 'explosion' }, o.pos.x, o.pos.y);
+          else { this.stats.nadeSelfDmg += Math.min(dmg, this.player.hp); this.damagePlayer({ dmg, dx, dy, source: 'explosion', owner: q.owner }, o.pos.x, o.pos.y); }
+        }
+      }
+      // Shrapnel: real bullets, fired outward, that can come back at you.
+      const sh = ST.SHRAPNEL[def.shrapnelType];
+      if (sh && def.shrapnelCount) {
+        for (let i = 0; i < def.shrapnelCount; i++) {
+          const a = rand(0, TAU);
+          const variance = 1 + rand(-0.5, 0.5) * (sh.variance || 0);
+          this.bullets.push(this.makeBullet(x, y, a, sh, q.owner, { range: sh.range * variance, shrapnel: true }));
+        }
+      }
+    }
+
+    // Line of sight: any solid obstacle taller than a bullet between the two points blocks.
+    blocked(ax, ay, bx, by) {
+      return this.obstacles.some(o => !o.dead && o.def.height >= GC.bullet.height
+        && segPointDist2(ax, ay, bx, by, o.x, o.y).d2 < o.r * o.r);
+    }
+    distToPlayer(q) { return Math.hypot(q.x - this.player.pos.x, q.y - this.player.pos.y); }
 
     updateEnemies(dt) {
       const p = this.player.pos;
@@ -555,10 +886,10 @@ window.ST = window.ST || {};
             if (e.timer <= 0) { if (Math.random() < 0.7) e.dirSign = -e.dirSign; e.timer = rand(0.35, 0.9) * this.strafeScale(); }
             vx = -tx + px * e.dirSign * 0.55; vy = -ty + py * e.dirSign * 0.55;
             const margin = 14;
-            const ex = Math.max(0, Math.abs(e.pos.x) - (ARENA - margin)) * Math.sign(e.pos.x);
-            const ey = Math.max(0, Math.abs(e.pos.y) - (ARENA - margin)) * Math.sign(e.pos.y);
+            const ex = Math.max(0, Math.abs(e.pos.x) - (this.arena - margin)) * Math.sign(e.pos.x);
+            const ey = Math.max(0, Math.abs(e.pos.y) - (this.arena - margin)) * Math.sign(e.pos.y);
             vx -= ex * 0.25; vy -= ey * 0.25;
-            for (const r of this.rocks) {
+            for (const r of this.liveObstacles()) {
               const rx = r.x - e.pos.x, ry = r.y - e.pos.y, rd = Math.hypot(rx, ry);
               if (rd < r.r + 7 && (rx * vx + ry * vy) > 0) { const side = (rx * vy - ry * vx) > 0 ? -1 : 1; const k = 2.2 * (1 - (rd - r.r) / 7); vx += -ry / rd * side * k; vy += rx / rd * side * k; }
             }
@@ -577,9 +908,9 @@ window.ST = window.ST || {};
         const speed = e.behavior === 'flee' ? MOVE_SPEED * this.fleeSpeed() : MOVE_SPEED;
         if (vl > 0) { vx = vx / vl * speed; vy = vy / vl * speed; }
         e.vel.x = vx; e.vel.y = vy;
-        e.pos.x = clamp(e.pos.x + vx * dt, -ARENA + PLAYER_R, ARENA - PLAYER_R);
-        e.pos.y = clamp(e.pos.y + vy * dt, -ARENA + PLAYER_R, ARENA - PLAYER_R);
-        this.pushOutOfRocks(e.pos);
+        e.pos.x = clamp(e.pos.x + vx * dt, -this.arena + PLAYER_R, this.arena - PLAYER_R);
+        e.pos.y = clamp(e.pos.y + vy * dt, -this.arena + PLAYER_R, this.arena - PLAYER_R);
+        this.pushOutOfObstacles(e.pos);
         // Keep enemies from overlapping each other.
         for (const o of this.enemies) {
           if (o === e) continue;
@@ -588,9 +919,22 @@ window.ST = window.ST || {};
         }
 
         // Aiming and shooting.
-        let aimX = p.x, aimY = p.y;
+        // The bot shoots at the silhouette it perceives, not at your hitbox centre, and it perceives
+        // it one reaction time late. That single delay is what makes spinning work: while you whirl,
+        // the gun it was tracking has already swung somewhere else.
+        const spin = this.spinFrac();
+        const seen = this.perceivedPos(e.skill.reaction);
+        let aimX = seen.x, aimY = seen.y;
         e.aimErrT -= dt;
-        if (e.aimErrT <= 0) { e.aimErr = gauss() * e.skill.sigma * this.aimScale() * DEG; e.leadFrac = rand(0.5, 1.1); e.aimErrT = rand(0.15, 0.4); }
+        if (e.aimErrT <= 0) {
+          e.aimErr = gauss() * e.skill.sigma * this.aimScale() * DEG;
+          // A steady opponent's facing telegraphs which way they are about to break. Spinning hides
+          // it, so the bot's guess at how far to lead gets noticeably worse (never a free dodge:
+          // the lead is still centred on the truth, it is only less certain).
+          const spreadLead = lerp(0.3, 0.95, spin);
+          e.leadFrac = clamp(0.8 + gauss() * spreadLead * 0.5, 0, 1.8);
+          e.aimErrT = rand(0.15, 0.4);
+        }
         if (e.skill.lead) {
           // Humans lead imperfectly: the fraction of the true lead is re-rolled with the aim error.
           const flight = d / e.gun.def.speed;
@@ -601,7 +945,7 @@ window.ST = window.ST || {};
 
         if (this.s.enemyShoots) {
           const inRange = d <= e.gun.def.range * 0.95;
-          const los = !this.rocks.some(r => segPointDist2(e.pos.x, e.pos.y, p.x, p.y, r.x, r.y).d2 < r.r * r.r);
+          const los = !this.blocked(e.pos.x, e.pos.y, p.x, p.y);
           // Reaction timer counts down only while the enemy can see you; losing sight resets it.
           if (inRange && los) e.reactT -= dt; else e.reactT = Math.max(e.reactT, 0.15);
           // Bursts: automatic weapons are fired in 0.4 to 1.0 s bursts with 0.25 to 0.6 s re-aim pauses.
@@ -628,28 +972,64 @@ window.ST = window.ST || {};
       }
     }
 
-    fireGun(shooter, def, aim, moving, owner) {
+    // One bullet, with everything survev's bullet needs to resolve damage later.
+    makeBullet(x, y, angle, def, owner, opts) {
+      opts = opts || {};
+      // bullet.ts: every bullet's range is jittered by +-1 unit in 16 steps so spray patterns are not
+      // perfectly repeatable. Shotgun pellets opt out (noDistAdj) because they already jitter.
+      const distAdj = def.noDistAdj ? 0 : remap(randInt(0, 16), 0, 16, -1, 1);
+      const reflectCount = opts.reflectCount || 0;
+      const range = Math.max(1, (opts.range !== undefined ? opts.range : def.range) + distAdj);
+      return {
+        x, y, sx: x, sy: y, dx: Math.cos(angle), dy: Math.sin(angle),
+        speed: def.speed, dmg: def.dmg, range, traveled: 0, owner, ammo: def.ammo,
+        moving: !!opts.moving, spin: !!opts.spin,
+        falloff: def.falloff, headshotMult: def.headshotMult || 1,
+        obstacleDamage: def.obstacleDamage === undefined ? 1 : def.obstacleDamage,
+        tracerWidth: def.tracerWidth, tracerLength: def.tracerLength, whizzed: false,
+        reflectCount, reflectObjId: opts.reflectObjId || 0, reflected: false,
+        shrapnel: !!opts.shrapnel,
+        // bullet.ts: a bullet that has bounced, or shrapnel, can hurt the person who fired it.
+        damageSelf: reflectCount > 0 || !!opts.shrapnel,
+        def,
+      };
+    }
+
+    fireGun(shooter, def, aim, moving, owner, opts) {
+      opts = opts || {};
       // weaponManager.ts: spread = shotSpread (+ moveSpread while moving); deviation = random(-0.5, 0.5) * spread.
-      const spread = def.spread + (moving ? def.moveSpread : 0);
+      // A gun idle longer than recoilTime fires its first shot dead straight.
+      const spread = opts.firstShot ? 0 : def.spread + (moving ? def.moveSpread : 0);
       const n = def.pellets || 1;
-      const jitter = 0.25;
+      const jitter = def.jitter === undefined ? 0.25 : def.jitter;
       const dx = Math.cos(aim), dy = Math.sin(aim);
       const gx = shooter.pos.x + -dy * def.barrelOffset, gy = shooter.pos.y + dx * def.barrelOffset;
       const dist = owner === 'enemy' ? Math.hypot(shooter.pos.x - this.player.pos.x, shooter.pos.y - this.player.pos.y) : 0;
+      const spinning = owner === 'player' && this.spinFrac() > 0.5;
       for (let i = 0; i < n; i++) {
         const a = aim + rand(-0.5, 0.5) * spread * DEG;
         let sx = gx + dx * def.barrel, sy = gy + dy * def.barrel;
         if (i > 0) { sx += rand(-jitter, jitter) * 1.11; sy += rand(-jitter, jitter) * 1.11; }
-        this.bullets.push({
-          x: sx, y: sy, sx, sy, dx: Math.cos(a), dy: Math.sin(a),
-          speed: def.speed, dmg: def.dmg, range: def.range, traveled: 0, owner, ammo: def.ammo, moving,
-          tracerWidth: def.tracerWidth, tracerLength: def.tracerLength, whizzed: false,
-        });
-        if (owner === 'player') { this.stats.pellets++; this.adaptWindow.pellets++; if (moving) this.stats.movingPellets++; }
+        this.bullets.push(this.makeBullet(sx, sy, a, def, owner, { moving, spin: spinning }));
+        if (owner === 'player') {
+          this.stats.pellets++; this.adaptWindow.pellets++;
+          if (moving) this.stats.movingPellets++;
+          if (spinning) this.stats.spinPellets++;
+        }
       }
       if (owner === 'player' && moving) this.stats.movingShots++;
       if (def.caseTiming === 'shoot') this.spawnCasing(shooter, def, dx, dy);
       ST.audio.shot(def, { dist, fallOff: def.sound.fallOff });
+    }
+
+    // survev bullet.ts, in order: halve per bounce, then the linear range falloff.
+    // The headshot roll is applied per victim, so it lives in the damage functions.
+    bulletDamage(b) {
+      let dmg = b.dmg / (b.reflectCount + 1);
+      if (GC.bullet.falloff && b.falloff !== undefined) {
+        dmg *= remap(clamp(b.traveled / b.range, 0, 1), 0, 1, 1, b.falloff);
+      }
+      return dmg;
     }
 
     // shot.ts createCasingParticle: shell flies perpendicular to the aim at 9.5 u/s, +-30 degrees.
@@ -675,24 +1055,28 @@ window.ST = window.ST || {};
 
     updateBullets(dt) {
       const p = this.player;
+      const spawned = [];
       for (const b of this.bullets) {
         const step = b.speed * dt;
         const nx = b.x + b.dx * step, ny = b.y + b.dy * step;
         let hitT = 1, hitKind = null, hitObj = null, hx = nx, hy = ny;
 
-        for (const r of this.rocks) {
+        for (const r of this.obstacles) {
+          if (r.dead || r.def.height < GC.bullet.height) continue;
+          if (r.id === b.reflectObjId) continue;      // never bounce twice off the same object
           const s = segPointDist2(b.x, b.y, nx, ny, r.x, r.y);
-          if (s.d2 < r.r * r.r && s.t < hitT) { hitT = s.t; hitKind = 'rock'; hx = s.cx; hy = s.cy; }
+          if (s.d2 < r.r * r.r && s.t < hitT) { hitT = s.t; hitKind = 'obstacle'; hitObj = r; hx = s.cx; hy = s.cy; }
         }
-        if (b.owner === 'player') {
+        if (b.owner === 'player' || b.damageSelf) {
           for (const e of this.enemies) {
             if (e.hp <= 0) continue;
             const s = segPointDist2(b.x, b.y, nx, ny, e.pos.x, e.pos.y);
             if (s.d2 < PLAYER_R * PLAYER_R && s.t < hitT) { hitT = s.t; hitKind = 'enemy'; hitObj = e; hx = s.cx; hy = s.cy; }
           }
-        } else {
+        }
+        if (b.owner === 'enemy' || b.damageSelf) {
           const s = segPointDist2(b.x, b.y, nx, ny, p.pos.x, p.pos.y);
-          if (s.d2 < PLAYER_R * PLAYER_R && s.t < hitT) { hitT = s.t; hitKind = 'player'; hx = s.cx; hy = s.cy; }
+          if (s.d2 < PLAYER_R * PLAYER_R && s.t < hitT) { hitT = s.t; hitKind = 'player'; hitObj = null; hx = s.cx; hy = s.cy; }
         }
 
         if (b.owner === 'enemy' && !b.whizzed) {
@@ -700,11 +1084,15 @@ window.ST = window.ST || {};
           if (s.d2 < 9 && s.d2 > PLAYER_R * PLAYER_R) { b.whizzed = true; ST.audio.whiz({ volume: 0.7 }); }
         }
         if (hitKind) {
-          b.dead = true;
+          b.traveled += step * hitT;
           b.x = hx; b.y = hy;
-          if (hitKind === 'enemy') this.damageEnemy(hitObj, b, hx, hy);
-          else if (hitKind === 'player') this.damagePlayer(b, hx, hy);
-          else { this.spawnPuff(hx, hy, 'rgba(200,200,200,0.8)', 3); ST.audio.play('stone_bullet_hit_01', { dist: Math.hypot(hx - p.pos.x, hy - p.pos.y), volume: 0.6 }); }
+          if (hitKind === 'enemy') { b.dead = true; this.damageEnemy(hitObj, b, hx, hy); }
+          else if (hitKind === 'player') { b.dead = true; this.damagePlayer(b, hx, hy); }
+          else {
+            b.dead = true;
+            const ric = this.hitObstacle(hitObj, b, hx, hy);
+            if (ric) spawned.push(ric);
+          }
           continue;
         }
         b.x = nx; b.y = ny;
@@ -712,16 +1100,88 @@ window.ST = window.ST || {};
         if (b.traveled >= b.range) b.dead = true;
       }
       this.bullets = this.bullets.filter(b => !b.dead);
+      for (const b of spawned) this.bullets.push(b);
+    }
+
+    // Bullet meets stone or barrel. Barrels are metal: survev flags them reflectBullets, so the round
+    // comes off the curved shell at the mirror angle with half the damage, and can find you again.
+    hitObstacle(o, b, hx, hy) {
+      const p = this.player.pos;
+      const dmg = this.bulletDamage(b) * b.obstacleDamage * (o.def.obstacleDamageMult || 1);
+      o.hitFlash = 0.08;
+      if (o.def.destructible) {
+        o.hp -= dmg;
+        if (o.hp <= 0 && !o.dead) this.destroyObstacle(o);
+      }
+      const snd = o.def.sound.bullet === 'barrel_bullet' ? (Math.random() < 0.5 ? 'metal_bullet_hit_01' : 'metal_bullet_hit_02') : 'stone_bullet_hit_01';
+      ST.audio.play(snd, { dist: Math.hypot(hx - p.x, hy - p.y), volume: 0.6 });
+      this.spawnPuff(hx, hy, o.reflect ? 'rgba(255,225,150,0.9)' : 'rgba(200,200,200,0.8)', 3);
+      if (!o.reflect || o.dead) return null;
+      if (b.reflected || b.reflectCount >= GC.bullet.maxReflect) return null;
+      b.reflected = true;
+      // Mirror the direction about the surface normal, which on a barrel is the radius through the
+      // impact point: where you hit the barrel decides where the round goes.
+      const nrx = (hx - o.x) / (o.r || 1), nry = (hy - o.y) / (o.r || 1);
+      const nl = Math.hypot(nrx, nry) || 1;
+      const ux = nrx / nl, uy = nry / nl;
+      const dot = b.dx * ux + b.dy * uy;
+      const rx = b.dx - 2 * dot * ux, ry = b.dy - 2 * dot * uy;
+      const ang = Math.atan2(ry, rx);
+      const nb = this.makeBullet(hx + ux * 0.05, hy + uy * 0.05, ang, b.def, b.owner, {
+        reflectCount: b.reflectCount + 1, reflectObjId: o.id, range: b.range,
+        shrapnel: b.shrapnel, moving: b.moving, spin: b.spin,
+      });
+      if (b.owner === 'player') this.stats.ricochetPellets++;
+      return nb;
+    }
+
+    destroyObstacle(o) {
+      o.dead = true;
+      o.hp = 0;
+      if (o.def.explosion) {
+        this.stats.barrelsPopped++;
+        ST.audio.play(o.def.sound.explode, { dist: Math.hypot(o.x - this.player.pos.x, o.y - this.player.pos.y), volume: 0.9 });
+        const x = ST.EXPLOSIONS[o.def.explosion];
+        this.explode({
+          x: o.x, y: o.y, owner: 'world',
+          def: {
+            dmg: x.damage, radMin: x.rad.min, radMax: x.rad.max,
+            shrapnelCount: x.shrapnelCount, shrapnelType: x.shrapnelType,
+          },
+        });
+      }
+    }
+
+    // survev server player.ts: every bullet hit rolls a 15% headshot, which multiplies the damage by
+    // the gun's headshotMult. Explosions never headshot.
+    rollDamage(b) {
+      let dmg = b.source === 'explosion' ? b.dmg : this.bulletDamage(b);
+      let head = false;
+      if (b.source !== 'explosion' && b.headshotMult > 1 && Math.random() < GC.player.headshotChance) {
+        dmg *= b.headshotMult;
+        head = true;
+      }
+      return { dmg, head };
     }
 
     damageEnemy(e, b, hx, hy) {
       const st = this.stats;
-      st.hits++;
-      this.adaptWindow.hits++;
-      if (b.moving) st.movingHits++;
-      const dmg = Math.min(b.dmg, e.hp);
-      st.dmgDealt += isFinite(dmg) ? dmg : b.dmg;
-      e.hp -= b.dmg;
+      const roll = this.rollDamage(b);
+      const amount = roll.dmg;
+      if (b.source !== 'explosion') {
+        st.hits++;
+        this.adaptWindow.hits++;
+        if (b.moving) st.movingHits++;
+        if (b.spin) st.spinHits++;
+        if (roll.head) st.headshots++;
+        if (b.reflectCount) { st.ricochetHits++; st.ricochetDmg += Math.min(amount, e.hp); }
+      } else {
+        st.nadeHits++;
+        st.nadeDmg += Math.min(amount, e.hp);
+      }
+      const dmg = Math.min(amount, e.hp);
+      st.dmgDealt += isFinite(dmg) ? dmg : amount;
+      e.hp -= amount;
       e.hitFlash = 0.08;
       this.hitFlash = 0.12;
       this.spawnBlood(hx, hy, b.dx, b.dy, 1, e);
@@ -732,6 +1192,7 @@ window.ST = window.ST || {};
       }
       if (e.hp <= 0) {
         st.kills++;
+        if (b.source === 'explosion') st.nadeKills++;
         if (e.rec) e.rec.killed = true;
         this.lastAcqT = this.time;
         this.bumpDiff(0.03);
@@ -750,12 +1211,15 @@ window.ST = window.ST || {};
 
     damagePlayer(b, hx, hy) {
       const p = this.player;
-      const dmg = Math.min(b.dmg, p.hp);
-      p.hp -= b.dmg;
+      const roll = this.rollDamage(b);
+      const dmg = Math.min(roll.dmg, p.hp);
+      p.hp -= roll.dmg;
       this.stats.dmgTaken += dmg;
       this.stats.hitsTaken++;
       this.adaptWindow.taken++;
       if (!p.moving) { this.stats.dmgTakenStill += dmg; this.stats.hitsTakenStill++; }
+      if (this.spinFrac() > 0.5) this.stats.dmgTakenSpinning += dmg;
+      if (b.reflectCount && b.owner === 'player') this.stats.ricochetSelfDmg += dmg;
       this.dmgFlash = 0.25;
       this.spawnBlood(hx, hy, b.dx, b.dy, 1, p);
       ST.audio.hurt();
@@ -764,8 +1228,14 @@ window.ST = window.ST || {};
         this.deathFlash = 0.6;
         this.pushFeed('You died', '#ff8080');
         p.hp = PLAYER_MAX_HP;
-        p.gun = makeGun(p.gun.def);
-        this.bullets = this.bullets.filter(x => x.owner === 'player');
+        for (let i = 0; i < p.weapons.length; i++) {
+          const w = p.weapons[i];
+          if (!w) continue;
+          p.weapons[i] = w.throwable ? makeThrowable(w.def, this.s.throwableCount) : makeGun(w.def);
+        }
+        p.curIdx = 0;
+        this.projectiles = [];
+        this.bullets = this.bullets.filter(x => x.owner === 'player' && !x.damageSelf);
         // Reset the fight: new enemy positions and fresh timers.
         this.enemies = [];
         this.respawns = [];
@@ -780,8 +1250,10 @@ window.ST = window.ST || {};
       }
     }
 
-    pushOutOfRocks(pos) {
-      for (const r of this.rocks) {
+    liveObstacles() { return this.obstacles.filter(o => !o.dead); }
+    pushOutOfObstacles(pos) {
+      for (const r of this.obstacles) {
+        if (r.dead || !r.def.collidable) continue;
         const dx = pos.x - r.x, dy = pos.y - r.y;
         const d = Math.hypot(dx, dy), min = r.r + PLAYER_R;
         if (d < min && d > 0) { pos.x = r.x + dx / d * min; pos.y = r.y + dy / d * min; }
@@ -811,6 +1283,19 @@ window.ST = window.ST || {};
         });
       }
     }
+    // particles.ts frag burst: a few sprite puffs thrown outward from the blast.
+    spawnFragBurst(x, y) {
+      const S = ST.SURVEV.fragBurst;
+      for (let i = 0; i < 10; i++) {
+        const a = rand(0, TAU), sp = rand(4, 14), life = rand(0.35, 0.7);
+        this.particles.push({
+          kind: 'burst', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life, maxLife: life,
+          drag: rand(3, 5), rot: rand(0, TAU), rotVel: rand(-4, 4),
+          scaleStart: 0.06, scaleEnd: rand(0.18, 0.3),
+          sprite: S.sprites[Math.floor(Math.random() * S.sprites.length)], color: '#ffd9a0', r: 0.3,
+        });
+      }
+    }
     spawnPuff(x, y, color, n) {
       for (let i = 0; i < n; i++) {
         const a = rand(0, TAU), sp = rand(1, 4), life = rand(0.15, 0.3);
@@ -830,6 +1315,9 @@ window.ST = window.ST || {};
         q.life -= dt;
       }
       this.particles = this.particles.filter(p => p.life > 0);
+      for (const x of this.explosions) x.life -= dt;
+      this.explosions = this.explosions.filter(x => x.life > 0);
+      for (const o of this.obstacles) o.hitFlash = Math.max(0, o.hitFlash - dt);
       for (const f of this.feed) f.life -= dt;
       this.feed = this.feed.filter(f => f.life > 0);
       this.hitFlash = Math.max(0, this.hitFlash - dt);
@@ -852,31 +1340,43 @@ window.ST = window.ST || {};
       ctx.translate(-p.pos.x, -p.pos.y);
 
       // Grass and grid: baseDefs grass color, map.ts grid every GameConfig.map.gridSize units at 15% black.
+      const AR = this.arena;
       ctx.fillStyle = A.hex(SV.grass);
-      ctx.fillRect(-ARENA, -ARENA, ARENA * 2, ARENA * 2);
+      ctx.fillRect(-AR, -AR, AR * 2, AR * 2);
       const left = p.pos.x - this.halfW, right = p.pos.x + this.halfW;
       const top = p.pos.y - this.halfH, bottom = p.pos.y + this.halfH;
       ctx.strokeStyle = `rgba(0,0,0,${SV.gridAlpha})`;
       ctx.lineWidth = Math.max(1.5 / this.ppu, 0.03);
       ctx.beginPath();
       const G = SV.gridSize;
-      for (let x = Math.floor(Math.max(left, -ARENA) / G) * G; x <= Math.min(right, ARENA); x += G) { ctx.moveTo(x, Math.max(top, -ARENA)); ctx.lineTo(x, Math.min(bottom, ARENA)); }
-      for (let y = Math.floor(Math.max(top, -ARENA) / G) * G; y <= Math.min(bottom, ARENA); y += G) { ctx.moveTo(Math.max(left, -ARENA), y); ctx.lineTo(Math.min(right, ARENA), y); }
+      for (let x = Math.floor(Math.max(left, -AR) / G) * G; x <= Math.min(right, AR); x += G) { ctx.moveTo(x, Math.max(top, -AR)); ctx.lineTo(x, Math.min(bottom, AR)); }
+      for (let y = Math.floor(Math.max(top, -AR) / G) * G; y <= Math.min(bottom, AR); y += G) { ctx.moveTo(Math.max(left, -AR), y); ctx.lineTo(Math.min(right, AR), y); }
       ctx.stroke();
       ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-      ctx.lineWidth = 0.4;
-      ctx.strokeRect(-ARENA, -ARENA, ARENA * 2, ARENA * 2);
+      ctx.lineWidth = 0.4 / this.ppu * 16;
+      ctx.strokeRect(-AR, -AR, AR * 2, AR * 2);
 
-      // Rocks: map-stone-01 at img.scale 0.4 covers 3.6 units for a 1.6-unit collider.
-      const stone = A.get(SV.stone.sprite);
-      for (const r of this.rocks) {
-        if (r.x + r.r * 1.3 < left || r.x - r.r * 1.3 > right || r.y + r.r * 1.3 < top || r.y - r.r * 1.3 > bottom) continue;
-        if (stone) {
-          const size = (144 * SV.stone.scale / SV.ppuBase) * (r.r / SV.stone.collision);
-          ctx.drawImage(stone, r.x - size / 2, r.y - size / 2, size, size);
+      // Obstacles: each survev sprite is 144 px drawn at its own img.scale on a 16 px/unit world,
+      // then stretched by how much the instance's collider was scaled up.
+      for (const r of this.obstacles) {
+        if (r.dead) continue;
+        if (r.x + r.r * 1.6 < left || r.x - r.r * 1.6 > right || r.y + r.r * 1.6 < top || r.y - r.r * 1.6 > bottom) continue;
+        const img = A.get(r.def.img.sprite);
+        if (img) {
+          const size = (144 * r.def.img.scale / SV.ppuBase) * r.scale;
+          if (r.hitFlash > 0) ctx.globalAlpha = 0.75;
+          ctx.drawImage(img, r.x - size / 2, r.y - size / 2, size, size);
+          ctx.globalAlpha = 1;
         } else {
           ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, TAU);
-          ctx.fillStyle = '#7d7d7d'; ctx.fill(); ctx.lineWidth = 0.25; ctx.strokeStyle = '#4c4c4c'; ctx.stroke();
+          ctx.fillStyle = r.reflect ? '#9a5b2e' : '#7d7d7d'; ctx.fill();
+          ctx.lineWidth = 0.25; ctx.strokeStyle = '#4c4c4c'; ctx.stroke();
+        }
+        // Barrels are the only thing here that bounces bullets, so they get a health ring while damaged.
+        if (r.def.destructible && r.hp < r.maxHp) {
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.r + 0.3, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(r.hp / r.maxHp, 0, 1));
+          ctx.strokeStyle = 'rgba(255,120,80,0.75)'; ctx.lineWidth = 0.14; ctx.stroke();
         }
       }
 
@@ -900,6 +1400,38 @@ window.ST = window.ST || {};
           ctx.strokeStyle = color; ctx.lineWidth = Math.max(Wd, 0.12); ctx.lineCap = 'round';
           ctx.beginPath(); ctx.moveTo(b.x - b.dx * Math.max(L, 0.5), b.y - b.dy * Math.max(L, 0.5)); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
+      }
+
+      // Grenades in flight: survev draws the projectile scaled up with its height off the ground,
+      // with a shadow left behind on the grass.
+      const nadeImg = A.get('proj-frag-nopin-nolever-01.img');
+      for (const q of this.projectiles) {
+        const lift = 1 + q.z / GC.projectile.maxHeight;
+        const size = 144 * q.def.worldImg.scale / SV.ppuBase * lift;
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath(); ctx.ellipse(q.x, q.y, 0.34, 0.24, 0, 0, TAU);
+        ctx.fillStyle = '#000'; ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.save();
+        ctx.translate(q.x, q.y - q.z * 0.35);
+        ctx.rotate(q.rot);
+        if (nadeImg) ctx.drawImage(nadeImg, -size / 2, -size / 2, size, size);
+        else { ctx.beginPath(); ctx.arc(0, 0, 0.35, 0, TAU); ctx.fillStyle = '#3f6b2f'; ctx.fill(); }
+        ctx.restore();
+        // The fuse ring: the last second before it goes off reads at a glance.
+        if (q.fuse < 1.2) {
+          ctx.beginPath();
+          ctx.arc(q.x, q.y - q.z * 0.35, 0.75, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(q.fuse / 1.2, 0, 1));
+          ctx.strokeStyle = 'rgba(255,90,60,0.9)'; ctx.lineWidth = 0.16; ctx.stroke();
+        }
+      }
+      // Blast radius, drawn for the half second after the bang so you can see what you actually covered.
+      for (const x of this.explosions) {
+        const u = 1 - clamp(x.life / x.maxLife, 0, 1);
+        ctx.globalAlpha = (1 - u) * 0.45;
+        ctx.beginPath(); ctx.arc(x.x, x.y, x.radMax * (0.35 + u * 0.65), 0, TAU);
+        ctx.fillStyle = '#ffb14a'; ctx.fill();
+        ctx.globalAlpha = 1;
       }
 
       // Enemies, then the player on top.
@@ -933,7 +1465,15 @@ window.ST = window.ST || {};
       }
 
       this.drawCharacter(p.pos.x, p.pos.y, p.aim, p.gun, SV.skinTint);
-      if (p.gun.reloading) {
+      if (p.gun && p.gun.throwable && p.gun.cooking) {
+        // Cooking: the ring counts the fuse down on your own body.
+        const left2 = clamp(1 - p.gun.cookT / p.gun.def.fuseTime, 0, 1);
+        ctx.beginPath();
+        ctx.arc(p.pos.x, p.pos.y, PLAYER_R + 0.5, -Math.PI / 2, -Math.PI / 2 + TAU * left2);
+        ctx.strokeStyle = left2 < 0.35 ? 'rgba(255,90,60,0.95)' : 'rgba(255,211,92,0.9)';
+        ctx.lineWidth = 0.18; ctx.stroke();
+      }
+      if (p.gun && !p.gun.throwable && p.gun.reloading) {
         const frac = 1 - p.gun.reloadT / p.gun.def.reload;
         ctx.beginPath();
         ctx.arc(p.pos.x, p.pos.y, PLAYER_R + 0.5, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(frac, 0, 1));
@@ -999,6 +1539,16 @@ window.ST = window.ST || {};
         ctx.globalAlpha = 1;
         return;
       }
+      if (q.kind === 'burst') {
+        const scale = lerp(q.scaleStart, q.scaleEnd, u);
+        const size = 144 * scale / ST.SURVEV.ppuBase;
+        const img = A.tint(q.sprite, q.color);
+        ctx.globalAlpha = 1 - u;
+        if (img) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.drawImage(img, -size / 2, -size / 2, size, size); ctx.restore(); }
+        else { ctx.fillStyle = q.color; ctx.beginPath(); ctx.arc(q.x, q.y, size / 2, 0, TAU); ctx.fill(); }
+        ctx.globalAlpha = 1;
+        return;
+      }
       if (q.kind === 'casing') {
         const C = ST.SURVEV.casing;
         const scale = lerp(C.scaleStart, C.scaleEnd, u) * q.scale;
@@ -1023,17 +1573,19 @@ window.ST = window.ST || {};
     drawCharacter(x, y, aim, gun, skinTint) {
       const ctx = this.ctx, A = ST.assets, SV = ST.SURVEV, U = SV.ppuBase;
       const def = gun.def;
+      const throwing = !!gun.throwable;
       const body = A.tint('player-base-01.img', A.hex(skinTint));
       const hand = A.tint('player-hands-01.img', A.hex(skinTint));
-      const gunImg = def.worldImg && A.get(def.worldImg.sprite);
+      const gunImg = !throwing && def.worldImg && A.get(def.worldImg.sprite);
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(aim);
-      const pose = def.pistol ? SV.poses.pistol : def.bullpup ? SV.poses.bullpup : SV.poses.rifle;
+      const pose = throwing ? SV.throwablePose : def.pistol ? SV.poses.pistol : def.bullpup ? SV.poses.bullpup : SV.poses.rifle;
+      // player.ts applies gun recoil to the right hand only; the gun rides along because it hangs off it.
       const recoil = (gun.recoil || 0) * 1.125;
       const handR = { x: (pose.handR[0] - recoil) / U, y: pose.handR[1] / U };
-      const lho = def.worldImg && def.worldImg.leftHandOffset ? def.worldImg.leftHandOffset : { x: 0, y: 0 };
-      const handL = { x: (pose.handL[0] + lho.x - recoil) / U, y: (pose.handL[1] + lho.y) / U };
+      const lho = !throwing && def.worldImg && def.worldImg.leftHandOffset ? def.worldImg.leftHandOffset : { x: 0, y: 0 };
+      const handL = { x: (pose.handL[0] + lho.x) / U, y: (pose.handL[1] + lho.y) / U };
       const bodySize = 140 * SV.bodySpriteScale / U;
       const handSize = 76 * SV.handSpriteScale / U;
 
@@ -1052,6 +1604,18 @@ window.ST = window.ST || {};
 
       // Gun, drawn from its stock at the right hand toward the muzzle.
       const drawGun = () => {
+        if (throwing) {
+          // The grenade sits in the throwing hand, at handImg's own pivot and scale.
+          const hi = def.handImg;
+          const img = A.get(gun.cooking ? 'proj-frag-nopin-nolever-01.img' : 'proj-frag-pin-01.img') || A.get('proj-frag-pin-01.img');
+          if (!img) return;
+          const size = 144 * hi.scale / U;
+          ctx.save();
+          ctx.translate(hi.pos.x / U, hi.pos.y / U);
+          ctx.drawImage(img, -size / 2, -size / 2, size, size);
+          ctx.restore();
+          return;
+        }
         if (!def.worldImg) return;
         const go = def.worldImg.gunOffset || { x: 0, y: 0 };
         const ax = handR.x + (SV.gunHandOffset[0] + go.x) / U, ay = handR.y + (SV.gunHandOffset[1] + go.y) / U;
@@ -1072,7 +1636,7 @@ window.ST = window.ST || {};
           else { ctx.beginPath(); ctx.arc(h.x, h.y, 0.34, 0, TAU); ctx.fillStyle = A.hex(skinTint); ctx.fill(); }
         }
       };
-      if (def.worldImg && def.worldImg.handsBelow) { drawHands(); drawGun(); } else { drawGun(); drawHands(); }
+      if (!throwing && def.worldImg && def.worldImg.handsBelow) { drawHands(); drawGun(); } else { drawGun(); drawHands(); }
       ctx.restore();
     }
 
@@ -1121,4 +1685,5 @@ window.ST = window.ST || {};
 
   ST.Game = Game;
   ST.ARENA = ARENA;
+  ST.arenaFor = arenaFor;
 })();

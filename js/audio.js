@@ -9,6 +9,11 @@ ST.audio = (function () {
     empty_fire_01: 'guns/empty_fire_01.mp3', empty_fire_02: 'guns/empty_fire_02.mp3', gun_switch_01: 'guns/gun_switch_01.mp3',
     player_bullet_hit_01: 'hits/player_bullet_hit_01.mp3', player_bullet_hit_02: 'hits/player_bullet_hit_02.mp3',
     stone_bullet_hit_01: 'hits/stone_bullet_hit_01.mp3',
+    metal_bullet_hit_01: 'hits/metal_bullet_hit_01.mp3', metal_bullet_hit_02: 'hits/metal_bullet_hit_02.mp3',
+    // Throwables and explosions (frag grenades, barrels).
+    explosion_01: 'sfx/explosion_01.mp3', explosion_02: 'sfx/explosion_02.mp3',
+    barrel_break_01: 'sfx/barrel_break_01.mp3',
+    frag_pin_01: 'sfx/frag_pin_01.mp3', frag_throw_01: 'sfx/frag_throw_01.mp3', frag_ground_01: 'sfx/frag_ground_01.mp3',
     bullet_whiz_01: 'sfx/bullet_whiz_01.mp3', bullet_whiz_02: 'sfx/bullet_whiz_02.mp3', bullet_whiz_03: 'sfx/bullet_whiz_03.mp3',
   };
   for (const w of ['m9', 'mp5', 'vector', 'ak47', 'm4a1', 'scar', 'dp28', 'mk12', 'm39', 'm870', 'spas12', 'mosin', 'sv98', 'awc']) {
