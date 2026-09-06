@@ -140,25 +140,6 @@ window.ST = window.ST || {};
   // The furthest a target can spawn under a scope and still be reachable in every direction.
   ST.scopeMaxDist = (scope) => Math.floor(ST.scopeHalfMin(scope) * 0.85);
 
-  // Enemy aim skill: sigma of aim error in degrees, reaction time after seeing you, whether it leads
-  // moving targets, and how much of that lead it can anticipate from your facing rather than from
-  // what it saw a reaction time ago. Anticipation is what spinning takes away (see game.js).
-  ST.AIM_SKILL = {
-    easy: { name: 'Easy', sigma: 9, reaction: 0.6, lead: false, anticipation: 0 },
-    normal: { name: 'Normal', sigma: 6, reaction: 0.35, lead: false, anticipation: 0.4 },
-    hard: { name: 'Hard', sigma: 4, reaction: 0.2, lead: true, anticipation: 1 },
-  };
-
-  ST.BEHAVIORS = {
-    static: { name: 'Stationary', desc: 'Does not move.' },
-    strafe: { name: 'Strafe', desc: 'Runs side to side, flipping direction unpredictably.' },
-    smooth: { name: 'Smooth strafe', desc: 'Predictable side-to-side sweep. Precise tracking.' },
-    juke: { name: 'Juke', desc: 'Random direction changes and stops, like a real player dodging.' },
-    orbit: { name: 'Orbit', desc: 'Circles you at a constant distance.' },
-    rush: { name: 'Rush', desc: 'Charges you and dances at point-blank range.' },
-    flee: { name: 'Flee', desc: 'Runs away from you with jukes. You have to chase while shooting.' },
-  };
-
   // Visual constants lifted from the survev client (player.ts, animData.ts, particles.ts, map.ts).
   ST.SURVEV = {
     ppuBase: 16,                       // Camera.m_ppu: PIXI world pixels per unit at zoom 1

@@ -5,10 +5,24 @@ ST.DEFAULT_SETTINGS = {
   weapon: 'mp5', secondary: '', throwable: '', throwableCount: 3,
   scope: '2x', duration: 60, enemies: 1, behavior: 'strafe',
   enemyHp: 100, enemyShoots: false, enemyAim: 'normal', minDist: 8, maxDist: 16,
-  ttl: 0, respawnDelay: 0.5, obstacles: true, stones: 14, barrels: 0, hugCover: false, arena: '',
+  ttl: 0, obstacles: true, stones: 14, barrels: 0, hugCover: false, arena: '',
   sound: true, hitmarker: true,
-  adaptive: true, leadHint: false, invincible: false,
+  adaptive: true, leadHint: false,
 };
+
+// Bots that shoot back respawn slowly enough that you can reload between fights, rather than the
+// next one arriving while you are still cycling. A drill may override it by setting respawnDelay.
+ST.respawnDelayFor = function (s) {
+  if (s.ttl > 0) return 0.2;                       // flick targets are meant to keep popping
+  const w = ST.WEAPONS[s.weapon];
+  if (!s.enemyShoots) return 0.5;
+  const full = w ? (w.reloadPerShell ? w.reload * w.mag : w.reload) : 2;
+  return Math.max(2, full + 0.4);
+};
+
+// Tracking drills are the ones with bots tough enough that the fight is about holding the stream on
+// them rather than killing them. They still take damage and still die; nothing is invincible.
+ST.isTrackingDrill = (s) => s.enemyHp >= 200 && !s.enemyShoots;
 
 // Scopes are picked the way a player picks them: the smallest one that still shows the fight.
 // ST.scopeForDistance uses the short screen axis, which is what limits a 16:9 view (see weapons.js).
@@ -17,13 +31,13 @@ ST.MODES = [
     id: 'tracking', name: 'Tracking',
     desc: 'One enemy strafes at mid range. Keep your stream on them: SMG/AR spray control.',
     tip: 'Move your crosshair with the target, not to where it was. Reset your aim on every direction flip.',
-    settings: { weapon: 'mp5', scope: '2x', duration: 60, enemies: 1, behavior: 'strafe', invincible: true, minDist: 8, maxDist: 16 },
+    settings: { weapon: 'mp5', scope: '2x', duration: 60, enemies: 1, behavior: 'strafe', enemyHp: 500, minDist: 8, maxDist: 16 },
   },
   {
     id: 'flick', name: 'Flick',
     desc: 'Targets pop up one at a time anywhere on screen and vanish after 1.5 s. One hit kills.',
     tip: 'Snap, confirm, click. Chasing a missed shot is slower than resetting.',
-    settings: { weapon: 'mk12', scope: '4x', duration: 60, enemies: 1, behavior: 'static', enemyHp: 1, minDist: 6, maxDist: 22, ttl: 1.5, respawnDelay: 0.2 },
+    settings: { weapon: 'mk12', scope: '4x', duration: 60, enemies: 1, behavior: 'hold', enemyHp: 1, minDist: 6, maxDist: 22, ttl: 1.5, respawnDelay: 0.2 },
   },
   {
     id: 'duel', name: '1v1 Duel',
@@ -35,7 +49,7 @@ ST.MODES = [
     id: 'shotgun', name: 'Shotgun Rush',
     desc: 'Enemies charge you. Hip-fire the M870, then quick-switch to the M9 (key 2 or Q) instead of waiting out the pump.',
     tip: 'The M870 takes 0.9 s between shells. A switch to a gun in a different deploy group costs 0.25 s, so shell, switch, tap, switch back beats standing there pumping.',
-    settings: { weapon: 'm870', secondary: 'm9', scope: '1x', duration: 60, enemies: 2, behavior: 'rush', enemyHp: 100, enemyShoots: true, enemyAim: 'easy', minDist: 8, maxDist: 13 },
+    settings: { weapon: 'm870', secondary: 'm9', scope: '1x', duration: 60, enemies: 2, behavior: 'push', enemyHp: 100, enemyShoots: true, enemyAim: 'easy', minDist: 8, maxDist: 13 },
   },
   {
     id: 'quickswitch', name: 'Quick Switch',
@@ -51,9 +65,9 @@ ST.MODES = [
   },
   {
     id: 'swarm', name: 'Swarm',
-    desc: 'Three jukers at once. Pick a target, finish it, switch.',
-    tip: 'Commit to one target until it dies. Splitting damage kills nobody.',
-    settings: { weapon: 'm4a1', scope: '2x', duration: 90, enemies: 3, behavior: 'juke', enemyHp: 100, minDist: 8, maxDist: 17 },
+    desc: 'Three enemies running lines across the field at once. Pick a target, finish it, switch.',
+    tip: 'They are not circling you, they are crossing you, so the lead changes sign as they pass. Commit to one until it dies; splitting damage kills nobody.',
+    settings: { weapon: 'm4a1', scope: '2x', duration: 90, enemies: 3, behavior: 'cross', enemyHp: 100, minDist: 8, maxDist: 17 },
   },
   {
     id: 'pistol', name: 'Pistol Tap',
@@ -99,11 +113,12 @@ ST.MODES = [
   },
   {
     id: 'ricochet', name: 'Ricochet',
-    desc: 'Inside the Hydra bunker. Its walls are metal, and metal is the one material in the game that bounces bullets: bank shots off them to reach an enemy down the corridor or around the corner.',
-    tip: 'A flat wall reflects at the mirror angle, so aim at the wall as far past the corner as the enemy is behind it and the round comes back out on their side. Bounced rounds do half damage, ignore the wall they came off, and will hit you if you bank one straight back down your own line. The control panels are metal too, and they detonate.',
+    desc: 'A random one of survev\u2019s bunkers. The enemy keeps a metal wall between you and it and leans out to shoot, so the straight shot mostly is not there: bounce one off the wall instead.',
+    tip: 'Metal is the only material in survev that reflects, and a wall is a flat mirror, so aim at it as far past the corner as the enemy is behind it. Bounced rounds do half damage and will come back at you if you bank one down your own line. It repositions when you do, so walking around the corner is not the answer.',
     settings: {
-      weapon: 'm4a1', arena: 'bunker_hydra_compartment_02', scope: '2x', duration: 75,
-      enemies: 1, behavior: 'strafe', enemyHp: 100, minDist: 8, maxDist: 17,
+      weapon: 'm4a1', arena: 'bunker', scope: '2x', duration: 75,
+      enemies: 1, behavior: 'cover', enemyHp: 100, enemyShoots: true, enemyAim: 'normal',
+      minDist: 7, maxDist: 16,
     },
   },
   {
@@ -111,7 +126,7 @@ ST.MODES = [
     desc: 'Enemies rush you through a barrel field. A barrel has 150 HP and detonates for 125 damage inside 5 units: pop it as they pass, not before.',
     tip: 'The blast falls off to nothing at 12 units and an obstacle in the way stops it dead. Shoot the barrel they are about to run past, not the one they just left.',
     settings: {
-      weapon: 'mp5', scope: '4x', duration: 60, enemies: 2, behavior: 'rush', enemyHp: 100,
+      weapon: 'mp5', scope: '4x', duration: 60, enemies: 2, behavior: 'push', enemyHp: 100,
       enemyShoots: true, enemyAim: 'easy', minDist: 14, maxDist: 20, barrels: 18, stones: 6,
     },
   },

@@ -27,7 +27,7 @@
     weapon: $('f-weapon'), secondary: $('f-secondary'), throwable: $('f-throwable'),
     scope: $('f-scope'), duration: $('f-duration'), enemies: $('f-enemies'),
     behavior: $('f-behavior'), enemyHp: $('f-hp'), minDist: $('f-mind'), maxDist: $('f-maxd'), ttl: $('f-ttl'),
-    enemyAim: $('f-aim'), enemyShoots: $('f-shoots'), invincible: $('f-invincible'), adaptive: $('f-adaptive'), leadHint: $('f-lead'),
+    enemyAim: $('f-aim'), enemyShoots: $('f-shoots'), adaptive: $('f-adaptive'), leadHint: $('f-lead'),
     obstacles: $('f-obstacles'), barrels: $('f-barrels'), sound: $('f-sound'), hitmarker: $('f-hitmarker'),
   };
   function fill(select, entries) {
@@ -68,8 +68,8 @@
   })();
   fill(fields.throwable, [['', 'None']].concat(Object.entries(ST.THROWABLES).map(([k, t]) => [k, t.name])));
   fill(fields.scope, Object.keys(ST.SCOPES).map(k => [k, `${k} (shows ${ST.scopeMaxDist(k)} units in any direction)`]));
-  fill(fields.behavior, Object.entries(ST.BEHAVIORS).map(([k, b]) => [k, b.name]));
-  fill(fields.enemyAim, Object.entries(ST.AIM_SKILL).map(([k, a]) => [k, a.name]));
+  fill(fields.behavior, ST.MOVEMENT_ORDER.map(k => [k, ST.MOVEMENT[k].name]));
+  fill(fields.enemyAim, Object.entries(ST.AIM).map(([k, a]) => [k, a.name]));
 
   function normalize(s) {
     s.enemies = Math.max(1, Math.min(8, s.enemies | 0));
@@ -78,7 +78,7 @@
     s.minDist = Math.max(2, s.minDist || 8);
     s.maxDist = Math.max(s.minDist + 1, s.maxDist || 16);
     s.ttl = Math.max(0, s.ttl || 0);
-    s.respawnDelay = s.ttl > 0 ? 0.2 : 0.5;
+    if (s.respawnDelay === undefined) s.respawnDelay = ST.respawnDelayFor(s);
     s.barrels = Math.max(0, Math.min(40, s.barrels | 0));
     s.stones = s.stones === undefined ? 14 : Math.max(0, Math.min(40, s.stones | 0));
     if (!s.obstacles) { s.barrels = 0; s.stones = 0; }
@@ -146,7 +146,7 @@
     }
   }
   function updateBehaviorHint() {
-    const b = ST.BEHAVIORS[fields.behavior.value];
+    const b = ST.MOVEMENT[fields.behavior.value];
     $('behavior-hint').textContent = b ? b.desc : '';
   }
   // Inline validation instead of silent rewriting.
@@ -572,7 +572,7 @@
       const row = (label, val, best, isNew) => rows.push(`<tr><td>${label}</td><td class="${isNew ? 'new-best' : ''}">${val}</td><td>${best}</td></tr>`);
       const section = (name) => rows.push(`<tr class="section"><td colspan="3">${name}</td></tr>`);
       row('Avg time to kill', fmt.sec(r.avgTtk), prevOf('avgTtk', fmt.sec), r.avgTtk !== null && better('avgTtk', true));
-      if (s.invincible) row('Cursor on target', fmt.pct(r.onTargetFrac), '', false);
+      if (ST.isTrackingDrill(s)) row('Cursor on target', fmt.pct(r.onTargetFrac), '', false);
       if (s.ttl > 0 && s.behavior !== 'flee') row('Targets escaped', fmt.int(r.expired), '', false);
       if (s.adaptive) row('Adaptive difficulty reached', `${Math.round(r.difficulty * 100)} / 100`, prevOf('difficulty', (v) => `${Math.round(v * 100)} / 100`), false);
       if (k && k.n >= 3) {

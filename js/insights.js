@@ -36,10 +36,10 @@ ST.insights = function (r, s) {
   if (!mustMove && w && r.shots >= 10 && w.moveSpread > w.spread * 1.5 && r.movingShotFrac > 0.4) {
     out.push({ sev: 3, text: `${pct(r.movingShotFrac)}% of your shots were fired while moving. The ${w.name} spreads ${w.moveSpread}° moving vs ${w.spread}° standing. Stop for the shot, then move.` });
   }
-  if (s.invincible && r.firingFrac <= 0.1) {
+  if (ST.isTrackingDrill(s) && r.firingFrac <= 0.1) {
     out.push({ sev: 3, text: `You held fire ${pct(1 - r.firingFrac)}% of the time. Tracking drills are about keeping the stream on the target: hold the trigger and steer.` });
   }
-  if (s.invincible && r.firingFrac > 0.1) {
+  if (ST.isTrackingDrill(s) && r.firingFrac > 0.1) {
     if (r.onTargetFrac < 0.45) out.push({ sev: 3, text: `Cursor was on the target only ${pct(r.onTargetFrac)}% of the time. Track the body, not the gun, and move with the target rather than chasing it.` });
     else if (r.accuracy < r.onTargetFrac - 0.2) out.push({ sev: 2, text: `Your cursor was on target ${pct(r.onTargetFrac)}% of the time but only ${pct(r.accuracy)}% of bullets hit: you are aiming where the target is, not where it will be. Lead by about ${(s.maxDist / w.speed).toFixed(2)}s at this range.` });
   }
@@ -57,7 +57,7 @@ ST.insights = function (r, s) {
   if (s.ttl > 0 && r.expired >= 3 && r.expired > r.kills * 0.3) {
     out.push({ sev: 2, text: `${r.expired} targets timed out. Snap and commit; a missed flick reset to center costs less than a slow approach.` });
   }
-  if (r.shots >= 15 && r.accuracy > 0.85 && (w.auto || s.ttl > 0) && !s.invincible) {
+  if (r.shots >= 15 && r.accuracy > 0.85 && (w.auto || s.ttl > 0) && !ST.isTrackingDrill(s)) {
     out.push({ sev: 1, text: `Accuracy ${pct(r.accuracy)}% is high enough. Hit rate plateaus in days; speed keeps improving for months. Push tempo and let accuracy drop toward 70%.` });
   }
   out.sort((a, b) => b.sev - a.sev);

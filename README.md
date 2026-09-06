@@ -50,23 +50,30 @@ damage out to 5 units and falls to nothing at 12, an obstacle in the way stops t
 the 4 s fuse runs whether or not you cooked it — so Cooked Frag is about holding the pin long enough
 that the thing bursts on arrival instead of announcing itself for four seconds.
 
-**Ricochet** is set inside the Hydra bunker, laid out from survev's own `bunker_hydra_compartment_02`
-object list. Everything that bounces a bullet in survev is made of metal — the `metal` material is the
-only one whose `reflectBullets` is true — and the metal is nearly all indoors: bunker walls, columns,
-control panels, lockers, and barrels out in the field. The shape of the mirror is what decides what
-the technique is worth:
+**Ricochet** is played inside a real survev bunker, drawn at random each run from four of them
+(Crossing, Conch, Hydra, Chrysanthemum), laid out from those buildings' own object lists. Everything
+that bounces a bullet in survev is made of metal — `metal` is the only material whose
+`reflectBullets` is true — and the metal is nearly all indoors: bunker walls, columns and control
+panels, plus barrels out in the field. The shape of the mirror decides what the technique is worth:
 
 - A **barrel is convex**, so it scatters rounds back into your own half of the field. It can catch
   someone hugging the barrel and it will put your own rounds back into you at close range, but it can
   never bend a shot around behind itself.
-- A **bunker wall is flat**, so it reflects at the mirror angle and genuinely turns corners. In the
-  Hydra compartment, five of eight sampled positions with no line of sight at all were reachable off
-  a wall, in aiming windows of three to eighteen degrees. Aim at the wall as far past the corner as
-  the enemy is behind it.
+- A **bunker wall is flat**, so it reflects at the mirror angle and genuinely turns corners. Aim at
+  the wall as far past the corner as the enemy is behind it.
 
-Bounced rounds do half damage (survev divides by `reflectCount + 1`), ignore the surface they came
-off, and can bounce up to three times. They can also hit you, which is why banking one straight back
-down your own line is a way to lose a fight.
+The bot in there holds cover: it walks to a spot that breaks your line of sight, stays until that
+cover stops working, and leans out for half a second at a time to shoot back. Because it re-solves
+whenever the cover fails, walking around the corner does not end the problem — it repositions too.
+Across the four bunkers the straight shot is unavailable 64–73% of the time while the bot still
+fires 126–169 rounds a run, so banking one off the wall is the answer that is actually available
+rather than a trick you could ignore.
+
+Those four were chosen by simulation, not by eye. Every survev bunker with six or more metal walls
+was played out against a bot holding cover and a player who keeps moving to re-take the shot; the
+ones that hid better than these stopped shooting back, and the ones that shot more stopped being
+cover. Bounced rounds do half damage (survev divides by `reflectCount + 1`), ignore the surface they
+came off, bounce up to three times, and can hit you.
 
 **Barrel Trap** is the other half of the same lesson, out in the open: a barrel has 150 HP and
 detonates for 125 damage inside 5 units, so popping the one an enemy is about to run past is usually
@@ -80,6 +87,32 @@ shoot while running with moving spread. Dodge: a strafing enemy with hard aim th
 your movement shoots back, so standing still or strafing predictably gets you hit.
 Both report accuracy while moving versus standing, time spent moving, enemies that got
 away, damage taken per minute and the share of damage taken while still.
+
+## Enemy movement and aim
+
+Every bot in every drill moves with one of eight patterns and aims with one of three skills, defined
+once in `js/behaviors.js`. Drills pick them by name and never define their own, so a change to how
+bots dodge or lead lands everywhere at once.
+
+| Pattern | What it does |
+| --- | --- |
+| Hold | Stands still. Pure clicking. |
+| Strafe | Runs across you, flipping direction unpredictably. Reactive tracking. |
+| Orbit | Circles at a steady speed and distance. Predictable, for smooth tracking. |
+| Juke | Sharp direction changes and dead stops, like a player dodging. |
+| Push | Closes the distance and dances at point-blank. |
+| Crossing runs | Ignores you and runs straight lines across the field, stopping and cutting back. |
+| Hold cover | Keeps a wall between you and it, leaning out to shoot. |
+| Flee | Runs away with jukes; you have to chase while shooting. |
+
+Only three of them circle you, and they do it at different tempos. Measured over 30 seconds against
+a stationary player, crossing runs turn around you at 29°/s while swinging between 5 and 24 units of
+range, where orbit turns at 53°/s and holds 13–14 units; push closes from 14 units to half a unit,
+and flee opens from 14 to 38. That spread is the point: before this there were three variants of
+running in a semicircle.
+
+Aim skills carry their difference in two numbers — how loosely they aim (9°, 6°, 4° of error) and how
+late they see you (0.6 s, 0.35 s, 0.2 s). All three try to lead, because every player does.
 
 ## Spinning
 
@@ -101,10 +134,16 @@ The consequences are the honest ones, and they are what the drill teaches:
 - It matters most against good opponents. Anticipation is 1.0 for the hard bots, 0.4 for normal and
   0 for easy, so there is nothing to take away from a bot that was not reading you anyway.
 
-Measured on a bot with hard aim against a target juking every 0.45 s, spinning took its hit rate
-from 28% to 20%; against a target running in a straight line it did nothing. The results screen
-reports accuracy spinning versus steady and damage taken per minute spinning versus steady, so the
-trade is visible rather than assumed.
+It is one shared implementation: the same aim solution runs for every bot in every drill, so
+spinning cannot behave one way in one drill and differently in another.
+
+Measured over ten trials per condition against a target juking at random intervals, spinning cut the
+bots' hit rate by 19% at hard aim and 17% at normal. Against easy bots it does nothing measurable,
+and that is the honest result rather than a gap: a bot with 9° of aim error is already missing by
+about two body widths at fighting range, so there is no careful tracking left to disturb. Against a
+target running in a straight line it does nothing at any skill, because stale and current velocity
+are the same vector. The results screen reports accuracy spinning versus steady and damage taken per
+minute spinning versus steady, so the trade is visible rather than assumed.
 Every setting is editable: weapon, scope, enemy count and movement, HP or invincible
 bots, return fire, adaptive difficulty, lead marker, obstacles.
 
@@ -174,6 +213,8 @@ Wrong, now fixed:
 | Stone size | random radius 1.6–3.2 | `stone_01` is a 1.6-unit collider scaled 1.0–1.2. |
 | Sprite world sizes | every sprite assumed to be 144 px | each sprite's own pixel size at the client's scale, at 16 px per unit. |
 | Gun artwork | `worldImg.tint` never applied, so the AK-47, Mk 12, M39 and M870 all drew the same untinted `gun-long-01` | most guns share a generic silhouette and are told apart only by their tint, which the client applies as a PIXI tint. Guns with their own artwork carry `0xffffff`, so one code path covers both. The DP-28's pan magazine (`worldImg.magImg`) was also never drawn. |
+| Invincible bots | tracking drills used bots that could not be damaged at all | there is no such mode any more. Tracking bots have 500 HP: enough that the drill is about holding the stream on them, but they take damage and they die. |
+| Respawn timing | every bot respawned 0.5 s after dying, including in drills where they shoot back, so the next fight started while you were still reloading | drills with return fire now wait for a full reload of your own weapon — 2.9 s behind an AK, 4.2 s behind an M870, which reloads a shell at a time. |
 | Drill settings | `readSettings()` read only the form fields, so any setting without a control — `arena`, `throwableCount`, `enemyWeapon`, `fleeSpeed`, `leash` — was dropped when a drill was started from the menu | the form now overrides the drill's preset instead of replacing it. |
 | Scope choices | several drills spawned targets further away than the scope could show | a 16:9 view reaches `zoomRadius` sideways but only `zoomRadius · 9/16` up and down, so targets past that only ever appeared to the left and right. Every drill and scenario now picks the smallest scope that shows its spawn range in every direction, and the menu says so if you set one that does not. |
 | Arena size | fixed ±100 units | scales with the scope, because at 15x the view is 104 units wide and you could see past the edge of the world. |

@@ -65,7 +65,8 @@ confirmed this as the claim future work should protect.
 
 - Drills: Tracking, Flick, 1v1 Duel, Shotgun Rush, Quick Switch, Sniper Leads,
   Swarm, Pistol Tap, Chase, Dodge, Spin Dodge, Frag Lob, Cooked Frag, Ricochet,
-  Barrel Trap, Custom. Ricochet is played inside survev's Hydra bunker. Routines: Daily 5, Benchmark, Clicking focus, Tracking focus,
+  Barrel Trap, Custom. Ricochet is played inside a real survev bunker, drawn at random each
+  run from four of them, against a bot that holds cover and shoots back. Routines: Daily 5, Benchmark, Clicking focus, Tracking focus,
   Moving focus, Utility focus, Bullet leads. Every routine but the Benchmark is five
   minutes end to end including rests, computed from the steps rather than written down.
 - Analytics: throughput score, flick kinematics from the cursor path (reaction,
@@ -77,6 +78,11 @@ confirmed this as the claim future work should protect.
   cook time, ricochet hits and self-inflicted ricochet damage.
 - Benchmark history is keyed by `ST.BENCHMARK_VERSION`. Scenario settings changed when
   the scopes were fixed, so pre-v2 runs are kept but never mixed into new bests.
+- Enemy behaviour is centrally owned: eight movement patterns and three aim skills live in
+  `js/behaviors.js`, and drills reference them by name rather than defining their own. Spinning is
+  handled inside the shared aim solution, so it behaves identically in every drill.
+- No drill uses invincible bots. Tracking drills use 500 HP bots that take damage and die.
+- Drills where bots shoot back space respawns by a full reload of the player's weapon.
 - Weapon, throwable, explosion, obstacle and config values are survev's definitions
   verbatim (`vendor/survev/defs`) and should be refreshed from upstream rather than
   edited; player radius 1 unit, run speed 12 units/s.

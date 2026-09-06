@@ -194,6 +194,7 @@ window.ST = window.ST || {};
       this.ctx = canvas.getContext('2d');
       this.s = settings;
       this.hooks = hooks || {};
+      if (settings.respawnDelay === undefined) settings.respawnDelay = ST.respawnDelayFor(settings);
       this.zoomRadius = ST.SCOPES[settings.scope] || 28;
       this.halfH = this.zoomRadius;
       this.arena = arenaFor(this.zoomRadius);
@@ -301,63 +302,66 @@ window.ST = window.ST || {};
       return out;
     }
 
-    // One of survev's own bunkers, laid out from its mapObjects list (vendor/survev/defs/bunkerDefs.js).
-    // survev's y axis points up and the trainer's points down, so the layout is mirrored on import;
-    // `ori` is a quarter turn, which for an axis-aligned box just swaps its extents.
+    // One of survev's own buildings, laid out from its mapObjects list
+    // (vendor/survev/defs/bunkerDefs.js). Pass a layout id, or "bunker" to draw one at random so a
+    // drill is not the same room every time. survev's y axis points up and the trainer's points
+    // down, so the layout is mirrored on import; `ori` is a quarter turn, which for an axis-aligned
+    // box just swaps its extents.
     makeBunker(id) {
       const B = window.SURVEV_BUNKER_DEFS;
-      const layout = B[id];
+      if (!B) return [];
+      const ids = Object.keys(B.layouts);
+      if (!B.layouts[id]) id = ids[Math.floor(Math.random() * ids.length)];
+      const layout = B.layouts[id];
       if (!layout) return [];
+      this.arenaId = id;
       const out = [];
       for (const obj of layout.objects) {
-        const raw = B.obstacles[obj.type] || ST.OBSTACLES[obj.type];
-        if (!raw) continue;
-        const def = Object.assign({
+        const wall = B.walls[obj.type];
+        const prop = B.props[obj.type];
+        if (!wall && !prop) continue;
+        const material = wall ? wall.material : prop.material;
+        const def = {
           collidable: true,
-          sound: { bullet: raw.reflectBullets ? 'barrel_bullet' : 'stone_bullet', explode: 'barrel_break_01' },
-        }, raw);
+          height: wall ? 10 : prop.height,
+          health: wall ? wall.health : prop.health,
+          destructible: wall ? false : !!prop.destructible,
+          reflectBullets: material === 'metal',
+          explosion: prop && prop.explosion,
+          material,
+          sound: { bullet: material === 'metal' ? 'barrel_bullet' : 'stone_bullet', explode: 'barrel_break_01' },
+          img: {},
+        };
         const x = obj.pos[0], y = -obj.pos[1];
         const item = {
           x, y, scale: 1, def, defId: obj.type, hp: def.health, maxHp: def.health,
-          reflect: !!def.reflectBullets, dead: false, hitFlash: 0, id: out.length + 1,
-          material: def.material || 'stone',
+          reflect: def.reflectBullets, dead: false, hitFlash: 0, id: out.length + 1, material,
         };
-        if (raw.shape === 'rect') {
+        const extents = wall ? wall.extents : prop.extents;
+        if (extents) {
           const swap = obj.ori % 2 === 1;
           item.shape = 'rect';
-          item.hw = swap ? raw.extents[1] : raw.extents[0];
-          item.hh = swap ? raw.extents[0] : raw.extents[1];
+          item.hw = swap ? extents[1] : extents[0];
+          item.hh = swap ? extents[0] : extents[1];
           item.r = Math.hypot(item.hw, item.hh);
         } else {
           item.shape = 'circle';
-          item.r = raw.collisionRad;
+          item.r = prop.rad;
         }
         out.push(item);
       }
-      // Bounds, rooms and a spawn point are derived from the walls when the layout does not name
+    // Bounds, rooms and a spawn point are derived from the walls when the layout does not name
       // them, so a new bunker only has to supply survev's own object list.
-      let bounds;
-      if (layout.bounds) {
-        bounds = { x: layout.bounds.center[0], y: -layout.bounds.center[1], hw: layout.bounds.extents[0], hh: layout.bounds.extents[1] };
-      } else {
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        for (const o of out) {
-          const hw = o.hw || o.r, hh = o.hh || o.r;
-          minX = Math.min(minX, o.x - hw); maxX = Math.max(maxX, o.x + hw);
-          minY = Math.min(minY, o.y - hh); maxY = Math.max(maxY, o.y + hh);
-        }
-        bounds = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, hw: (maxX - minX) / 2, hh: (maxY - minY) / 2 };
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const o of out) {
+        const hw = o.hw || o.r, hh = o.hh || o.r;
+        minX = Math.min(minX, o.x - hw); maxX = Math.max(maxX, o.x + hw);
+        minY = Math.min(minY, o.y - hh); maxY = Math.max(maxY, o.y + hh);
       }
-      this.bunker = {
-        rooms: layout.rooms
-          ? layout.rooms.map(r => ({ x: r.center[0], y: -r.center[1], hw: r.extents[0], hh: r.extents[1] }))
-          : [bounds],
-        bounds,
-        name: layout.name,
-        spawn: layout.playerSpawn ? { x: layout.playerSpawn[0], y: -layout.playerSpawn[1] } : null,
-      };
+      const bounds = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, hw: (maxX - minX) / 2, hh: (maxY - minY) / 2 };
+      this.bunker = { rooms: [bounds], bounds, name: layout.name };
       this.obstacles = out;   // clearAt needs them in place before it can look for open floor
-      if (!this.bunker.spawn) this.bunker.spawn = this.openestPoint(bounds);
+      this.bunker.spawn = this.openestPoint(bounds);
       return out;
     }
 
@@ -688,8 +692,8 @@ window.ST = window.ST || {};
 
     spawnEnemy() {
       const pos = this.randomSpawn();
-      const skill = ST.AIM_SKILL[this.s.enemyAim] || ST.AIM_SKILL.normal;
-      const hp = this.s.invincible ? Infinity : this.s.enemyHp;
+      const skill = ST.AIM[this.s.enemyAim] || ST.AIM.normal;
+      const hp = this.s.enemyHp;
       const e = {
         pos, vel: { x: 0, y: 0 }, hp, maxHp: hp,
         aim: Math.atan2(this.player.pos.y - pos.y, this.player.pos.x - pos.x),
@@ -735,8 +739,9 @@ window.ST = window.ST || {};
         // Under fire: a good second is landing shots without taking any.
         if (w.pellets > 0) this.bumpDiff(w.hits / w.pellets >= 0.4 && w.taken === 0 ? 0.03 : -0.06);
         else if (w.taken > 0) this.bumpDiff(-0.06);
-      } else if (this.s.invincible) {
-        // Tracking has no kill events, so grade each one-second window on hit ratio.
+      } else if (ST.isTrackingDrill(this.s)) {
+        // A tracking drill's bots are tough enough that kills are rare, so grade each one-second
+        // window on hit ratio instead.
         if (w.pellets > 0) this.bumpDiff(w.hits / w.pellets >= 0.6 ? 0.03 : -0.09);
       }
       w.t = 0; w.pellets = 0; w.hits = 0; w.taken = 0;
@@ -1045,6 +1050,114 @@ window.ST = window.ST || {};
     }
     distToPlayer(q) { return Math.hypot(q.x - this.player.pos.x, q.y - this.player.pos.y); }
 
+    // Everything a movement pattern or an aim skill is allowed to know about the world.
+    // Built once per bot per frame and handed to ST.MOVEMENT / ST.aimSolution, so drills cannot
+    // grow their own private variants of either.
+    botContext(e, dt) {
+      const p = this.player.pos;
+      const dx = p.x - e.pos.x, dy = p.y - e.pos.y;
+      const d = Math.hypot(dx, dy) || 0.001;
+      const tx = dx / d, ty = dy / d;
+      return {
+        dt, time: this.time, dist: d,
+        toPlayer: { x: tx, y: ty }, perp: { x: -ty, y: tx },
+        player: p, playerVel: this.player.vel,
+        minDist: this.s.minDist, maxDist: this.s.maxDist,
+        tempo: this.strafeScale(), aimScale: this.aimScale(), spin: this.spinFrac(),
+        bulletSpeed: e.gun.def.speed,
+        rand, gauss,
+        perceived: (lat) => this.perceived(lat),
+        blocked: (ax, ay, bx, by) => this.blocked(ax, ay, bx, by),
+        clearAt: (x, y) => this.clearAt(x, y),
+        avoid: (pos, vx, vy, range) => this.avoidSteering(pos, vx, vy, range),
+        findSpot: (from, wantLos) => this.findSpot(from, wantLos),
+      };
+    }
+
+    // Steer away from obstacles ahead and from the edge of the playable area.
+    avoidSteering(pos, vx, vy, range) {
+      let sx = 0, sy = 0;
+      for (const r of this.obstacles) {
+        if (r.dead || !r.def.collidable) continue;
+        const n = normalAt(r, pos.x, pos.y);
+        if (n.d > range) continue;
+        const rx = -n.nx, ry = -n.ny;                  // toward the obstacle
+        if (rx * vx + ry * vy <= 0) continue;          // already moving away from it
+        const k = 2.2 * (1 - n.d / range);
+        const side = (rx * vy - ry * vx) > 0 ? -1 : 1; // slide around rather than stall
+        sx += -ry * side * k; sy += rx * side * k;
+      }
+      const b = this.bunker && this.bunker.bounds;
+      const margin = 6;
+      if (b) {
+        sx -= Math.max(0, margin - ((b.x + b.hw) - pos.x)) * 0.4;
+        sx += Math.max(0, margin - (pos.x - (b.x - b.hw))) * 0.4;
+        sy -= Math.max(0, margin - ((b.y + b.hh) - pos.y)) * 0.4;
+        sy += Math.max(0, margin - (pos.y - (b.y - b.hh))) * 0.4;
+      } else {
+        const lim = this.arena - 14;
+        sx -= Math.max(0, Math.abs(pos.x) - lim) * Math.sign(pos.x) * 0.25;
+        sy -= Math.max(0, Math.abs(pos.y) - lim) * Math.sign(pos.y) * 0.25;
+      }
+      return { x: sx, y: sy };
+    }
+
+    // A place to stand that is clear, in range, and either hidden from the player or exposed to
+    // them. Hiding places are looked for on the far side of nearby walls rather than at random,
+    // which is the difference between a bot that holds cover and one that wanders into the open.
+    // Because it re-solves as you move, walking around the corner just makes it pick another one.
+    findSpot(from, wantVisible) {
+      const p = this.player.pos;
+      const cands = [];
+      if (!wantVisible) {
+        for (const o of this.obstacles) {
+          if (o.dead || !o.def.collidable || o.def.height < GC.bullet.height) continue;
+          if (Math.hypot(o.x - from.x, o.y - from.y) > 22) continue;
+          // Straight out the back of the wall, plus a little to either side of that line.
+          const dx = o.x - p.x, dy = o.y - p.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const ux = dx / d, uy = dy / d;
+          // How deep the box actually is along the line of sight, not its longest side: a 21-unit
+          // wall seen end-on is thin, and using its length would put the hiding spot outside the room.
+          const depth = (o.hw ? Math.abs(ux) * o.hw + Math.abs(uy) * o.hh : o.r) + PLAYER_R + 0.8;
+          for (const lat of [0, -2.5, 2.5, -5, 5]) {
+            cands.push({ x: o.x + ux * depth - uy * lat, y: o.y + uy * depth + ux * lat });
+          }
+        }
+      }
+      for (let i = 0; i < 40; i++) {
+        const a = rand(0, TAU), r = rand(1, 12);
+        cands.push({ x: from.x + Math.cos(a) * r, y: from.y + Math.sin(a) * r });
+      }
+      // Sidesteps the player could take in the next second or so. A hiding place that only works
+      // from exactly where they stand is not cover; the good ones stay blocked as they shuffle.
+      const px = p.x - (this.enemies[0] ? this.enemies[0].pos.x : from.x);
+      const py = p.y - (this.enemies[0] ? this.enemies[0].pos.y : from.y);
+      const pl = Math.hypot(px, py) || 1;
+      const sx = -py / pl, sy = px / pl;
+      const probes = wantVisible ? [[0, 0]] : [[0, 0], [4, 0], [-4, 0], [8, 0], [-8, 0]];
+
+      let best = null, bestScore = -Infinity;
+      for (const cnd of cands) {
+        if (!this.clearAt(cnd.x, cnd.y, 0.4)) continue;
+        const d = Math.hypot(cnd.x - p.x, cnd.y - p.y);
+        if (d < 5) continue;
+        if (this.blocked(cnd.x, cnd.y, p.x, p.y) === wantVisible) continue;
+        // There is no pathfinding here, so only consider cover it can actually walk straight to.
+        // That is also how a player picks cover: the nearest corner you can reach, not the best one.
+        if (this.blocked(from.x, from.y, cnd.x, cnd.y)) continue;
+        let robust = 0;
+        for (const [lat] of probes) {
+          if (this.blocked(cnd.x, cnd.y, p.x + sx * lat, p.y + sy * lat) !== wantVisible) robust++;
+        }
+        const score = robust * 6
+                      - Math.abs(d - (this.s.minDist + this.s.maxDist) / 2) * 0.5
+                      - Math.hypot(cnd.x - from.x, cnd.y - from.y) * 0.35;
+        if (score > bestScore) { bestScore = score; best = cnd; }
+      }
+      return best;
+    }
+
     updateEnemies(dt) {
       const p = this.player.pos;
       for (const e of this.enemies) {
@@ -1052,79 +1165,19 @@ window.ST = window.ST || {};
         e.ttl -= dt;
         if (e.ttl <= 0) { e.expired = true; continue; }
 
-        const dx = p.x - e.pos.x, dy = p.y - e.pos.y;
-        const d = Math.hypot(dx, dy) || 0.001;
-        const tx = dx / d, ty = dy / d;           // unit vector toward player
-        const px = -ty, py = tx;                  // perpendicular
-        let vx = 0, vy = 0;
+        const c = this.botContext(e, dt);
         e.timer -= dt;
+        const pattern = ST.MOVEMENT[e.behavior] || ST.MOVEMENT.strafe;
+        const want = pattern.update(e, c) || { x: 0, y: 0 };
+        let vx = want.x, vy = want.y;
 
-        switch (e.behavior) {
-          case 'static':
-            break;
-          case 'strafe': {
-            if (e.timer <= 0) { if (Math.random() < 0.8) e.dirSign = -e.dirSign; e.timer = rand(0.3, 1.1) * this.strafeScale(); }
-            vx = px * e.dirSign; vy = py * e.dirSign;
-            if (d < this.s.minDist) { vx -= tx * 0.9; vy -= ty * 0.9; }
-            if (d > this.s.maxDist) { vx += tx * 0.9; vy += ty * 0.9; }
-            break;
-          }
-          case 'juke': {
-            if (e.timer <= 0) {
-              e.timer = rand(0.15, 0.55) * this.strafeScale();
-              e.stopped = Math.random() < 0.15;
-              // Bias toward lateral movement, like a player dodging.
-              const lateral = (Math.random() < 0.5 ? -1 : 1);
-              const ang = Math.atan2(py * lateral, px * lateral) + gauss() * 0.7;
-              e.wander = ang;
-            }
-            if (!e.stopped) { vx = Math.cos(e.wander); vy = Math.sin(e.wander); }
-            if (d < this.s.minDist) { vx -= tx * 1.2; vy -= ty * 1.2; }
-            if (d > this.s.maxDist) { vx += tx * 1.2; vy += ty * 1.2; }
-            break;
-          }
-          case 'smooth': {
-            // Predictable sinusoidal strafe for precise tracking.
-            e.timer -= 0; // unused
-            const phase = (this.time - e.spawnT) * (1.2 / this.strafeScale());
-            const sgn = Math.cos(phase) >= 0 ? 1 : -1;
-            const mag = Math.abs(Math.cos(phase));
-            vx = px * sgn * mag; vy = py * sgn * mag;
-            const mid = (this.s.minDist + this.s.maxDist) / 2;
-            const k = clamp((mid - d) * 0.3, -0.5, 0.5);
-            vx -= tx * k; vy -= ty * k;
-            break;
-          }
-          case 'orbit': {
-            vx = px * e.dirSign; vy = py * e.dirSign;
-            const mid = (this.s.minDist + this.s.maxDist) / 2;
-            const k = clamp((mid - d) * 0.3, -0.8, 0.8);
-            vx -= tx * k; vy -= ty * k;
-            break;
-          }
-          case 'flee': {
-            // Run away with lateral jukes; steer off walls and rocks; escape if the leash is exceeded.
-            if (e.timer <= 0) { if (Math.random() < 0.7) e.dirSign = -e.dirSign; e.timer = rand(0.35, 0.9) * this.strafeScale(); }
-            vx = -tx + px * e.dirSign * 0.55; vy = -ty + py * e.dirSign * 0.55;
-            const margin = 14;
-            const ex = Math.max(0, Math.abs(e.pos.x) - (this.arena - margin)) * Math.sign(e.pos.x);
-            const ey = Math.max(0, Math.abs(e.pos.y) - (this.arena - margin)) * Math.sign(e.pos.y);
-            vx -= ex * 0.25; vy -= ey * 0.25;
-            for (const r of this.liveObstacles()) {
-              const rx = r.x - e.pos.x, ry = r.y - e.pos.y, rd = Math.hypot(rx, ry);
-              if (rd < r.r + 7 && (rx * vx + ry * vy) > 0) { const side = (rx * vy - ry * vx) > 0 ? -1 : 1; const k = 2.2 * (1 - (rd - r.r) / 7); vx += -ry / rd * side * k; vy += rx / rd * side * k; }
-            }
-            const leash = this.s.maxDist + (this.s.leash || 8);
-            if (d > leash) { e.leashT = (e.leashT || 0) + dt; if (e.leashT > 1.2) e.expired = true; } else e.leashT = 0;
-            break;
-          }
-          case 'rush': {
-            if (e.timer <= 0) { if (Math.random() < 0.6) e.dirSign = -e.dirSign; e.timer = rand(0.25, 0.7); }
-            if (d > 3.2) { vx = tx + px * e.dirSign * 0.5; vy = ty + py * e.dirSign * 0.5; }
-            else { vx = px * e.dirSign + tx * 0.2; vy = py * e.dirSign + ty * 0.2; }
-            break;
-          }
+        // A runner that gets too far ahead for too long has escaped.
+        if (e.behavior === 'flee') {
+          const leash = this.s.maxDist + (this.s.leash || 8);
+          if (c.dist > leash) { e.leashT = (e.leashT || 0) + dt; if (e.leashT > 1.2) e.expired = true; }
+          else e.leashT = 0;
         }
+
         const vl = Math.hypot(vx, vy);
         const speed = e.behavior === 'flee' ? MOVE_SPEED * this.fleeSpeed() : MOVE_SPEED;
         if (vl > 0) { vx = vx / vl * speed; vy = vy / vl * speed; }
@@ -1140,47 +1193,17 @@ window.ST = window.ST || {};
           if (od > 0 && od < 2 * PLAYER_R) { e.pos.x += ox / od * (2 * PLAYER_R - od) * 0.5; e.pos.y += oy / od * (2 * PLAYER_R - od) * 0.5; }
         }
 
-        // Aiming and shooting.
-        //
-        // Spinning, and why it works. A surviv player's facing is the strongest tell they give: you
-        // strafe across the way you are looking and back off along it, so an opponent watching your
-        // gun knows which way you are about to break and is already moving there. Whirling the
-        // cursor takes that tell away, and all they have left is where you were going a reaction
-        // time ago. So the bot's lead is blended between the velocity it can still see (stale) and
-        // the velocity it can anticipate from your facing, and spinning collapses the blend toward
-        // stale. The consequence is the honest one: spinning only saves you if you also change
-        // direction, because against a straight line stale and current velocity are the same thing.
-        // Two smaller effects come along with it: it shoots at the centre of your silhouette, which
-        // your gun swings around as you turn, and it re-reads that silhouette one reaction late.
-        const spin = this.spinFrac();
-        const seen = this.perceived(e.skill.reaction);
-        let aimX = seen.x, aimY = seen.y;
-        e.aimErrT -= dt;
-        if (e.aimErrT <= 0) {
-          e.aimErr = gauss() * e.skill.sigma * this.aimScale() * DEG;
-          e.leadFrac = rand(0.5, 1.1);
-          e.aimErrT = rand(0.15, 0.4);
-        }
-        if (e.skill.lead) {
-          // Humans lead imperfectly: the fraction of the true lead is re-rolled with the aim error.
-          const antic = (1 - spin) * (e.skill.anticipation || 0);
-          const vx = lerp(seen.vx, this.player.vel.x, antic);
-          const vy = lerp(seen.vy, this.player.vel.y, antic);
-          const flight = d / e.gun.def.speed;
-          aimX += vx * flight * (e.leadFrac || 0.8); aimY += vy * flight * (e.leadFrac || 0.8);
-        }
-        const base = Math.atan2(aimY - e.pos.y, aimX - e.pos.x);
-        e.aim = base + e.aimErr;
+        // Aiming and shooting: one shared solution (js/behaviors.js) for every bot in every drill,
+        // which is what makes spinning behave the same way everywhere.
+        e.aim = ST.aimSolution(e, c);
 
         if (this.s.enemyShoots) {
-          const inRange = d <= e.gun.def.range * 0.95;
+          const inRange = c.dist <= e.gun.def.range * 0.95;
           const los = !this.blocked(e.pos.x, e.pos.y, p.x, p.y);
           // Reaction timer counts down only while the enemy can see you; losing sight resets it.
           if (inRange && los) e.reactT -= dt; else e.reactT = Math.max(e.reactT, 0.15);
-          // Bursts: automatic weapons are fired in 0.4 to 1.0 s bursts with 0.25 to 0.6 s re-aim pauses.
-          e.burstT = (e.burstT || 0) - dt;
-          if (e.burstT <= 0) { e.bursting = !e.bursting; e.burstT = e.bursting ? rand(0.4, 1.0) : rand(0.25, 0.6); }
-          const wantFire = e.reactT <= 0 && (e.bursting || !e.gun.def.auto);
+          const bursting = ST.aimBurst(e, c);
+          const wantFire = e.reactT <= 0 && los && inRange && (bursting || !e.gun.def.auto);
           updateGun(e.gun, dt, wantFire, () => {
             this.fireGun(e, e.gun.def, e.aim, vl > 0, 'enemy');
           }, e.gun.def.auto ? 0 : 0.22);
@@ -1582,27 +1605,31 @@ window.ST = window.ST || {};
 
       // Grass and grid: baseDefs grass color, map.ts grid every GameConfig.map.gridSize units at 15% black.
       const AR = this.arena;
-      ctx.fillStyle = A.hex(SV.grass);
+      const inside = !!this.bunker;
+      // Underground: there is no grass to see, so the whole view is the building and the dark
+      // around it rather than a structure sitting on a field.
+      ctx.fillStyle = inside ? '#26241f' : A.hex(SV.grass);
       ctx.fillRect(-AR, -AR, AR * 2, AR * 2);
       const left = p.pos.x - this.halfW, right = p.pos.x + this.halfW;
       const top = p.pos.y - this.halfH, bottom = p.pos.y + this.halfH;
+      if (inside) { ctx.fillStyle = '#26241f'; ctx.fillRect(left - 2, top - 2, (right - left) + 4, (bottom - top) + 4); }
       ctx.strokeStyle = `rgba(0,0,0,${SV.gridAlpha})`;
       ctx.lineWidth = Math.max(1.5 / this.ppu, 0.03);
-      ctx.beginPath();
-      const G = SV.gridSize;
-      for (let x = Math.floor(Math.max(left, -AR) / G) * G; x <= Math.min(right, AR); x += G) { ctx.moveTo(x, Math.max(top, -AR)); ctx.lineTo(x, Math.min(bottom, AR)); }
-      for (let y = Math.floor(Math.max(top, -AR) / G) * G; y <= Math.min(bottom, AR); y += G) { ctx.moveTo(Math.max(left, -AR), y); ctx.lineTo(Math.min(right, AR), y); }
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-      ctx.lineWidth = 0.4 / this.ppu * 16;
-      ctx.strokeRect(-AR, -AR, AR * 2, AR * 2);
+      if (!inside) {
+        ctx.beginPath();
+        const G = SV.gridSize;
+        for (let x = Math.floor(Math.max(left, -AR) / G) * G; x <= Math.min(right, AR); x += G) { ctx.moveTo(x, Math.max(top, -AR)); ctx.lineTo(x, Math.min(bottom, AR)); }
+        for (let y = Math.floor(Math.max(top, -AR) / G) * G; y <= Math.min(bottom, AR); y += G) { ctx.moveTo(Math.max(left, -AR), y); ctx.lineTo(Math.min(right, AR), y); }
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 0.4 / this.ppu * 16;
+        ctx.strokeRect(-AR, -AR, AR * 2, AR * 2);
+      }
 
       // A bunker replaces the grass with its own concrete floor.
-      if (this.bunker) {
-        // The floor runs a little past the walls so the outside of the structure never shows grass
-        // through a doorway; a bunker should read as fully enclosed.
-        const b = this.bunker.bounds, m = 5;
-        ctx.fillStyle = '#3f3b36';
+      if (inside) {
+        const b = this.bunker.bounds, m = 3;
+        ctx.fillStyle = '#3a3630';
         ctx.fillRect(b.x - b.hw - m, b.y - b.hh - m, (b.hw + m) * 2, (b.hh + m) * 2);
         ctx.fillStyle = '#4b4640';
         ctx.fillRect(b.x - b.hw, b.y - b.hh, b.hw * 2, b.hh * 2);
@@ -1693,8 +1720,8 @@ window.ST = window.ST || {};
         const bw = 2.6, bh = 0.32, bx = e.pos.x - bw / 2, by = e.pos.y - PLAYER_R - 0.9;
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.fillRect(bx - 0.06, by - 0.06, bw + 0.12, bh + 0.12);
-        const frac = isFinite(e.maxHp) ? clamp(e.hp / e.maxHp, 0, 1) : 1;
-        ctx.fillStyle = !isFinite(e.maxHp) ? '#9fb4ff' : frac > 0.5 ? '#61d15b' : frac > 0.25 ? '#f2c94c' : '#e0473d';
+        const frac = clamp(e.hp / e.maxHp, 0, 1);
+        ctx.fillStyle = frac > 0.5 ? '#61d15b' : frac > 0.25 ? '#f2c94c' : '#e0473d';
         ctx.fillRect(bx, by, bw * frac, bh);
         if (this.s.leadHint) {
           const a = this.leadAlpha();
