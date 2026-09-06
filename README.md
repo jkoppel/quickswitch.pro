@@ -20,16 +20,45 @@ Use the Fullscreen button so pixel geometry matches the game.
 
 ## Routines
 
+Every routine except the Benchmark is five minutes end to end, rests included. The lengths shown
+in the menu are computed from the steps rather than written down, so they cannot drift.
+
 | Routine | What it is |
 | --- | --- |
-| Benchmark | 45 s warm-up, then nine 30 s scored scenarios: static, precision and dynamic clicking; precise and reactive tracking; speed and evasive switching; chase and dodge under fire. Fixed difficulty, no hints, so scores compare across weeks. |
-| Daily 15 | Warm-up plus eight 75 s adaptive drills in shuffled order, one per category. |
-| Clicking focus / Tracking focus / Moving focus | Category-specific adaptive sets. Moving focus is chase, dodge and a hard duel. |
-| Bullet leads | Sniper drills with a lead marker that fades out during each run. |
+| Daily 5 | 30 s warm-up plus six 32 s adaptive drills in shuffled order, one from each of clicking, tracking, switching and moving. 5 minutes. |
+| Benchmark | 30 s warm-up, then nine 30 s scored scenarios: static, precision and dynamic clicking; precise and reactive tracking; speed and evasive switching; chase and dodge under fire. Fixed difficulty, no hints, so scores compare across weeks. Weekly, not daily. |
+| Clicking focus / Tracking focus / Moving focus | Category-specific adaptive sets, 5 minutes each. Moving focus is chase, dodge, spin dodge and a hard duel. |
+| Utility focus | Quick switching, frag placement, barrels and spinning. 5 minutes. |
+| Bullet leads | Sniper drills with a lead marker that fades out during each run. 5 minutes. |
 
 ## Drills
 
-Tracking, Flick, 1v1 Duel, Shotgun Rush, Sniper Leads, Swarm, Pistol Tap, Chase, Dodge, Custom.
+Tracking, Flick, 1v1 Duel, Shotgun Rush, Quick Switch, Sniper Leads, Swarm, Pistol Tap, Chase,
+Dodge, Spin Dodge, Frag Lob, Cooked Frag, Ricochet, Barrel Trap, Custom.
+
+**Quick Switch and Shotgun Rush** carry two guns. survev gives you one free weapon switch a second
+that costs `baseSwitchDelay` (0.25 s) instead of the gun's own switch delay, so after an M870 shell
+you can be firing an MP5 a quarter of a second later instead of waiting out the 0.9 s pump. Two guns
+that share a `deployGroup` — both shotguns do — are charged the full delay instead, which is exactly
+why the pairing has to be a shotgun plus something from another class. The result screen reports how
+many shots actually beat the primary's own cycle.
+
+**Frag Lob and Cooked Frag** are grenade drills. Hold left mouse with the throwable out to pull the
+pin, release to throw; throw strength is your cursor's distance from you over survev's
+`throwableMaxMouseDist` of 18 units, which works out to about 19 units of flight. A frag does 125
+damage out to 5 units and falls to nothing at 12, an obstacle in the way stops the blast dead, and
+the 4 s fuse runs whether or not you cooked it — so Cooked Frag is about holding the pin long enough
+that the thing bursts on arrival instead of announcing itself for four seconds.
+
+**Ricochet and Barrel Trap** are barrel drills. Barrels are the one obstacle survev flags
+`reflectBullets`. Two things follow, and both are trainable: a round barrel is a convex mirror, so it
+throws rounds back into your own half of the field — it can catch someone hugging the barrel, it can
+never bend a shot around behind it, and it will happily put your own rounds back into you at close
+range. And a barrel has 150 HP and detonates for 125 damage inside 5 units, so popping the one an
+enemy is about to run past is usually worth more than the ricochet. Bounced rounds do half damage
+(survev divides by `reflectCount + 1`).
+
+**Spin Dodge** is the spinning drill: see below.
 
 Chase: the enemy flees with jukes at 90% of your speed (faster as adaptive difficulty
 rises) and gets away if you fall more than the leash distance behind, so you have to
@@ -37,6 +66,31 @@ shoot while running with moving spread. Dodge: a strafing enemy with hard aim th
 your movement shoots back, so standing still or strafing predictably gets you hit.
 Both report accuracy while moving versus standing, time spent moving, enemies that got
 away, damage taken per minute and the share of damage taken while still.
+
+## Spinning
+
+Spinning the cursor is a real surviv habit, and the trainer models the reason it works rather than
+handing out a dodge bonus. A player's facing is the strongest tell they give: you strafe across the
+way you are looking and back off along it, so an opponent watching your gun already knows which way
+you are about to break. The bots lead you with a blend of the velocity they can still see — sampled
+one reaction time ago — and the velocity they can anticipate from your facing. Spinning collapses
+that blend onto the stale sample, so on every direction change they shoot where you were going
+rather than where you are going. Two smaller effects come with it: they aim at the centre of your
+silhouette, which your gun swings around as you turn, and they re-read that silhouette late.
+
+The consequences are the honest ones, and they are what the drill teaches:
+
+- Spinning only pays if you also change direction. Against a straight line the stale read and the
+  live read are the same vector, so it buys nothing.
+- It costs you your own aim, because your cursor is your aim. You spin to cross ground and settle to
+  shoot.
+- It matters most against good opponents. Anticipation is 1.0 for the hard bots, 0.4 for normal and
+  0 for easy, so there is nothing to take away from a bot that was not reading you anyway.
+
+Measured on a bot with hard aim against a target juking every 0.45 s, spinning took its hit rate
+from 28% to 20%; against a target running in a straight line it did nothing. The results screen
+reports accuracy spinning versus steady and damage taken per minute spinning versus steady, so the
+trade is visible rather than assumed.
 Every setting is editable: weapon, scope, enemy count and movement, HP or invincible
 bots, return fire, adaptive difficulty, lead marker, obstacles.
 
@@ -60,23 +114,70 @@ The research behind these choices, including what was cut and why, is in
 
 - Mouse: aim, left click: shoot (hold for automatic weapons)
 - WASD / arrows: move
+- 1 / 2: primary and secondary weapon, 4 or G: throwable, Q: last weapon
+- With a throwable out, hold left mouse to cook and release to throw; cursor distance is throw strength
 - R: reload
 - Esc: pause
 
 ## Fidelity and licensing
 
-Gun and bullet definitions are survev's own, extracted verbatim from
-`shared/defs/gameObjects/gunDefs.ts` and `bulletDefs.ts` into
-`vendor/survev/defs/`. Player and gun sprites, rock and blood-splat sprites, the
-bullet trail, the default crosshair, every gun's fire/reload/cycle sound, the hit and
-bullet-whiz sounds, and the Roboto Condensed font are copied from the survev client
-into `vendor/survev/`. The camera (pixels per unit = half the larger screen dimension
-divided by the scope's zoom radius), the additive standing plus moving spread, hand and
-gun placement, tracer colors, grass color and grid all follow the survev client and
-server code. Player radius is 1 unit and movement is 12 units/s.
+Definitions are survev's own, extracted verbatim into `vendor/survev/defs/`: guns and
+bullets from `shared/defs/gameObjects/gunDefs.ts` and `bulletDefs.ts`, throwables and
+explosions from `throwableDefs.ts` and `explosionsDefs.ts`, the stone and barrel
+obstacles from `shared/defs/mapObjects/obstacles/mapObstacleDefs.ts`, and the constants
+the simulation needs from `shared/gameConfig.ts`. Player, gun, obstacle, projectile,
+particle and crosshair sprites, gun and explosion sounds, and the Roboto Condensed font
+are copied from the survev client into `vendor/survev/`. Player radius is 1 unit and
+movement is 12 units/s.
 
 survev is licensed under the GNU GPL v3, so this project is too: see `LICENSE` and
 `vendor/survev/attribution.txt` for the third-party icon credits survev carries.
+
+### Mechanics audit
+
+Every rule below was checked line by line against survev's source (`server/src/game/objects/bullet.ts`,
+`server/src/game/weaponManager.ts`, `server/src/game/objects/explosion.ts` and `projectile.ts`,
+`client/src/objects/player.ts`, `client/src/game.ts`, `client/src/animData.ts`).
+
+Already correct, left alone: the spread formula (`shotSpread`, plus `moveSpread` while moving,
+deviation `random(-0.5, 0.5) * spread`), shotgun pellet jitter and its 1.11 multiplier, muzzle
+position from `barrelOffset` and `barrelLength`, gun sprite anchoring and `worldImg.scale * 0.5`,
+the idle hand pivots for rifle, bullpup and pistol poses, recoil decay, reloading `maxReload`
+rounds per `reloadTime`, tracer colours, grass colour, grid size, scope zoom radii, casing physics
+and blood-splat particles.
+
+Wrong, now fixed:
+
+| What | Was | survev |
+| --- | --- | --- |
+| Camera zoom | `max(w, h) / (2 · zoomRadius)` | `maxScreenDim = max(min(w,h)·16/9, max(w,h))`. Anything in a window narrower than 16:9 was drawn at the wrong size. |
+| Damage falloff | not applied at all | `damage *= remap(traveled / distance, 0, 1, 1, falloff)`. Buckshot has `falloff` 0.3, so an M870 pellet went from 12.5 flat to 12.5 near and 3.75 at its 27-unit limit. |
+| Headshots | none | 15% chance per hit (`GameConfig.player.headshotChance`) times the gun's `headshotMult`: ×2 for most, ×1.5 for shotguns. |
+| Bullet range jitter | none | every non-shotgun bullet's range is jittered ±1 unit in 16 steps (`distAdj`). |
+| First-shot accuracy | none | a gun idle longer than its `recoilTime` fires the next shot with zero spread. |
+| Backpack sprite | drawn about twice too wide | `(0.4 + level·0.03) · 0.5` on the 148 px circle sprite, which is slightly smaller than the body. |
+| Gun recoil | moved both hands | `handRContainer.position.x -= gunRecoilR · 1.125`; the right hand only, and the gun rides along with it. |
+| Stone size | random radius 1.6–3.2 | `stone_01` is a 1.6-unit collider scaled 1.0–1.2. |
+| Sprite world sizes | every sprite assumed to be 144 px | each sprite's own pixel size at the client's scale, at 16 px per unit. |
+| Scope choices | several drills spawned targets further away than the scope could show | a 16:9 view reaches `zoomRadius` sideways but only `zoomRadius · 9/16` up and down, so targets past that only ever appeared to the left and right. Every drill and scenario now picks the smallest scope that shows its spawn range in every direction, and the menu says so if you set one that does not. |
+| Arena size | fixed ±100 units | scales with the scope, because at 15x the view is 104 units wide and you could see past the edge of the world. |
+
+Missing, now implemented: barrels (survev's only `reflectBullets` obstacle) with ricochet at
+`maxReflect` 3 and half damage per bounce, barrel detonation, frag grenades with survev's throw
+physics, fuse and cooking, explosion damage that is flat inside `rad.min`, ramps to zero at
+`rad.max` and is blocked by obstacles, shrapnel, and weapon slots with survev's exact switch rule.
+
+Deliberate deviations, and why:
+
+- **Bots push each other apart.** survev players pass through one another; its movement collision
+  loop only considers obstacles. Overlapping bots make a drill degenerate, so the trainer separates
+  them.
+- **No armour, helmets, perks, building layers, or muzzle clipping against obstacles.** None of them
+  change the aiming task, and all of them would need map and inventory systems the trainer does not
+  have.
+- **Benchmark scores from before the scope fix are not comparable.** The scenarios changed, so
+  benchmark history is keyed by `ST.BENCHMARK_VERSION`; old runs are kept but are not mixed into new
+  bests or trends.
 
 ## Demo bot
 

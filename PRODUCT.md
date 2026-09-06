@@ -14,10 +14,14 @@ nice"). Data persists in the browser's localStorage only. Opens from `index.html
 directly or from any static host.
 
 Reuses survev (the open-source surviv.io continuation, GPL-3.0) as much as
-possible, at the user's request: gun and bullet definitions extracted verbatim to
-`vendor/survev/defs/`, the client's sprites, sounds and font under `vendor/survev/`,
-and its camera, spread, hand/gun placement, tracer and particle rules re-implemented
-in plain JavaScript in `js/game.js`. The project is therefore GPL-3.0 (`LICENSE`).
+possible, at the user's request: gun, bullet, throwable, explosion, obstacle and
+GameConfig definitions extracted verbatim to `vendor/survev/defs/`, the client's
+sprites, sounds and font under `vendor/survev/`, and its camera, spread, damage
+falloff, headshot, ricochet, blast, throw-physics, weapon-switch, hand/gun placement,
+tracer and particle rules re-implemented in plain JavaScript in `js/game.js`. Every one
+of those rules has been audited against survev's source; the results, including the
+deliberate deviations, are the "Mechanics audit" table in `README.md`. The project is
+therefore GPL-3.0 (`LICENSE`).
 
 ## Users
 
@@ -59,16 +63,27 @@ confirmed this as the claim future work should protect.
 
 ## Capabilities and Constraints
 
-- Drills: Tracking, Flick, 1v1 Duel, Shotgun Rush, Sniper Leads, Swarm, Pistol
-  Tap, Chase, Dodge, Custom. Routines: Benchmark, Daily 15, Clicking focus,
-  Tracking focus, Moving focus, Bullet leads.
+- Drills: Tracking, Flick, 1v1 Duel, Shotgun Rush, Quick Switch, Sniper Leads,
+  Swarm, Pistol Tap, Chase, Dodge, Spin Dodge, Frag Lob, Cooked Frag, Ricochet,
+  Barrel Trap, Custom. Routines: Daily 5, Benchmark, Clicking focus, Tracking focus,
+  Moving focus, Utility focus, Bullet leads. Every routine but the Benchmark is five
+  minutes end to end including rests, computed from the steps rather than written down.
 - Analytics: throughput score, flick kinematics from the cursor path (reaction,
   movement time, overshoot gain, submovements, direction rose), moving vs
   standing accuracy, damage taken while still, adaptive difficulty reached,
-  per-scenario trend chart, personal bests, provisional benchmark tiers.
-- Weapon values are survev's gun definitions verbatim (`vendor/survev/defs`) and
-  should be refreshed from upstream rather than edited; player radius 1 unit, run
-  speed 12 units/s.
+  per-scenario trend chart, personal bests, provisional benchmark tiers. Plus, for the
+  mechanics beyond aim: accuracy and damage taken spinning vs steady, switches that
+  beat the primary's own fire delay and the gap they produced, damage per grenade and
+  cook time, ricochet hits and self-inflicted ricochet damage.
+- Benchmark history is keyed by `ST.BENCHMARK_VERSION`. Scenario settings changed when
+  the scopes were fixed, so pre-v2 runs are kept but never mixed into new bests.
+- Weapon, throwable, explosion, obstacle and config values are survev's definitions
+  verbatim (`vendor/survev/defs`) and should be refreshed from upstream rather than
+  edited; player radius 1 unit, run speed 12 units/s.
+- Scopes are not free choices. A 16:9 view reaches `zoomRadius` units sideways but only
+  `zoomRadius · 9/16` up and down, so any drill whose spawn range exceeds the short axis
+  spawns targets only to the left and right. `ST.scopeForDistance` picks the scope, and
+  the menu warns when a hand-set one does not fit.
 - Terminology follows the games: scopes 1x/2x/4x/8x/15x, weapon names as in
   survev, "units" for world distance.
 - Must remain a static site with no build step (confirmed).
@@ -91,7 +106,14 @@ player circles, weapon tracers) for fidelity, not as a binding brand.
   al. 2021, KovaaK's reliability pilot, Aimlabs kinematics study, Sala & Gobet
   2018, contextual-interference meta-analysis, and others).
 - `demo/surviv-trainer-demo.mp4`: one recording of a simulated user (`demo/bot.mjs`)
-  running the Benchmark, Flick, Sniper Leads, Chase and Dodge drills.
+  running the Benchmark, Flick, Sniper Leads, Chase and Dodge drills. Recorded before
+  the mechanics audit, so it does not show the barrels, grenades, weapon slots or the
+  survev-style menu.
+- The spinning model's effect size was measured in the headless harness, not assumed:
+  against a hard-aim bot and a target juking every 0.45 s it cut the bot's hit rate from
+  28% to 20%, and against a target running straight it did nothing. Ricochet was measured
+  the same way and is a low-percentage tool: roughly one firing angle in ten connects for
+  a target standing beside a barrel, and none at all for one standing behind it.
 - No real player data, testimonials, or transfer-to-game results exist. Do not
   fabricate improvement claims, user counts, or comparisons.
 

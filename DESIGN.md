@@ -131,12 +131,14 @@ components:
 **Creative North Star: "The Range Card"**
 
 A range card is the small dark notebook a marksman keeps beside the rifle: distances,
-holds, wind, what worked. This interface is that card laid on top of surviv's grass.
-The game field is the only bright, saturated thing on screen. Everything the player
-reads before and after a run sits on dark mossy panels that take their greens from the
-field itself, one step darker, so the chrome reads as belonging to the world rather than
-floating over it. The single accent is the yellow of a 9mm tracer, spent sparingly:
-one primary action, one active selection, one line on a chart.
+holds, wind, what worked. This interface is that card laid on top of surviv's grass —
+literally: the menu and results screens are drawn over a live, slowly drifting slice of
+the game world, rendered from the same sprites and the same grass colour the drills use,
+the way survev's own menu sits on a picture of the map. The card itself is a translucent
+black panel, as survev's panels are, so the field reads through it and the chrome
+belongs to the world rather than floating over it. The accent is survev's own orange,
+spent sparingly: one primary action, one active selection. Tracer yellow stays, demoted
+to data — the trend line, the rose, the countdown, the reload and spin bars.
 
 Density is Operate density. Menus are lists and forms; results are tables with a few
 cards. Nothing decorative competes with the numbers, and the copy does the
@@ -149,11 +151,11 @@ over provisional numbers. Honesty markers (warm-up, provisional thresholds) are 
 of the visual system, not fine print.
 
 **Key Characteristics:**
-- Field-derived greens for every surface; the grass is the brightest green on screen.
-- One yellow accent, used as a tracer: rare, directional, meaning "go" or "this one".
-- System font throughout, heavy weights for numbers and titles, uppercase sage labels.
+- The game world is the page background, at full brightness; panels are translucent black over it.
+- One orange accent for actions and selection, survev's own; tracer yellow reserved for data.
+- Roboto Condensed, survev's UI face, for titles, buttons and labels; system font for prose.
 - Dark tonal layering instead of shadows, except the one deep shadow under a floating panel.
-- HUD copies survev's layout so a player's eyes need no retraining.
+- HUD copies survev's layout, weapon slots included, so a player's eyes need no retraining.
 
 ## Colors
 
@@ -161,15 +163,18 @@ A dark moss palette pulled from the grass field, one tracer-yellow accent, and a
 set of reserved status colors that mirror in-game meanings.
 
 ### Primary
-- **Tracer Yellow** (`{colors.tracer-yellow}`): the primary button, the active list item,
-  the trend line, the rose wedges, the countdown numeral, the reload bar, new-best
-  marks. Hover lightens to `{colors.tracer-yellow-hover}`.
+- **Surviv Orange** (`#d45500`, survev's own): the primary button, the active list item,
+  the active weapon slot's edge, the dot in the wordmark. Hover lightens to `#f06a10`.
+- **Barrel Brown** (`#8f5827`, survev's own): secondary buttons.
+- **Tracer Yellow** (`{colors.tracer-yellow}`): data only now — the trend line, the rose
+  wedges, the countdown numeral, the reload and spin bars, new-best marks.
 
 ### Neutral
 - **Night Floor** (`{colors.night-floor}`): the page background behind the field and the
   ink color on yellow surfaces.
-- **Panel Moss** (`{colors.panel-moss}`): every floating panel (menu, pause, rest,
-  results).
+- **Panel Black** (`rgba(0,0,0,.72)`): every floating panel (menu, pause, rest, results),
+  translucent so the field reads through, as survev's panels are. Panel Moss survives only
+  where a panel must sit on a solid background.
 - **Chart Well** (`{colors.chart-well}`) and **Input Well** (`{colors.input-well}`): sunken
   surfaces one and two steps darker than the panel, for charts, insight cards and fields.
 - **List Moss** (`{colors.list-moss}`) rising to **List Moss Hover**
@@ -263,6 +268,10 @@ of a box, and HUD boxes use `rgba(0,0,0,.55)` fills.
 ### Named Rules
 **The Sink, Don't Lift Rule.** Nested content goes darker, never lighter, and never
 gains a shadow. Only whole panels cast one.
+
+**The Field Below Rule.** Nothing on a panel may rely on the field behind it for legibility.
+Wells inside a translucent panel are opaque enough to read on their own, and the menu backdrop
+carries a light vignette so the panel's edges stay defined whatever the world is doing.
 
 ## Shapes
 
