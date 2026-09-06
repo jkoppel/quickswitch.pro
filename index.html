@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<canvas id="backdrop" aria-hidden="true"></canvas>
 <canvas id="game" role="img" aria-label="Training arena: top-down field with your player in the center and enemy targets"></canvas>
 <div id="tip" class="tip" role="tooltip"></div>
 
@@ -25,16 +26,18 @@
       <div id="hud-reload"><div id="hud-reload-fill"></div></div>
     </div>
   </div>
+  <div id="hud-slots"></div>
+  <div id="hud-spin"><span>spin</span><div class="bar"><div id="hud-spin-fill"></div></div></div>
   <div id="hud-diff"></div>
-  <div id="hud-hint">WASD move &middot; LMB shoot &middot; R reload &middot; Esc pause</div>
+  <div id="hud-hint">WASD move &middot; LMB shoot &middot; R reload &middot; 1/2/4 or Q weapons &middot; Esc pause</div>
 </div>
 
 <main id="menu" class="screen">
   <div class="panel wide">
     <div class="titlebar">
       <div>
-        <h1>SURVIV AIM TRAINER</h1>
-        <p class="sub" style="margin:0">Top-down drills with surviv.io / survev.io bullet speeds, spread and reload times.</p>
+        <h1 class="logo">SURVIV<span class="dot">.</span>AIM</h1>
+        <p class="sub" style="margin:0">Top-down drills on survev's own gun, bullet, blast and switching rules.</p>
       </div>
       <div class="session">
         <span id="session-today">Today: 0 min</span>
@@ -58,7 +61,11 @@
             <label>Weapon <select id="f-weapon"></select></label>
             <label>Scope <select id="f-scope"></select></label>
             <label>Duration (seconds) <input id="f-duration" type="number" min="10" max="600" step="5"></label>
+            <label>Secondary (key 2 / Q) <select id="f-secondary"></select></label>
+            <label>Throwable (key 4 / G) <select id="f-throwable"></select></label>
+            <label>Barrels <input id="f-barrels" type="number" min="0" max="40"><span class="field-hint">Metal: bullets bounce off them and they explode.</span></label>
           </div>
+          <p id="switch-note" class="field-hint"></p>
           <div id="weapon-info" class="weapon-info"></div>
           <details id="advanced" class="advanced">
             <summary>Scenario settings</summary>
@@ -76,7 +83,7 @@
               <label class="check"><input id="f-invincible" type="checkbox"> Invincible bots (pure tracking)</label>
               <label class="check"><input id="f-adaptive" type="checkbox"> Adaptive difficulty</label>
               <label class="check"><input id="f-lead" type="checkbox"> Lead marker (fades out)</label>
-              <label class="check"><input id="f-obstacles" type="checkbox"> Rocks</label>
+              <label class="check"><input id="f-obstacles" type="checkbox"> Obstacles (rocks, barrels)</label>
               <label class="check"><input id="f-sound" type="checkbox"> Sound</label>
               <label class="check"><input id="f-hitmarker" type="checkbox"> Hit marker</label>
             </div>
@@ -99,6 +106,7 @@
       <span>Score = 100 × hits per second × √accuracy: speed at acceptable accuracy, because hit rate plateaus in days while speed keeps improving for months.</span>
       <span>Your first ~40 s of practice each day is warm-up and doesn't count toward bests.</span>
       <span>Enter starts. Data stays in this browser.</span>
+      <span>Hold left mouse with a throwable out to cook it; release to throw. Cursor distance is throw strength.</span>
       <button id="btn-clear" class="link" type="button">Clear history</button>
     </p>
   </div>
@@ -161,8 +169,12 @@
   </div>
 </div>
 
+<script src="vendor/survev/defs/gameConfig.js"></script>
 <script src="vendor/survev/defs/gunDefs.js"></script>
 <script src="vendor/survev/defs/bulletDefs.js"></script>
+<script src="vendor/survev/defs/throwableDefs.js"></script>
+<script src="vendor/survev/defs/explosionDefs.js"></script>
+<script src="vendor/survev/defs/obstacleDefs.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/weapons.js"></script>
 <script src="js/modes.js"></script>
@@ -172,6 +184,7 @@
 <script src="js/charts.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/game.js"></script>
+<script src="js/menuscene.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

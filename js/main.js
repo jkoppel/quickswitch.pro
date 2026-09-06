@@ -2,6 +2,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const canvas = $('game');
+  const backdrop = $('backdrop');
   const screens = { menu: $('menu'), pause: $('pause'), rest: $('rest'), results: $('results') };
   const hud = $('hud');
   const tip = $('tip');
@@ -274,6 +275,10 @@
     const inRun = name === null;
     hud.classList.toggle('hidden', !inRun && name !== 'pause');
     hud.setAttribute('aria-hidden', inRun ? 'false' : 'true');
+    // The world runs behind the menu and results, and stops while a drill is on the same canvas stack.
+    const wantBackdrop = name === 'menu' || name === 'results';
+    backdrop.classList.toggle('hidden', !wantBackdrop);
+    if (wantBackdrop) ST.menuScene.start(backdrop); else ST.menuScene.stop();
     if (name === 'menu') updateSession();
     if (name === 'pause') { disarmQuit(); $('btn-resume').focus(); }
     if (name === 'rest') $('btn-rest-skip').focus();
@@ -424,7 +429,7 @@
     }
     seq.aborted = true; game.paused = false; game.finish();
   });
-  $('btn-menu').addEventListener('click', () => { show('menu'); select(selection.kind, selection.item); });
+  $('btn-menu').addEventListener('click', () => { ST.menuScene.rebuild(); show('menu'); select(selection.kind, selection.item); });
   $('btn-again').addEventListener('click', () => lastSeqSpec && startSequence(lastSeqSpec));
 
   // Keyboard accelerators on screens (the game binds its own keys while running).
@@ -657,5 +662,5 @@
   if (!initial || !initial[1]) initial = ['routine', ST.ROUTINES[0]];
   select(initial[0], initial[1]);
   show('menu');
-  ST.assets.load();
+  ST.assets.load().then(() => { if (current === 'menu' || current === 'results') ST.menuScene.start(backdrop); });
 })();
