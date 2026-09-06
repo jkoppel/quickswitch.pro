@@ -1401,7 +1401,7 @@ window.ST = window.ST || {};
         if (r.x + r.r * 1.6 < left || r.x - r.r * 1.6 > right || r.y + r.r * 1.6 < top || r.y - r.r * 1.6 > bottom) continue;
         const img = A.get(r.def.img.sprite);
         if (img) {
-          const size = (144 * r.def.img.scale / SV.ppuBase) * r.scale;
+          const size = this.spriteSize(img, r.def.img.scale) * r.scale;
           if (r.hitFlash > 0) ctx.globalAlpha = 0.75;
           ctx.drawImage(img, r.x - size / 2, r.y - size / 2, size, size);
           ctx.globalAlpha = 1;
@@ -1445,7 +1445,7 @@ window.ST = window.ST || {};
       const nadeImg = A.get('proj-frag-nopin-nolever-01.img');
       for (const q of this.projectiles) {
         const lift = 1 + q.z / GC.projectile.maxHeight;
-        const size = 144 * q.def.worldImg.scale / SV.ppuBase * lift;
+        const size = this.spriteSize(nadeImg, q.def.worldImg.scale) * lift;
         ctx.globalAlpha = 0.35;
         ctx.beginPath(); ctx.ellipse(q.x, q.y, 0.34, 0.24, 0, 0, TAU);
         ctx.fillStyle = '#000'; ctx.fill();
@@ -1563,12 +1563,17 @@ window.ST = window.ST || {};
       return { x: e.pos.x + vx * t, y: e.pos.y + vy * t };
     }
 
+    // World size of a survev sprite: its own pixel size at the client's scale, at 16 px per unit.
+    spriteSize(img, scale) {
+      return (img ? (img.naturalWidth || img.width) : 144) * scale / ST.SURVEV.ppuBase;
+    }
+
     drawParticle(ctx, q) {
       const A = ST.assets, u = 1 - clamp(q.life / q.maxLife, 0, 1);
       if (q.kind === 'splat') {
         // scale lerps 0..1 over life; alpha fades over the last quarter (lerp 0.75..1).
         const scale = lerp(q.scaleStart, q.scaleEnd, u);
-        const size = 144 * scale / ST.SURVEV.ppuBase;
+        const size = this.spriteSize(A.get(q.sprite), scale);
         const alpha = u < 0.75 ? 1 : 1 - (u - 0.75) / 0.25;
         const img = A.tint(q.sprite, q.color);
         ctx.globalAlpha = alpha;
@@ -1579,8 +1584,8 @@ window.ST = window.ST || {};
       }
       if (q.kind === 'burst') {
         const scale = lerp(q.scaleStart, q.scaleEnd, u);
-        const size = 144 * scale / ST.SURVEV.ppuBase;
         const img = A.tint(q.sprite, q.color);
+        const size = this.spriteSize(A.get(q.sprite), scale);
         ctx.globalAlpha = 1 - u;
         if (img) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.drawImage(img, -size / 2, -size / 2, size, size); ctx.restore(); }
         else { ctx.fillStyle = q.color; ctx.beginPath(); ctx.arc(q.x, q.y, size / 2, 0, TAU); ctx.fill(); }
@@ -1632,7 +1637,7 @@ window.ST = window.ST || {};
       if (bag) {
         const lvl = SV.backpack.level;
         const bagScale = (0.4 + lvl * 0.03) * 0.5;
-        const bagSize = 148 * bagScale * 2 / U; // circle-base sprite is 148px at 2x, like the others
+        const bagSize = this.spriteSize(A.get('player-circle-base-01.img'), bagScale);
         const bagOffset = SV.backpack.offsets[Math.min(lvl - 1, 2)] / U;
         ctx.drawImage(bag, -bagOffset - bagSize / 2, -bagSize / 2, bagSize, bagSize);
       }
@@ -1647,7 +1652,7 @@ window.ST = window.ST || {};
           const hi = def.handImg;
           const img = A.get(gun.cooking ? 'proj-frag-nopin-nolever-01.img' : 'proj-frag-pin-01.img') || A.get('proj-frag-pin-01.img');
           if (!img) return;
-          const size = 144 * hi.scale / U;
+          const size = this.spriteSize(img, hi.scale);
           ctx.save();
           ctx.translate(hi.pos.x / U, hi.pos.y / U);
           ctx.drawImage(img, -size / 2, -size / 2, size, size);

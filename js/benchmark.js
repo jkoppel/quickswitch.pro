@@ -32,7 +32,7 @@ ST.SCENARIOS = {
     settings: { weapon: 'ak47', scope: '2x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 100, enemyShoots: true, enemyAim: 'hard', minDist: 8, maxDist: 14 } },
   // Utility scenarios: scored like the rest, but not part of the Benchmark ruler (no `ref`).
   quickSwitch:    { name: 'Quick switching',    cat: 'Utility',   tip: 'Shell, switch, tap, switch. One free 0.25 s switch per second is the whole trick.',
-    settings: { weapon: 'm870', secondary: 'm9', scope: '1x', duration: 30, enemies: 1, behavior: 'juke', enemyHp: 100, enemyShoots: true, enemyAim: 'normal', minDist: 6, maxDist: 12 } },
+    settings: { weapon: 'm870', secondary: 'm9', enemyWeapon: 'mp5', scope: '1x', duration: 30, enemies: 1, behavior: 'juke', enemyHp: 100, enemyShoots: true, enemyAim: 'normal', minDist: 6, maxDist: 12 } },
   fragLob:        { name: 'Frag lobbing',       cat: 'Utility',   tip: 'Cursor distance is throw strength. Lead the throw and cook so it lands live.',
     settings: { weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '4x', duration: 30, enemies: 2, behavior: 'strafe', enemyHp: 100, minDist: 12, maxDist: 20, stones: 8 } },
   bankShot:       { name: 'Bank shots',         cat: 'Utility',   tip: 'A barrel is a round mirror: it scatters rounds back into your half of the field, so it reaches a target beside it, not behind it.',

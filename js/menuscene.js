@@ -10,7 +10,9 @@ ST.menuScene = (function () {
   let canvas = null, ctx = null, raf = null, running = false;
   let t = 0, last = 0, w = 0, h = 0, dpr = 1;
   let props = [], actors = [], cam = { x: 0, y: 0, vx: 0, vy: 0 };
-  const PPU = 22;   // a touch tighter than a 1x scope, so the props read at panel size
+  // Zoomed further out than any in-game scope: survev's menu shows a wide slice of the map, and a
+  // tree is 11 units across, so at a drill's zoom two of them would fill the screen.
+  const PPU = 10;
 
   function build() {
     props = [];
@@ -22,18 +24,18 @@ ST.menuScene = (function () {
     ];
     const bag = [];
     for (const k of kinds) for (let i = 0; i < k.weight; i++) bag.push(k);
-    for (let i = 0; i < 34; i++) {
+    for (let i = 0; i < 150; i++) {
       const k = bag[Math.floor(Math.random() * bag.length)];
-      props.push({ k, x: rand(-90, 90), y: rand(-70, 70), rot: Math.random() < 0.5 ? 0 : rand(0, TAU) });
+      props.push({ k, x: rand(-260, 260), y: rand(-170, 170), rot: Math.random() < 0.5 ? 0 : rand(0, TAU) });
     }
     props.sort((a, b) => a.k.r - b.k.r);
 
     // A couple of idle players turning on the spot, the way the real menu shows the world moving.
     const guns = ['mp5', 'ak47', 'm870', 'mosin'].filter(g => ST.WEAPONS[g]);
     actors = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) {
       actors.push({
-        x: rand(-55, 55), y: rand(-40, 40), aim: rand(0, TAU),
+        x: rand(-90, 90), y: rand(-60, 60), aim: rand(0, TAU),
         spin: rand(-0.5, 0.5), gun: { def: ST.WEAPONS[guns[i % guns.length]], recoil: 0 },
         walk: rand(0, TAU), speed: rand(1.2, 2.6),
       });
@@ -56,8 +58,8 @@ ST.menuScene = (function () {
     last = now;
     t += dt;
     cam.x += cam.vx * dt; cam.y += cam.vy * dt;
-    if (Math.abs(cam.x) > 26) cam.vx *= -1;
-    if (Math.abs(cam.y) > 18) cam.vy *= -1;
+    if (Math.abs(cam.x) > 70) cam.vx *= -1;
+    if (Math.abs(cam.y) > 45) cam.vy *= -1;
     for (const a of actors) {
       a.aim += a.spin * dt;
       a.walk += dt * 0.35;
@@ -91,7 +93,7 @@ ST.menuScene = (function () {
     for (const p of props) {
       const img = A.get(p.k.sprite);
       if (!img) continue;
-      const size = 144 * p.k.scale / SV.ppuBase;
+      const size = (img.naturalWidth || 144) * p.k.scale / SV.ppuBase;
       ctx.save();
       ctx.translate(p.x, p.y);
       if (p.rot) ctx.rotate(p.rot);
@@ -101,10 +103,11 @@ ST.menuScene = (function () {
     for (const a of actors) drawActor(a);
     ctx.restore();
 
-    // A soft vignette so the panel on top always has contrast to sit against.
-    const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.25, w / 2, h / 2, Math.max(w, h) * 0.75);
-    g.addColorStop(0, 'rgba(10,14,8,0.28)');
-    g.addColorStop(1, 'rgba(10,14,8,0.82)');
+    // A light vignette: survev's menu shows the map at full brightness and lets the panel supply the
+    // contrast, so this only darkens the corners enough to keep the edges of the panel legible.
+    const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.8);
+    g.addColorStop(0, 'rgba(10,14,8,0.05)');
+    g.addColorStop(1, 'rgba(10,14,8,0.55)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
   }
@@ -128,7 +131,7 @@ ST.menuScene = (function () {
     const bag = A.tint('player-circle-base-01.img', A.hex(SV.backpackTint));
     if (bag) {
       const bagScale = (0.4 + SV.backpack.level * 0.03) * 0.5;
-      const bagSize = 148 * bagScale * 2 / U;
+      const bagSize = (bag.width || 148) * bagScale / U;
       ctx.drawImage(bag, -SV.backpack.offsets[0] / U - bagSize / 2, -bagSize / 2, bagSize, bagSize);
     }
     if (body) ctx.drawImage(body, -bodySize / 2, -bodySize / 2, bodySize, bodySize);

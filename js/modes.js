@@ -41,7 +41,7 @@ ST.MODES = [
     id: 'quickswitch', name: 'Quick Switch',
     desc: 'One-on-one with an M870 and an MP5. Every kill should use both guns: shell, switch, burst, switch.',
     tip: 'survev gives you one free switch a second (0.25 s instead of the gun’s own switch delay). Two shotguns share a deploy group and do not get it, which is why the pairing is shotgun plus anything else.',
-    settings: { weapon: 'm870', secondary: 'mp5', scope: '1x', duration: 60, enemies: 1, behavior: 'juke', enemyHp: 100, enemyShoots: true, enemyAim: 'normal', minDist: 6, maxDist: 12 },
+    settings: { weapon: 'm870', secondary: 'mp5', enemyWeapon: 'mp5', scope: '1x', duration: 60, enemies: 1, behavior: 'juke', enemyHp: 100, enemyShoots: true, enemyAim: 'normal', minDist: 6, maxDist: 12 },
   },
   {
     id: 'sniper', name: 'Sniper Leads',
