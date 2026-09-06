@@ -24,6 +24,27 @@ window.ST = window.ST || {};
     while (!v) v = Math.random();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
   }
+  // Where a segment first enters a circle: the entry point and the outward surface normal there.
+  // Bouncing needs the real entry point, not the segment's closest approach to the centre, or the
+  // normal comes out perpendicular to the shot and nothing reflects.
+  function segCircleEntry(ax, ay, bx, by, cx, cy, r) {
+    const dx = bx - ax, dy = by - ay;
+    const fx = ax - cx, fy = ay - cy;
+    const A = dx * dx + dy * dy;
+    if (A < 1e-12) return null;
+    const B = 2 * (fx * dx + fy * dy);
+    const C = fx * fx + fy * fy - r * r;
+    const disc = B * B - 4 * A * C;
+    if (disc < 0) return null;
+    const sq = Math.sqrt(disc);
+    let t = (-B - sq) / (2 * A);
+    if (t < 0) t = (-B + sq) / (2 * A);   // started inside the circle
+    if (t < 0 || t > 1) return null;
+    const px = ax + dx * t, py = ay + dy * t;
+    const nl = Math.hypot(px - cx, py - cy) || 1;
+    return { t, px, py, nx: (px - cx) / nl, ny: (py - cy) / nl };
+  }
+
   // Distance from segment ab to point p (squared), and where along the segment it lands.
   function segPointDist2(ax, ay, bx, by, px, py) {
     const dx = bx - ax, dy = by - ay;
@@ -462,9 +483,13 @@ window.ST = window.ST || {};
         if (Math.abs(x - p.x) > bx || Math.abs(y - p.y) > by) continue;
         if (Math.hypot(x - p.x, y - p.y) < Math.min(minD, 4)) continue;
         if (this.liveObstacles().some(r => Math.hypot(r.x - x, r.y - y) < r.r + 2.5)) continue;
+        // hugCover: the ricochet drill only works if targets stand beside a barrel, because a round
+        // barrel throws bullets back into the shooter's own half of the field and can never bend
+        // them around behind itself.
+        if (this.s.hugCover && !this.obstacles.some(r => !r.dead && r.reflect && Math.hypot(r.x - x, r.y - y) < r.r + 5)) continue;
         if (this.enemies.some(e => Math.hypot(e.pos.x - x, e.pos.y - y) < 3)) continue;
         // Skip spawns whose line of sight to the player is blocked.
-        if (this.s.coverSpawn !== true && this.blocked(p.x, p.y, x, y)) continue;
+        if (this.blocked(p.x, p.y, x, y)) continue;
         return cand;
       }
       return best;
@@ -674,19 +699,24 @@ window.ST = window.ST || {};
       const g = p.gun;
       const barrel = g && !g.throwable ? g.def.barrel : 1.5;
       const off = clamp(barrel * 0.15, 0, 0.6);
-      return { x: p.pos.x + Math.cos(p.aim) * off, y: p.pos.y + Math.sin(p.aim) * off, t: this.time };
+      return {
+        x: p.pos.x + Math.cos(p.aim) * off, y: p.pos.y + Math.sin(p.aim) * off,
+        vx: p.vel.x, vy: p.vel.y, t: this.time,
+      };
     }
     sampleVisual() {
       const log = this.player.visualLog;
       log.push(this.visualCentroid());
       while (log.length > 1 && log[0].t < this.time - 1.2) log.shift();
     }
-    // Where an enemy with `latency` seconds of perception delay believes your silhouette is.
-    // Spin fast enough and that stale point is uncorrelated with the current one, which is exactly
-    // the miss distance spinning buys you: at most the gun's own offset, never more.
-    perceivedPos(latency) {
+    // What an enemy with `latency` seconds of perception delay saw: where your silhouette was and
+    // which way you were going. Spin fast enough and the stale silhouette centre is uncorrelated
+    // with the current one, which is the miss distance spinning buys you directly: at most the gun's
+    // own offset from your body, never more.
+    perceived(latency) {
       const log = this.player.visualLog;
-      if (!log.length) return { x: this.player.pos.x, y: this.player.pos.y };
+      const p = this.player;
+      if (!log.length) return { x: p.pos.x, y: p.pos.y, vx: p.vel.x, vy: p.vel.y };
       const want = this.time - latency;
       for (let i = log.length - 1; i >= 0; i--) if (log[i].t <= want) return log[i];
       return log[0];
@@ -919,26 +949,33 @@ window.ST = window.ST || {};
         }
 
         // Aiming and shooting.
-        // The bot shoots at the silhouette it perceives, not at your hitbox centre, and it perceives
-        // it one reaction time late. That single delay is what makes spinning work: while you whirl,
-        // the gun it was tracking has already swung somewhere else.
+        //
+        // Spinning, and why it works. A surviv player's facing is the strongest tell they give: you
+        // strafe across the way you are looking and back off along it, so an opponent watching your
+        // gun knows which way you are about to break and is already moving there. Whirling the
+        // cursor takes that tell away, and all they have left is where you were going a reaction
+        // time ago. So the bot's lead is blended between the velocity it can still see (stale) and
+        // the velocity it can anticipate from your facing, and spinning collapses the blend toward
+        // stale. The consequence is the honest one: spinning only saves you if you also change
+        // direction, because against a straight line stale and current velocity are the same thing.
+        // Two smaller effects come along with it: it shoots at the centre of your silhouette, which
+        // your gun swings around as you turn, and it re-reads that silhouette one reaction late.
         const spin = this.spinFrac();
-        const seen = this.perceivedPos(e.skill.reaction);
+        const seen = this.perceived(e.skill.reaction);
         let aimX = seen.x, aimY = seen.y;
         e.aimErrT -= dt;
         if (e.aimErrT <= 0) {
           e.aimErr = gauss() * e.skill.sigma * this.aimScale() * DEG;
-          // A steady opponent's facing telegraphs which way they are about to break. Spinning hides
-          // it, so the bot's guess at how far to lead gets noticeably worse (never a free dodge:
-          // the lead is still centred on the truth, it is only less certain).
-          const spreadLead = lerp(0.3, 0.95, spin);
-          e.leadFrac = clamp(0.8 + gauss() * spreadLead * 0.5, 0, 1.8);
+          e.leadFrac = rand(0.5, 1.1);
           e.aimErrT = rand(0.15, 0.4);
         }
         if (e.skill.lead) {
           // Humans lead imperfectly: the fraction of the true lead is re-rolled with the aim error.
+          const antic = (1 - spin) * (e.skill.anticipation || 0);
+          const vx = lerp(seen.vx, this.player.vel.x, antic);
+          const vy = lerp(seen.vy, this.player.vel.y, antic);
           const flight = d / e.gun.def.speed;
-          aimX += this.player.vel.x * flight * (e.leadFrac || 0.8); aimY += this.player.vel.y * flight * (e.leadFrac || 0.8);
+          aimX += vx * flight * (e.leadFrac || 0.8); aimY += vy * flight * (e.leadFrac || 0.8);
         }
         const base = Math.atan2(aimY - e.pos.y, aimX - e.pos.x);
         e.aim = base + e.aimErr;
@@ -1061,11 +1098,12 @@ window.ST = window.ST || {};
         const nx = b.x + b.dx * step, ny = b.y + b.dy * step;
         let hitT = 1, hitKind = null, hitObj = null, hx = nx, hy = ny;
 
+        let hitNormal = null;
         for (const r of this.obstacles) {
           if (r.dead || r.def.height < GC.bullet.height) continue;
           if (r.id === b.reflectObjId) continue;      // never bounce twice off the same object
-          const s = segPointDist2(b.x, b.y, nx, ny, r.x, r.y);
-          if (s.d2 < r.r * r.r && s.t < hitT) { hitT = s.t; hitKind = 'obstacle'; hitObj = r; hx = s.cx; hy = s.cy; }
+          const s = segCircleEntry(b.x, b.y, nx, ny, r.x, r.y, r.r);
+          if (s && s.t < hitT) { hitT = s.t; hitKind = 'obstacle'; hitObj = r; hx = s.px; hy = s.py; hitNormal = s; }
         }
         if (b.owner === 'player' || b.damageSelf) {
           for (const e of this.enemies) {
@@ -1090,7 +1128,7 @@ window.ST = window.ST || {};
           else if (hitKind === 'player') { b.dead = true; this.damagePlayer(b, hx, hy); }
           else {
             b.dead = true;
-            const ric = this.hitObstacle(hitObj, b, hx, hy);
+            const ric = this.hitObstacle(hitObj, b, hx, hy, hitNormal);
             if (ric) spawned.push(ric);
           }
           continue;
@@ -1105,7 +1143,7 @@ window.ST = window.ST || {};
 
     // Bullet meets stone or barrel. Barrels are metal: survev flags them reflectBullets, so the round
     // comes off the curved shell at the mirror angle with half the damage, and can find you again.
-    hitObstacle(o, b, hx, hy) {
+    hitObstacle(o, b, hx, hy, normal) {
       const p = this.player.pos;
       const dmg = this.bulletDamage(b) * b.obstacleDamage * (o.def.obstacleDamageMult || 1);
       o.hitFlash = 0.08;
@@ -1121,10 +1159,10 @@ window.ST = window.ST || {};
       b.reflected = true;
       // Mirror the direction about the surface normal, which on a barrel is the radius through the
       // impact point: where you hit the barrel decides where the round goes.
-      const nrx = (hx - o.x) / (o.r || 1), nry = (hy - o.y) / (o.r || 1);
-      const nl = Math.hypot(nrx, nry) || 1;
-      const ux = nrx / nl, uy = nry / nl;
+      const ux = normal ? normal.nx : (hx - o.x) / (o.r || 1);
+      const uy = normal ? normal.ny : (hy - o.y) / (o.r || 1);
       const dot = b.dx * ux + b.dy * uy;
+      if (dot >= 0) return null;   // already leaving the surface
       const rx = b.dx - 2 * dot * ux, ry = b.dy - 2 * dot * uy;
       const ang = Math.atan2(ry, rx);
       const nb = this.makeBullet(hx + ux * 0.05, hy + uy * 0.05, ang, b.def, b.owner, {

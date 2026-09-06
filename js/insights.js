@@ -80,3 +80,52 @@ ST.strategyCheck = function (stepResults) {
       : `Your movement time barely changed between the speed (${ks.moveTime.toFixed(2)}s) and precision (${kp.moveTime.toFixed(2)}s) conditions. Experts slow down and land short on small targets; try it.`,
   };
 };
+
+// Insights for the mechanics the trainer added on top of aim: spinning, quick switching,
+// throwables and ricochet. Same rule as the rest, one actionable sentence each, after the run only.
+ST.utilityInsights = function (r, s) {
+  const out = [];
+  const pct = (v) => Math.round(v * 100);
+
+  // Spinning is a trade, so it is only worth reporting as a trade.
+  if (r.spinFrac > 0.03) {
+    const paid = r.accSpinning !== null && r.accNotSpinning !== null && r.accSpinning < r.accNotSpinning - 0.05;
+    const bought = r.dmgTakenPerMinSpinning !== null && r.dmgTakenPerMinSteady !== null
+      && r.dmgTakenPerMinSpinning < r.dmgTakenPerMinSteady * 0.8;
+    if (paid && bought) {
+      out.push({ sev: 2, text: `Spinning worked: ${Math.round(r.dmgTakenPerMinSteady - r.dmgTakenPerMinSpinning)} less damage per minute while you whirled. It cost ${pct(r.accNotSpinning - r.accSpinning)} points of accuracy, so keep spinning to the moments you are crossing ground rather than trading.` });
+    } else if (paid && !bought) {
+      out.push({ sev: 3, text: `You spun ${pct(r.spinFrac)}% of the time and it did not lower the damage you took, but it did cost ${pct(r.accNotSpinning - r.accSpinning)} points of accuracy. Spinning only helps if you change direction under it: against a straight line the bot's stale read and its live read are the same.` });
+    } else if (r.spinFrac > 0.5) {
+      out.push({ sev: 2, text: `You spent ${pct(r.spinFrac)}% of the run spinning. It is a way to cross open ground, not a way to fight: settle the cursor before you shoot.` });
+    }
+  }
+  // Quick switching: the whole point is beating the primary's own fire delay.
+  if (s.secondary && r.switches >= 2) {
+    const w = ST.WEAPONS[s.weapon], sec = ST.WEAPONS[s.secondary];
+    const sameGroup = w && sec && w.deployGroup !== undefined && w.deployGroup === sec.deployGroup;
+    if (sameGroup) {
+      out.push({ sev: 2, text: `${w.name} and ${sec.name} share a deploy group, so survev charges you the full ${sec.switchDelay}s switch. This pairing cannot be quick-switched; carry something from another class.` });
+    } else if (r.quickSwitchShots === 0) {
+      out.push({ sev: 3, text: `You switched ${r.switches} times but never fired the second gun inside the first one's ${w.fireDelay + (w.pullDelay || 0)}s cycle. The switch has to come straight after the shot, not after you have already waited.` });
+    } else if (r.avgSwitchGap !== null) {
+      out.push({ sev: 1, text: `You landed ${r.quickSwitchShots} shots that beat the ${w.name}'s own cycle, averaging ${r.avgSwitchGap.toFixed(2)}s between the two guns. The floor is ${ST.GC.player.baseSwitchDelay}s.` });
+    }
+  } else if (s.secondary && r.switches < 2) {
+    out.push({ sev: 3, text: `You barely used the second weapon. Key 2 or Q after every shot from the ${ST.WEAPONS[s.weapon].name}: the free switch costs ${ST.GC.player.baseSwitchDelay}s against its ${ST.WEAPONS[s.weapon].fireDelay}s fire delay.` });
+  }
+  // Throwables.
+  if (s.throwable && r.nadesThrown >= 3) {
+    const t = ST.THROWABLES[s.throwable];
+    if (r.nadeSelfDmg > 20) out.push({ sev: 3, text: `Your own grenades did ${Math.round(r.nadeSelfDmg)} damage to you. The blast is full strength out to ${t.radMin} units and only stops at ${t.radMax}: throw further, or put an obstacle between you and it.` });
+    else if (r.nadeDmgPerThrow !== null && r.nadeDmgPerThrow < 20) out.push({ sev: 3, text: `${Math.round(r.nadeDmgPerThrow)} damage per grenade. A frag does ${t.dmg} inside ${t.radMin} units, so nearly every throw is landing wide or late: lead the throw and cook it so it bursts on arrival.` });
+    else if (r.avgCookTime !== null && r.avgCookTime < 0.5) out.push({ sev: 2, text: `You threw with an average cook of ${r.avgCookTime.toFixed(2)}s, so each frag sat live for about ${(t.fuseTime - r.avgCookTime).toFixed(1)}s before going off. Anyone who sees it simply walks away; hold the pin longer.` });
+  }
+  // Ricochet: report it as what it is, a low-percentage tool and a real hazard.
+  if (s.barrels > 0 && (r.ricochetPellets > 0 || r.ricochetSelfDmg > 0)) {
+    if (r.ricochetSelfDmg > 15) out.push({ sev: 3, text: `Your own ricochets did ${Math.round(r.ricochetSelfDmg)} damage to you. A barrel is a round mirror pointed back at you: stop firing through one at close range.` });
+    else if (r.ricochetHits > 0) out.push({ sev: 1, text: `${r.ricochetHits} of ${r.ricochetPellets} bounced rounds connected for ${Math.round(r.ricochetDmg)} damage, at half damage each. That is about the ceiling for ricochet; treat it as a bonus, not a plan.` });
+  }
+  out.sort((a, b) => b.sev - a.sev);
+  return out;
+};

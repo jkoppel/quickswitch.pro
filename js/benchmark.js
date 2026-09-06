@@ -34,9 +34,9 @@ ST.SCENARIOS = {
   quickSwitch:    { name: 'Quick switching',    cat: 'Utility',   tip: 'Shell, switch, tap, switch. One free 0.25 s switch per second is the whole trick.',
     settings: { weapon: 'm870', secondary: 'm9', scope: '1x', duration: 30, enemies: 1, behavior: 'juke', enemyHp: 100, enemyShoots: true, enemyAim: 'normal', minDist: 6, maxDist: 12 } },
   fragLob:        { name: 'Frag lobbing',       cat: 'Utility',   tip: 'Cursor distance is throw strength. Lead the throw and cook so it lands live.',
-    settings: { weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '2x', duration: 30, enemies: 2, behavior: 'strafe', enemyHp: 100, minDist: 12, maxDist: 19, stones: 8 } },
-  bankShot:       { name: 'Bank shots',         cat: 'Utility',   tip: 'Barrels are metal and bounce bullets. Hit the edge that points where you want the round to go.',
-    settings: { weapon: 'm4a1', scope: '2x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 100, minDist: 8, maxDist: 17, barrels: 16, stones: 10, coverSpawn: true } },
+    settings: { weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '4x', duration: 30, enemies: 2, behavior: 'strafe', enemyHp: 100, minDist: 12, maxDist: 20, stones: 8 } },
+  bankShot:       { name: 'Bank shots',         cat: 'Utility',   tip: 'A barrel is a round mirror: it scatters rounds back into your half of the field, so it reaches a target beside it, not behind it.',
+    settings: { weapon: 'm4a1', scope: '2x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 100, minDist: 8, maxDist: 17, barrels: 18, stones: 8, hugCover: true } },
   spinDodge:      { name: 'Spin dodge',         cat: 'Utility',   tip: 'Whirl while you cross open ground, settle to shoot. Spinning costs your aim, so it has to be paid back.',
     settings: { weapon: 'ak47', scope: '2x', duration: 30, enemies: 2, behavior: 'strafe', enemyHp: 100, enemyShoots: true, enemyAim: 'hard', minDist: 9, maxDist: 16 } },
 };

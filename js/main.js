@@ -551,7 +551,7 @@
       if (strat) { strategyEl.textContent = strat.text; strategyEl.className = 'insight ' + (strat.adapted ? 'ok' : ''); }
       const weakest = scored.filter(e => e.scenario && ST.SCENARIOS[e.scenario].ref).sort((a, b) => a.result.score / ST.SCENARIOS[a.scenario].ref - b.result.score / ST.SCENARIOS[b.scenario].ref)[0] || scored[scored.length - 1];
       if (weakest) {
-        const ins = ST.insights(weakest.result, weakest.step.settings);
+        const ins = ST.insights(weakest.result, weakest.step.settings).concat(ST.utilityInsights(weakest.result, weakest.step.settings)).slice(0, 3);
         insightsEl.innerHTML = `<p class="insight-from">From ${weakest.step.label}, your weakest step</p>` + (ins.length ? ins.map(i => `<div class="insight">${i.text}</div>`).join('') : '<div class="insight ok">Nothing stands out. Keep the tempo up.</div>');
       }
       // Pool flick directions across every step that measured them.
@@ -628,7 +628,8 @@
       $('results-sub').innerHTML = `${e.step.label} · ${ST.WEAPONS[s.weapon].name} · ${s.scope} · ${Math.round(r.time)}s${t ? ' · ' + tierHtml(t) : ''}`;
       if (e.step.warmup) { warm.textContent = `Warm-up run, not counted toward bests. ${WARMUP_COPY}`; warm.classList.remove('hidden'); }
       if (!e.recorded) $('results-note').textContent = 'Ended before the halfway mark, so this run was not recorded.';
-      const ins = ST.insights(r, s);
+      // Aim insights first, then anything the utility mechanics turned up.
+      const ins = ST.insights(r, s).concat(ST.utilityInsights(r, s)).slice(0, 3);
       insightsEl.innerHTML = ins.length ? ins.map(i => `<div class="insight">${i.text}</div>`).join('') : '<div class="insight ok">Nothing stands out. Keep the tempo up.</div>';
       roseSectors = k ? k.sectors : [];
     }

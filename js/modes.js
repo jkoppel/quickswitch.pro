@@ -5,7 +5,7 @@ ST.DEFAULT_SETTINGS = {
   weapon: 'mp5', secondary: '', throwable: '', throwableCount: 3,
   scope: '2x', duration: 60, enemies: 1, behavior: 'strafe',
   enemyHp: 100, enemyShoots: false, enemyAim: 'normal', minDist: 8, maxDist: 16,
-  ttl: 0, respawnDelay: 0.5, obstacles: true, stones: 14, barrels: 0, coverSpawn: false,
+  ttl: 0, respawnDelay: 0.5, obstacles: true, stones: 14, barrels: 0, hugCover: false,
   sound: true, hitmarker: true,
   adaptive: true, leadHint: false, invincible: false,
 };
@@ -84,8 +84,8 @@ ST.MODES = [
     desc: 'Throw frag grenades at targets that will not stand still. Hold left mouse to pull the pin, release to throw; strength comes from how far your cursor is from you.',
     tip: 'Full strength needs the cursor 18 units out, which is about 19 units of flight. Aim the cursor past the target, not at it, and remember the 4 s fuse gives them time to walk away.',
     settings: {
-      weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '2x', duration: 60,
-      enemies: 2, behavior: 'strafe', enemyHp: 100, minDist: 12, maxDist: 19, stones: 8,
+      weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '4x', duration: 60,
+      enemies: 2, behavior: 'strafe', enemyHp: 100, minDist: 12, maxDist: 20, stones: 8,
     },
   },
   {
@@ -93,17 +93,17 @@ ST.MODES = [
     desc: 'Same grenades, jukier targets. Hold the pin so the frag bursts as it arrives instead of giving them four seconds to leave.',
     tip: 'Cook about 2.5 s for a full-strength throw: roughly a second of flight plus the time they need to notice it. Hold too long and it goes off in your hand, which is survev’s own safety behaviour, not a bug.',
     settings: {
-      weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '2x', duration: 60,
-      enemies: 2, behavior: 'juke', enemyHp: 100, minDist: 12, maxDist: 19, stones: 8,
+      weapon: 'mp5', throwable: 'frag', throwableCount: 99, scope: '4x', duration: 60,
+      enemies: 2, behavior: 'juke', enemyHp: 100, minDist: 12, maxDist: 20, stones: 8,
     },
   },
   {
     id: 'ricochet', name: 'Ricochet',
-    desc: 'A barrel field with the enemy allowed to sit behind cover. Metal barrels bounce bullets in survev: bank a round off one to reach what you cannot shoot straight at.',
-    tip: 'A barrel is round, so the angle you leave at depends on where on the shell you hit. Aim at the edge nearest the line you want. A bounced round does half damage and can come back at you.',
+    desc: 'A normal fight in a barrel field. You can shoot the enemy straight; the point is learning what the barrels do — scatter your rounds into someone hugging cover, and throw them back at you when you fire through one.',
+    tip: 'A barrel is a round mirror: it throws rounds back into your own half of the field, so it reaches a target beside the barrel, never one hidden behind it. Hit the edge on the target\u2019s side. A bounced round does half damage and will happily come back and hit you, so never shoot a barrel at point-blank range.',
     settings: {
       weapon: 'm4a1', scope: '2x', duration: 75, enemies: 1, behavior: 'strafe', enemyHp: 100,
-      minDist: 8, maxDist: 17, barrels: 16, stones: 10, coverSpawn: true,
+      minDist: 8, maxDist: 17, barrels: 18, stones: 8, hugCover: true,
     },
   },
   {
@@ -111,7 +111,7 @@ ST.MODES = [
     desc: 'Enemies rush you through a barrel field. A barrel has 150 HP and detonates for 125 damage inside 5 units: pop it as they pass, not before.',
     tip: 'The blast falls off to nothing at 12 units and an obstacle in the way stops it dead. Shoot the barrel they are about to run past, not the one they just left.',
     settings: {
-      weapon: 'mp5', scope: '2x', duration: 60, enemies: 2, behavior: 'rush', enemyHp: 100,
+      weapon: 'mp5', scope: '4x', duration: 60, enemies: 2, behavior: 'rush', enemyHp: 100,
       enemyShoots: true, enemyAim: 'easy', minDist: 14, maxDist: 20, barrels: 18, stones: 6,
     },
   },
