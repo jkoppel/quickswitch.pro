@@ -377,9 +377,12 @@ window.ST = window.ST || {};
       // survev client/src/game.ts: maxScreenDim = max(minDim * 16/9, maxDim);
       // targetZoom = (maxScreenDim * 0.5) / (zoomRadius * ppu). A window narrower than 16:9 is treated
       // as 16:9, so the world is the same size on screen as it is in the real game.
-      this.ppu = ST.pixelsPerUnit(this.w, this.h, this.zoomRadius);
-      this.halfW = this.w / (2 * this.ppu);
-      this.halfH = this.h / (2 * this.ppu);
+      // A canvas can be momentarily zero-sized — a fullscreen transition, a restored tab, layout not
+      // settled yet — and 0/0 would make the scale NaN, which then leaks into aim and spawn geometry
+      // and is very hard to trace back here. Refuse to compute a degenerate camera.
+      this.ppu = ST.pixelsPerUnit(Math.max(this.w, 1), Math.max(this.h, 1), this.zoomRadius) || 1;
+      this.halfW = Math.max(this.w, 1) / (2 * this.ppu);
+      this.halfH = Math.max(this.h, 1) / (2 * this.ppu);
     }
 
     bindInput() {
@@ -725,9 +728,36 @@ window.ST = window.ST || {};
       this.updateEnemies(dt);
       this.updateProjectiles(dt);
       this.updateBullets(dt);
+      this.repairState();
       this.updateEffects(dt);
       this.updateRespawns(dt);
       this.updateAdaptive(dt);
+    }
+
+    // A frozen, unkillable enemy is the worst failure this thing has: it looks like the drill is
+    // broken and there is no way for a player to clear it. If anything's position or velocity ever
+    // stops being a real number, put it back rather than letting it sit there.
+    repairState() {
+      const ok = (v) => Number.isFinite(v);
+      const p = this.player;
+      if (!ok(p.pos.x) || !ok(p.pos.y)) { p.pos.x = 0; p.pos.y = 0; p.vel.x = 0; p.vel.y = 0; }
+      if (!ok(p.vel.x) || !ok(p.vel.y)) { p.vel.x = 0; p.vel.y = 0; }
+      if (!ok(p.aim)) p.aim = 0;
+      if (!ok(p.aimVel)) p.aimVel = 0;
+      for (let i = this.enemies.length - 1; i >= 0; i--) {
+        const e = this.enemies[i];
+        if (!ok(e.vel.x) || !ok(e.vel.y)) { e.vel.x = 0; e.vel.y = 0; }
+        if (!ok(e.heading)) e.heading = rand(0, TAU);
+        if (!ok(e.timer)) e.timer = 0;
+        if (!ok(e.hp) || !ok(e.maxHp)) { e.hp = this.s.enemyHp; e.maxHp = this.s.enemyHp; }
+        if (!ok(e.pos.x) || !ok(e.pos.y)) {
+          const spot = this.randomSpawn();
+          if (spot && ok(spot.x) && ok(spot.y)) { e.pos.x = spot.x; e.pos.y = spot.y; }
+          else { this.enemies.splice(i, 1); this.respawns.push(this.s.respawnDelay); }
+        }
+      }
+      this.bullets = this.bullets.filter(b => ok(b.x) && ok(b.y) && ok(b.dx) && ok(b.dy));
+      this.projectiles = this.projectiles.filter(q => ok(q.x) && ok(q.y));
     }
 
     // ---------- difficulty ----------
