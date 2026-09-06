@@ -135,7 +135,14 @@ window.ST = window.ST || {};
 
         const dx = e.goal.x - e.pos.x, dy = e.goal.y - e.pos.y;
         const d = Math.hypot(dx, dy);
-        if (d < 0.8) return { x: 0, y: 0 };
+        if (d < 0.8) {
+          // Arrived. Hold the pocket, but keep working inside it: a player waiting behind a wall
+          // shuffles along it, they do not stand to attention. Moving across the player's line keeps
+          // the same wall between you, and drifting past the spot pulls it straight back.
+          e.shuffleT = (e.shuffleT || 0) - c.dt;
+          if (e.shuffleT <= 0) { e.shuffleT = c.rand(0.35, 0.8); e.shuffleDir = -(e.shuffleDir || 1); }
+          return { x: c.perp.x * e.shuffleDir, y: c.perp.y * e.shuffleDir };
+        }
         const ux = dx / d, uy = dy / d;
         const steer = c.avoid(e.pos, ux, uy, 2.5);
         return { x: ux + steer.x * 0.5, y: uy + steer.y * 0.5 };

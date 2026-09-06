@@ -81,9 +81,7 @@ confirmed this as the claim future work should protect.
 - Enemy behaviour is centrally owned: eight movement patterns and three aim skills live in
   `js/behaviors.js`, and drills reference them by name rather than defining their own. Spinning is
   handled inside the shared aim solution, so it behaves identically in every drill.
-- No drill uses invincible bots, and no drill uses passive ones: every bot in every drill and
-  scenario is armed. Aim-focused drills give them a sidearm and loose aim so return fire is pressure
-  rather than punishment. Tracking drills use 500 HP bots that take damage and die.
+- No drill uses invincible bots. Tracking drills use 500 HP bots that take damage and die.
 - Drills where bots shoot back space respawns by a full reload of the player's weapon.
 - Weapon, throwable, explosion, obstacle and config values are survev's definitions
   verbatim (`vendor/survev/defs`) and should be refreshed from upstream rather than
