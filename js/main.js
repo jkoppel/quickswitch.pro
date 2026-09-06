@@ -23,10 +23,11 @@
 
   // ---------- form ----------
   const fields = {
-    weapon: $('f-weapon'), scope: $('f-scope'), duration: $('f-duration'), enemies: $('f-enemies'),
+    weapon: $('f-weapon'), secondary: $('f-secondary'), throwable: $('f-throwable'),
+    scope: $('f-scope'), duration: $('f-duration'), enemies: $('f-enemies'),
     behavior: $('f-behavior'), enemyHp: $('f-hp'), minDist: $('f-mind'), maxDist: $('f-maxd'), ttl: $('f-ttl'),
     enemyAim: $('f-aim'), enemyShoots: $('f-shoots'), invincible: $('f-invincible'), adaptive: $('f-adaptive'), leadHint: $('f-lead'),
-    obstacles: $('f-obstacles'), sound: $('f-sound'), hitmarker: $('f-hitmarker'),
+    obstacles: $('f-obstacles'), barrels: $('f-barrels'), sound: $('f-sound'), hitmarker: $('f-hitmarker'),
   };
   function fill(select, entries) {
     select.innerHTML = '';
@@ -52,7 +53,20 @@
     }
     for (const [id, w] of Object.entries(ST.WEAPONS)) if (!seen.has(id)) { const o = document.createElement('option'); o.value = id; o.textContent = w.name; sel.appendChild(o); }
   })();
-  fill(fields.scope, Object.keys(ST.SCOPES).map(k => [k, k]));
+  // Secondary weapon and throwable are optional, so both lists lead with an empty entry.
+  (function fillSecondary() {
+    const sel = fields.secondary;
+    sel.innerHTML = '';
+    const none = document.createElement('option'); none.value = ''; none.textContent = 'None';
+    sel.appendChild(none);
+    for (const [group, ids] of WEAPON_CLASS) {
+      const og = document.createElement('optgroup'); og.label = group;
+      for (const id of ids) { const w = ST.WEAPONS[id]; if (!w) continue; const o = document.createElement('option'); o.value = id; o.textContent = w.name; og.appendChild(o); }
+      sel.appendChild(og);
+    }
+  })();
+  fill(fields.throwable, [['', 'None']].concat(Object.entries(ST.THROWABLES).map(([k, t]) => [k, t.name])));
+  fill(fields.scope, Object.keys(ST.SCOPES).map(k => [k, `${k} (shows ${ST.scopeMaxDist(k)} units in any direction)`]));
   fill(fields.behavior, Object.entries(ST.BEHAVIORS).map(([k, b]) => [k, b.name]));
   fill(fields.enemyAim, Object.entries(ST.AIM_SKILL).map(([k, a]) => [k, a.name]));
 
@@ -64,6 +78,11 @@
     s.maxDist = Math.max(s.minDist + 1, s.maxDist || 16);
     s.ttl = Math.max(0, s.ttl || 0);
     s.respawnDelay = s.ttl > 0 ? 0.2 : 0.5;
+    s.barrels = Math.max(0, Math.min(40, s.barrels | 0));
+    s.stones = s.stones === undefined ? 14 : Math.max(0, Math.min(40, s.stones | 0));
+    if (!s.obstacles) { s.barrels = 0; s.stones = 0; }
+    s.throwableCount = s.throwableCount === undefined ? 3 : Math.max(0, s.throwableCount | 0);
+    if (s.secondary === s.weapon) s.secondary = '';
     return s;
   }
   function readSettings() {
@@ -105,7 +124,21 @@
       `<span>Spread <b>${w.spread}° still, +${w.moveSpread}° moving</b></span>`,
       `<span>Mag <b>${w.mag}</b></span>`,
       `<span>Reload <b>${w.reload}s${w.reloadPerShell ? ' per shell' : ''}</b></span>`,
+      // survev applies these two on every hit; both were missing from the trainer before.
+      `<span>Damage at max range <b>${Math.round(w.dmg * w.falloff * 10) / 10}</b> <small>(${Math.round(w.falloff * 100)}% falloff floor)</small></span>`,
+      `<span>Headshot <b>×${w.headshotMult}</b> <small>(15% of hits)</small></span>`,
+      `<span>Switch delay <b>${w.switchDelay}s</b>${w.deployGroup !== undefined ? ` <small>(deploy group ${w.deployGroup})</small>` : ''}</span>`,
     ].join('');
+    const sec = ST.WEAPONS[fields.secondary.value];
+    const note = $('switch-note');
+    if (!sec) note.textContent = '';
+    else if (w.deployGroup !== undefined && w.deployGroup === sec.deployGroup) {
+      note.textContent = `${w.name} and ${sec.name} share deploy group ${w.deployGroup}, so survev makes you pay the full ${sec.switchDelay}s switch delay: no quick-switching between them.`;
+      note.className = 'field-hint warn';
+    } else {
+      note.textContent = `Quick switch available: the free switch costs ${ST.GC.player.baseSwitchDelay}s instead of ${sec.switchDelay}s, once every ${ST.GC.player.freeSwitchCooldown}s.`;
+      note.className = 'field-hint';
+    }
   }
   function updateBehaviorHint() {
     const b = ST.BEHAVIORS[fields.behavior.value];
@@ -117,6 +150,14 @@
     const min = Number(fields.minDist.value), max = Number(fields.maxDist.value);
     if (max <= min) { note.textContent = `Max spawn distance (${max}) must be greater than min (${min}); it will run as ${min + 1}.`; return; }
     if (Number(fields.duration.value) < 10) { note.textContent = 'Duration is at least 10 s.'; return; }
+    // A 16:9 view is much shorter than it is wide, so a scope that "reaches" horizontally can still
+    // hide targets directly above and below you. Say so rather than silently biasing the drill.
+    const scope = fields.scope.value;
+    const fits = ST.scopeMaxDist(scope);
+    if (max > fits) {
+      note.textContent = `At ${scope} you can only see ${fits} units above and below you, so targets at ${max} units will only ever appear to the sides. ${ST.scopeForDistance(max)} fits this range.`;
+      return;
+    }
     note.textContent = '';
   }
 
@@ -164,7 +205,11 @@
     return b;
   }
   for (const r of ST.ROUTINES) {
-    r._btn = makeButton($('routine-list'), r.name, `${r.steps.length} steps · ~${r.minutes} min`, () => select('routine', r));
+    // Length is derived from the steps and rests, so it can never drift from what actually runs.
+    const secs = ST.routineSeconds(r, stepSpec);
+    r._seconds = secs;
+    const mins = Math.round(secs / 60);
+    r._btn = makeButton($('routine-list'), r.name, `${r.steps.length} steps · ${mins} min`, () => select('routine', r));
   }
   for (const m of ST.MODES) {
     m._btn = makeButton($('mode-list'), m.name, m.settings.weapon ? ST.WEAPONS[m.settings.weapon].name + ' · ' + m.settings.scope : 'Your rules', () => select('mode', m));
@@ -180,7 +225,10 @@
       const settings = normalize({ ...base, ...sc.settings, ...(step.settings || {}), mode: step.scenario, label: sc.name });
       const scored = sc.scored !== false;
       const custom = !!step.settings;
-      return { label: sc.name, key: custom ? `${step.scenario}:${settings.weapon}:${settings.duration}` : step.scenario, settings, scenario: step.scenario, scored, benchmark: !custom, tip: sc.tip || '' };
+      const key = custom
+        ? `${step.scenario}:${settings.weapon}:${settings.duration}:v${ST.BENCHMARK_VERSION}`
+        : `${step.scenario}:v${ST.BENCHMARK_VERSION}`;
+      return { label: sc.name, key, settings, scenario: step.scenario, scored, benchmark: !custom, tip: sc.tip || '' };
     }
     const m = ST.MODES.find(x => x.id === step.mode);
     const settings = normalize({ ...base, ...m.settings, ...(step.settings || {}), mode: m.id, label: m.name });
@@ -201,11 +249,12 @@
     $('form-note').textContent = '';
     if (isRoutine) {
       const steps = item.steps.map(stepSpec);
-      $('routine-steps').innerHTML = `<b>${item.shuffle ? 'Shuffled order' : 'Fixed order'}, ${item.rest} s rest between steps.</b><ol>` +
+      $('routine-steps').innerHTML = `<b>${item.shuffle ? 'Shuffled order' : 'Fixed order'}, ${item.rest} s rest between steps. ${Math.round(item._seconds / 60 * 10) / 10} minutes end to end.</b><ol>` +
         steps.map(st => {
           const w = ST.WEAPONS[st.settings.weapon];
           const b = st.scored ? ST.history.best(st.key, 'score') : null;
-          return `<li>${st.label} <span>· ${w.name} · ${st.settings.scope} · ${st.settings.duration}s${st.settings.adaptive ? ' · adaptive' : ''}${b ? ` · best ${Math.round(b.score)}` : ''}</span></li>`;
+          const extra = [st.settings.secondary ? '+' + ST.WEAPONS[st.settings.secondary].name : '', st.settings.throwable ? '+' + ST.THROWABLES[st.settings.throwable].name : ''].filter(Boolean).join(' ');
+          return `<li>${st.label} <span>· ${w.name}${extra ? ' ' + extra : ''} · ${st.settings.scope} · ${st.settings.duration}s${st.settings.adaptive ? ' · adaptive' : ''}${b ? ` · best ${Math.round(b.score)}` : ''}</span></li>`;
         }).join('') + '</ol>';
       updateBestAndTrend();
     } else {
@@ -393,9 +442,11 @@
   const hudEls = {
     timer: $('hud-timer'), kills: $('hud-kills'), deaths: $('hud-deaths'), step: $('hud-step'),
     health: $('hud-health-fill'), healthText: $('hud-health-text'), weapon: $('hud-weapon'), mag: $('hud-mag'),
-    reload: $('hud-reload'), reloadFill: $('hud-reload-fill'), diff: $('hud-diff'),
+    reload: $('hud-reload'), reloadFill: $('hud-reload-fill'), diff: $('hud-diff'), slots: $('hud-slots'),
+    spin: $('hud-spin'), spinFill: $('hud-spin-fill'),
   };
   let lastHud = '';
+  let lastSlots = '';
   function updateHud(h) {
     const remaining = Math.max(0, h.duration - h.time);
     const m = Math.floor(remaining / 60);
@@ -413,10 +464,21 @@
       hudEls.weapon.textContent = h.weapon;
       hudEls.mag.textContent = h.ammo;
       hudEls.mag.classList.toggle('empty', h.ammo === 0);
+      // Weapon slots, survev-style: the number key, the name and what is left in it.
+      const slotKey = h.slots.map(sl => `${sl.key}${sl.active ? '*' : ''}${sl.ammo}`).join('|');
+      if (slotKey !== lastSlots) {
+        lastSlots = slotKey;
+        hudEls.slots.innerHTML = h.slots.length > 1 ? h.slots.map(sl =>
+          `<div class="slot${sl.active ? ' active' : ''}"><span class="k">${sl.key}</span><span class="n">${sl.name}</span><span class="a">${sl.ammo}${sl.mag ? '/' + sl.mag : ''}</span></div>`).join('') : '';
+      }
       hudEls.reload.style.visibility = h.reloading ? 'visible' : 'hidden';
       hudEls.diff.textContent = h.difficulty === null ? '' : `adaptive difficulty ${Math.round(h.difficulty * 100)} / 100`;
     }
     hudEls.reloadFill.style.width = (h.reloadFrac * 100) + '%';
+    // The only live readout the trainer adds: how hard you are spinning, because you cannot see your
+    // own angular velocity and the whole point of the drill is learning what "spinning" feels like.
+    hudEls.spin.style.visibility = h.spin > 0.02 ? 'visible' : 'hidden';
+    hudEls.spinFill.style.transform = `scaleX(${h.spin.toFixed(2)})`;
   }
 
   // ---------- results ----------
@@ -522,6 +584,40 @@
         row('Damage taken per minute', fmt.num(r.dmgTakenPerMin), '', false);
         row('Damage taken while standing still', r.stillDmgFrac === null ? '—' : fmt.pct(r.stillDmgFrac), '', false);
       }
+      // Spinning is only worth reporting once you actually did some.
+      if (r.spinFrac > 0.03) {
+        section('Spinning');
+        row('Time spent spinning', fmt.pct(r.spinFrac), '', false);
+        if (r.accSpinning !== null && r.accNotSpinning !== null) {
+          row('Accuracy spinning / steady', `${fmt.pct(r.accSpinning)} / ${fmt.pct(r.accNotSpinning)}`, '', false);
+        }
+        if (r.dmgTakenPerMinSpinning !== null && r.dmgTakenPerMinSteady !== null) {
+          row('Damage taken per minute, spinning / steady', `${fmt.num(r.dmgTakenPerMinSpinning)} / ${fmt.num(r.dmgTakenPerMinSteady)}`, '', false);
+        }
+      }
+      if (s.secondary) {
+        section('Weapon switching');
+        row('Switches', fmt.int(r.switches), '', false);
+        row('Shots that beat the primary’s fire delay', fmt.int(r.quickSwitchShots), '', false);
+        row('Average gap between the two guns’ shots', fmt.sec(r.avgSwitchGap), '', false);
+      }
+      if (s.throwable) {
+        section('Throwables');
+        row('Grenades thrown', fmt.int(r.nadesThrown), '', false);
+        row('Damage per grenade', fmt.num(r.nadeDmgPerThrow), '', false);
+        row('Kills by grenade', fmt.int(r.nadeKills), '', false);
+        row('Average cook time', fmt.sec(r.avgCookTime), '', false);
+        row('Damage you took from your own grenades', fmt.num(r.nadeSelfDmg), '', false);
+      }
+      if (s.barrels > 0) {
+        section('Barrels');
+        row('Rounds that bounced off a barrel', fmt.int(r.ricochetPellets), '', false);
+        row('Bounced rounds that hit', `${fmt.int(r.ricochetHits)}${r.ricochetRate !== null ? ` <small>(${fmt.pct(r.ricochetRate)})</small>` : ''}`, '', false);
+        row('Damage dealt by bounced rounds', fmt.num(r.ricochetDmg), '', false);
+        row('Barrels detonated', fmt.int(r.barrelsPopped), '', false);
+        row('Damage you took from your own ricochets', fmt.num(r.ricochetSelfDmg), '', false);
+      }
+      if (r.headshots) row('Headshots landed', `${fmt.int(r.headshots)} <small>(survev rolls 15% per hit)</small>`, '', false);
       table.innerHTML = rows.join('');
       const t = e.scenario && e.step.benchmark && !e.step.warmup ? ST.tierFor(e.scenario, r.score) : null;
       $('results-sub').innerHTML = `${e.step.label} · ${ST.WEAPONS[s.weapon].name} · ${s.scope} · ${Math.round(r.time)}s${t ? ' · ' + tierHtml(t) : ''}`;
