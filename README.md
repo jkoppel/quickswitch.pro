@@ -170,7 +170,7 @@ The research behind these choices, including what was cut and why, is in
 - Right click or Q: swap to your last weapon
 - 1 / 2: primary and secondary weapon, 4 or G: throwable
 - With a throwable out, hold left mouse to cook and release to throw; cursor distance is throw strength
-- R: reload
+- R: reload — an empty gun also reloads by itself, as in survev
 - Esc: pause
 
 ## Fidelity and licensing
@@ -216,6 +216,7 @@ Wrong, now fixed:
 | Gun artwork | `worldImg.tint` never applied, so the AK-47, Mk 12, M39 and M870 all drew the same untinted `gun-long-01` | most guns share a generic silhouette and are told apart only by their tint, which the client applies as a PIXI tint. Guns with their own artwork carry `0xffffff`, so one code path covers both. The DP-28's pan magazine (`worldImg.magImg`) was also never drawn. |
 | Stale saved settings | a setting saved by an older version that named something since renamed — a movement pattern, say — was assigned to its dropdown, which silently went blank, and the blank was then saved back as the real setting | selects reject values they do not have and keep the drill's own preset instead, and known renames are migrated. |
 | Invincible bots | tracking drills used bots that could not be damaged at all | there is no such mode any more. Tracking bots have 500 HP: enough that the drill is about holding the stream on them, but they take damage and they die. |
+| Auto-reload | a dry gun reloaded only when you pulled the trigger on it, so letting go of the mouse after the last round left you standing there empty | `fireWeapon` sets `scheduledReload = ammo <= 1` and `gunUpdate` starts it the moment the shot's `fireDelay` is up, trigger held or not. Switching away cancels the scheduled reload and switching back to an empty gun queues it again behind the switch delay. |
 | Respawn timing | every bot respawned 0.5 s after dying, including in drills where they shoot back, so the next fight started while you were still reloading | drills with return fire now wait for a full reload of your own weapon — 2.9 s behind an AK, 4.2 s behind an M870, which reloads a shell at a time. |
 | Drill settings | `readSettings()` read only the form fields, so any setting without a control — `arena`, `throwableCount`, `enemyWeapon`, `fleeSpeed`, `leash` — was dropped when a drill was started from the menu | the form now overrides the drill's preset instead of replacing it. |
 | Scope choices | several drills spawned targets further away than the scope could show | a 16:9 view reaches `zoomRadius` sideways but only `zoomRadius · 9/16` up and down, so targets past that only ever appeared to the left and right. Every drill and scenario now picks the smallest scope that shows its spawn range in every direction, and the menu says so if you set one that does not. |

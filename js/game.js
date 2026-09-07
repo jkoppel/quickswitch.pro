@@ -138,7 +138,7 @@ window.ST = window.ST || {};
   function makeGun(def) {
     return {
       def, ammo: def.mag, reloading: false, reloadT: 0, cooldown: 0, pullT: 0, recoil: 0,
-      emptyClicked: false, recoilTicker: 0,
+      emptyClicked: false, recoilTicker: 0, scheduledReload: false,
     };
   }
   // A throwable occupies a weapon slot like a gun does, but holds a count instead of a magazine.
@@ -157,6 +157,13 @@ window.ST = window.ST || {};
     g.recoilTicker += dt;
     g.recoil = Math.max(0, g.recoil - g.recoil * dt * 5 - dt); // player.ts recoil decay
     if (g.pullT > 0) { g.pullT -= dt; if (g.pullT <= 0 && g.def.sound.pull) ST.audio.play(g.def.sound.pull, g.soundOpts); }
+    // weaponManager.gunUpdate: a reload scheduled by the shot that emptied the gun (or by switching
+    // to an empty one) starts as soon as that shot's fireDelay is up, whether or not you are still
+    // holding the trigger. Running dry reloads by itself; you never have to press R for it.
+    if (g.scheduledReload && g.cooldown <= 0) {
+      g.scheduledReload = false;
+      startReload(g, g.soundOpts);
+    }
     if (g.reloading) {
       g.reloadT -= dt;
       if (g.reloadT <= 0) {
@@ -168,8 +175,9 @@ window.ST = window.ST || {};
     }
     if (!wantFire) { g.emptyClicked = false; return false; }
     if (g.ammo <= 0) {
-      if (!g.emptyClicked && !g.reloading) { ST.audio.empty(g.def); g.emptyClicked = true; }
-      startReload(g, g.soundOpts);
+      // fireWeapon schedules a reload even on a trigger pull that finds the gun already empty.
+      if (!g.emptyClicked && !g.reloading && !g.scheduledReload) { ST.audio.empty(g.def); g.emptyClicked = true; }
+      g.scheduledReload = true;
       return false;
     }
     if (g.cooldown > 0) return false;
@@ -178,6 +186,7 @@ window.ST = window.ST || {};
       else return false;
     }
     g.ammo--;
+    g.scheduledReload = g.ammo <= 0;   // fireWeapon: the shot that empties the mag queues the reload
     // weaponManager.ts: a gun idle for longer than recoilTime fires its next shot with no spread.
     const firstShot = g.recoilTicker >= g.def.recoilTime;
     g.recoilTicker = 0;
@@ -459,6 +468,9 @@ window.ST = window.ST || {};
       if (next.throwable && next.count <= 0) return;
       if (cur.throwable && cur.cooking) this.throwGrenade(true);   // switching away lobs the cooked nade
       if (cur.reloading) { cur.reloading = false; cur.reloadT = 0; }
+      if (!cur.throwable) cur.scheduledReload = false;
+      // setCurWeapIndex: switching to a gun you left empty queues its reload behind the switch delay.
+      if (!next.throwable && next.ammo <= 0) next.scheduledReload = true;
 
       const swappingToGun = !next.throwable;
       let delay = swappingToGun ? next.def.switchDelay : 0;
