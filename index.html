@@ -46,6 +46,7 @@
       </div>
       <div class="session">
         <span id="session-today">Today: 0 min</span>
+        <button id="btn-controls" class="secondary small" type="button">Controls</button>
         <button id="btn-fullscreen" class="secondary small" type="button">Fullscreen</button>
       </div>
     </div>
@@ -68,8 +69,8 @@
             <label>Weapon <select id="f-weapon"></select></label>
             <label>Scope <select id="f-scope"></select></label>
             <label>Duration (seconds) <input id="f-duration" type="number" min="10" max="600" step="5"></label>
-            <label>Secondary (2 / Q / right click) <select id="f-secondary"></select></label>
-            <label>Throwable (key 4 / G) <select id="f-throwable"></select></label>
+            <label>Secondary <span data-keys="secondary,swap">(2 / Q / right click)</span> <select id="f-secondary"></select></label>
+            <label>Throwable <span data-keys="throwable">(4 / G)</span> <select id="f-throwable"></select></label>
             <label>Barrels <input id="f-barrels" type="number" min="0" max="40"><span class="field-hint">Metal: bullets bounce off them and they explode.</span></label>
           </div>
           <p id="switch-note" class="field-hint editable"></p>
@@ -319,6 +320,8 @@
     <h1 id="pause-title">PAUSED</h1>
     <p id="pause-sub" class="sub">Esc or Resume to continue.</p>
     <div class="row">
+      <button id="btn-pause-controls" class="ghost" type="button">Controls</button>
+      <span class="spacer"></span>
       <button id="btn-quit" class="secondary" type="button">End</button>
       <button id="btn-resume" class="primary" type="button">Resume</button>
     </div>
@@ -393,6 +396,7 @@
 <script src="js/charts.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/rng.js"></script>
+<script src="js/controls.js"></script>
 <script src="js/game.js"></script>
 <script src="js/menuscene.js"></script>
 <script src="platform/shared/streak.js"></script>

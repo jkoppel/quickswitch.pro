@@ -513,6 +513,8 @@
   }
   $('btn-start').addEventListener('click', startFromMenu);
   $('btn-resume').addEventListener('click', () => game && game.togglePause());
+  $('btn-controls').addEventListener('click', () => ST.controls.open());
+  $('btn-pause-controls').addEventListener('click', () => ST.controls.open());
 
   // Ending a multi-step routine from pause takes two clicks; a single drill ends at once.
   let quitArmed = null;

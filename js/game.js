@@ -396,32 +396,46 @@ window.ST = window.ST || {};
 
     bindInput() {
       const c = this.canvas;
-      this.onKeyDown = (e) => {
-        if (e.repeat) return;
-        const k = e.key.toLowerCase();
-        if (k === 'escape') { this.togglePause(); e.preventDefault(); return; }
-        if (this.paused) return;
-        if (k === 'r') { const g = this.player.gun; if (g && !g.throwable) startReload(g); return; }
-        // Weapon slots, as in survev: 1 and 2 are the guns, 4 (or G) the throwable, Q the last weapon.
-        if (k === '1' || k === '2') { this.equip(Number(k) - 1); e.preventDefault(); return; }
-        if (k === '4' || k === 'g') { this.equip(2); e.preventDefault(); return; }
-        if (k === 'q') { this.equip(this.player.lastIdx); e.preventDefault(); return; }
-        this.keys.add(k);
-        if (['w', 'a', 's', 'd', ' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
-      };
-      this.onKeyUp = (e) => this.keys.delete(e.key.toLowerCase());
-      this.onMouseMove = (e) => { this.mouse.x = e.clientX; this.mouse.y = e.clientY; };
-      this.onMouseDown = (e) => {
-        // Right click swaps to the last weapon, the same as Q: with a shotgun in hand the switch is
-        // part of the shot, and reaching for a number key mid-fight is not.
-        if (e.button === 2) { this.equip(this.player.lastIdx); e.preventDefault(); return; }
-        if (e.button !== 0) return;
-        ST.audio.unlock();
-        this.mouse.down = true;
-        this.mouse.queued = true;
+      // Inputs map to actions through ST.controls (rebindable; survev's layout by default).
+      // this.keys holds the movement actions currently held.
+      this.press = (action, e) => {
+        switch (action) {
+          case 'shoot': ST.audio.unlock(); this.mouse.down = true; this.mouse.queued = true; break;
+          case 'up': case 'down': case 'left': case 'right': this.keys.add(action); break;
+          case 'reload': { const g = this.player.gun; if (g && !g.throwable) startReload(g); break; }
+          // Weapon slots, as in survev: the two guns, the throwable, and the last weapon.
+          case 'primary': this.equip(0); break;
+          case 'secondary': this.equip(1); break;
+          case 'throwable': this.equip(2); break;
+          case 'swap': this.equip(this.player.lastIdx); break;
+          default: return;
+        }
         e.preventDefault();
       };
-      this.onMouseUp = (e) => { if (e.button === 0) { this.mouse.down = false; this.mouse.queued = false; } };
+      this.release = (action) => {
+        if (action === 'shoot') { this.mouse.down = false; this.mouse.queued = false; } else this.keys.delete(action);
+      };
+      this.onKeyDown = (e) => {
+        if (e.code === 'Escape' || e.key === 'Escape') { if (!e.repeat) this.togglePause(); e.preventDefault(); return; }
+        const action = ST.controls.actionFor(e.code);
+        if (!action) return;
+        if (e.repeat || this.paused) { e.preventDefault(); return; }
+        this.press(action, e);
+      };
+      this.onKeyUp = (e) => { const a = ST.controls.actionFor(e.code); if (a) this.release(a); };
+      this.onMouseMove = (e) => { this.mouse.x = e.clientX; this.mouse.y = e.clientY; };
+      this.onMouseDown = (e) => {
+        ST.audio.unlock();
+        const action = ST.controls.actionFor('Mouse' + e.button);
+        if (action && !this.paused) this.press(action, e);
+        else e.preventDefault();
+      };
+      this.onMouseUp = (e) => {
+        const a = ST.controls.actionFor('Mouse' + e.button);
+        if (a) this.release(a);
+        // Mouse 4 and 5 are the browser's back and forward buttons.
+        if (e.button === 3 || e.button === 4) e.preventDefault();
+      };
       this.onBlur = () => { this.keys.clear(); this.mouse.down = false; this.mouse.queued = false; };
       this.onCtx = (e) => e.preventDefault();
 
@@ -868,10 +882,10 @@ window.ST = window.ST || {};
     updatePlayer(dt) {
       const p = this.player, k = this.keys;
       let mx = 0, my = 0;
-      if (k.has('w') || k.has('arrowup')) my -= 1;
-      if (k.has('s') || k.has('arrowdown')) my += 1;
-      if (k.has('a') || k.has('arrowleft')) mx -= 1;
-      if (k.has('d') || k.has('arrowright')) mx += 1;
+      if (k.has('up')) my -= 1;
+      if (k.has('down')) my += 1;
+      if (k.has('left')) mx -= 1;
+      if (k.has('right')) mx += 1;
       const l = Math.hypot(mx, my);
       p.moving = l > 0;
       if (l > 0) { mx /= l; my /= l; }

@@ -171,6 +171,9 @@ The research behind these choices, including what was cut and why, is in
 
 ## Controls
 
+These are survev's defaults. Change any of them, and add an alternate, under **Controls** in the
+drills menu or on the pause screen; the bindings are saved in your browser. Esc always pauses.
+
 - Mouse: aim, left click: shoot (hold for automatic weapons)
 - WASD / arrows: move
 - Right click or Q: swap to your last weapon

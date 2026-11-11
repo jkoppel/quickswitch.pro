@@ -495,3 +495,17 @@ textarea { width: 100%; font: inherit; font-size: 14px; color: var(--ink); backg
 .result-actions .btn-meta { font-family: var(--font); font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; opacity: 0.85; }
 .result-links { display: flex; gap: 16px; margin-left: auto; }
 .result-actions button.link { font-size: 14px; white-space: nowrap; }
+
+/* Controls dialog: one row per action, a main and an alternate binding. */
+.panel.sheet.controls-sheet { width: min(520px, 100%); }
+.binds { width: 100%; border-collapse: collapse; }
+.binds th, .binds td { padding: 3px 0; }
+.binds thead th { font-size: 12px; font-weight: 600; color: var(--ink-muted); text-align: left; padding-bottom: 6px; }
+.binds tbody th { font-weight: 600; text-align: left; padding-right: var(--space-3); white-space: nowrap; }
+.binds td { width: 34%; padding-left: 6px; }
+button.bind { width: 100%; padding: 6px 10px; font-size: 13px; text-transform: none; letter-spacing: 0; background: var(--input); border-color: var(--field-line); color: var(--ink); }
+button.bind:hover { background: var(--moss-hover); }
+button.bind.empty { color: var(--ink-muted); }
+button.bind.live { border-color: var(--yellow); color: var(--ink); }
+#controls-note { min-height: 2.6em; margin: var(--space-3) 0 0; }
+#controls .row { margin-top: var(--space-4); }
