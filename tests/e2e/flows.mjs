@@ -4,6 +4,9 @@
 // they can be removed afterwards (tests/e2e/cleanup.mjs).
 //
 //   node tests/e2e/flows.mjs https://quickswitch.pro [outDir] [survevSlug]
+//
+// Without a survevSlug it takes the top player on survev's weekly solo kills board, since a fixed
+// name stops working once that player renames or goes quiet.
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -13,8 +16,19 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const base = (process.argv[2] || 'http://localhost:3210').replace(/\/$/, '');
 const out = process.argv[3] || join(here, 'out-flows');
-const slug = process.argv[4] || '6kat7';
+const slug = process.argv[4] || await currentSurvevPlayer();
 mkdirSync(out, { recursive: true });
+
+async function currentSurvevPlayer() {
+  const r = await fetch('https://api.survev.io/api/leaderboard', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'most_kills', interval: 'weekly', teamMode: 'solo', mapId: '0' }),
+  });
+  const board = await r.json();
+  const top = Array.isArray(board) && board.find(p => p.slug);
+  if (!top) throw new Error(`survev leaderboard returned no players: ${JSON.stringify(board).slice(0, 200)}`);
+  return top.slug;
+}
 
 function loadChromium() {
   try { return createRequire(import.meta.url)('playwright').chromium; } catch (e) { /* fall through */ }
