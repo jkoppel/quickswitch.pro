@@ -101,7 +101,7 @@ canvas#backdrop { position: fixed; inset: 0; display: block; z-index: 0; }
 .panel { margin: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 26px 30px; width: min(520px, 100%); box-shadow: var(--shadow-panel); backdrop-filter: blur(3px); }
 .panel.wide { width: min(1040px, 100%); }
 h1 { margin: 0 0 6px; font-family: var(--font-title); font-size: 34px; letter-spacing: 2px; font-weight: 700; color: #fff; line-height: 1.05; text-transform: uppercase; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55); }
-h1.logo { font-size: 44px; letter-spacing: 1px; }
+h1.logo { font-size: clamp(26px, 8vw, 44px); letter-spacing: 1px; }
 h1.logo .dot { color: var(--orange); }
 h2 { margin: 0 0 var(--space-3); font-family: var(--font-title); font-size: 14px; letter-spacing: 2px; text-transform: uppercase; color: var(--sage); }
 h2.mt, .mt { margin-top: var(--space-6); }
@@ -112,7 +112,7 @@ h2.mt, .mt { margin-top: var(--space-6); }
 .foot .link:hover { color: var(--ink); }
 .titlebar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--space-3) var(--space-4); margin-bottom: var(--space-6); --title-line: 36px; }
 .titlebar:has(.logo) { --title-line: 46px; }
-.titlebar > :first-child { flex: 1 1 0; }
+.titlebar > :first-child { flex: 1 1 0; min-width: 0; }
 /* Controls on the right sit on the title's line, centred on it, not on the top of its box. */
 .titlebar > :last-child:not(:first-child) { min-height: var(--title-line); display: flex; align-items: center; gap: var(--space-2); }
 /* A ghost button's padding is its hover area; pull it out so its text meets the panel's edge. */
@@ -180,6 +180,12 @@ button.primary { background: var(--orange-fill); color: #fff; border-bottom: 3px
 button.primary:hover { background: var(--orange-fill-hover); filter: none; }
 button:disabled, button:disabled:hover { opacity: 0.5; cursor: default; filter: none; }
 #btn-start { font-size: 19px; padding: 12px 34px; }
+/* A short window scrolls the picker; Start sits at the settings column's foot and stays in view,
+   as the results actions do. Taller windows keep it under the chart. */
+@media (max-height: 700px) {
+  #menu .col.settings { display: flex; flex-direction: column; }
+  #menu .col.settings > .row:last-child { position: sticky; bottom: -20px; margin: auto -30px 0 0; padding: 12px 30px 12px 0; background: rgba(10, 13, 8, 0.94); border-top: 1px solid var(--line); }
+}
 button.secondary { background: var(--brown); color: #fff; border-bottom: 3px solid rgba(0, 0, 0, 0.35); }
 button.secondary:hover { background: var(--brown); }
 button.secondary.armed { background: var(--danger); color: var(--night); border-color: var(--danger); }
