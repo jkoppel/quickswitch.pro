@@ -1504,7 +1504,7 @@ window.ST = window.ST || {};
         const ttk = this.time - e.spawnT;
         st.ttk.push(ttk);
         st.engage.push(this.time - e.firstHitT);
-        this.pushFeed(`Kill  ${ttk.toFixed(2)}s`, '#9cff9c');
+        this.pushFeed(`Kill  ${ST.fmt.sec(ttk)}`, '#9cff9c');
         ST.audio.kill();
         this.spawnBlood(e.pos.x, e.pos.y, b.dx, b.dy, 6);
         this.enemies.splice(this.enemies.indexOf(e), 1);

@@ -4,9 +4,15 @@
   const canvas = $('game');
   const backdrop = $('backdrop');
   const screens = { menu: $('menu'), pause: $('pause'), rest: $('rest'), results: $('results') };
+  // Screens drawn over the live field rather than a dimmed overlay. Platform screens register here too.
+  const backdropScreens = new Set(['menu', 'results']);
+  // A tiny event bus so the platform layer (accounts, streaks, headline) can listen without the
+  // game knowing it exists. With no listeners the trainer behaves exactly as it always has.
+  const handlers = {};
+  function emit(name, data) { for (const fn of handlers[name] || []) { try { fn(data); } catch (e) { console.error(e); } } }
   const hud = $('hud');
   const tip = $('tip');
-  const WARMUP_COPY = 'Your first ~40 s of practice each day is warm-up and doesn’t count toward bests.';
+  const WARMUP_COPY = 'Your first ~30 s of practice each day is warm-up and doesn’t count toward bests.';
 
   let selection = { kind: 'mode', item: ST.MODES[0] };
   let game = null;
@@ -14,6 +20,12 @@
   let lastSeqSpec = null;  // for "Run again"
   let restTimer = null;
   let current = 'menu';    // which screen is showing
+  let rng = null;          // seeded Math.random while a seeded step runs
+  // Hooks the platform layer may set (see app below). Unset, the trainer behaves as it always has.
+  let briefing = null;     // (step, go) => true if it took over before the first step
+  let intercept = null;    // (seq) => true if it shows its own screen instead of the results
+  let gate = null;         // () => true while custom weapons and settings are locked
+  let pendingRose = null;  // flick directions to draw once the results screen is actually visible
 
   // ---------- persistence ----------
   const LS = {
@@ -131,18 +143,19 @@
     if (!w) return;
     const rpm = Math.round(60 / w.fireDelay);
     const pellets = w.pellets ? ` × ${w.pellets} pellets` : '';
+    const n = ST.fmt.dec;
     $('weapon-info').innerHTML = [
-      `<span>Damage <b>${w.dmg}${pellets}</b></span>`,
-      `<span>Fire rate <b>${rpm} rpm</b></span>`,
-      `<span>Bullet speed <b>${w.speed} u/s</b></span>`,
-      `<span>Range <b>${w.range} units</b></span>`,
-      `<span>Spread <b>${w.spread}° still, +${w.moveSpread}° moving</b></span>`,
+      `<span>Damage <b>${n(w.dmg)}${pellets}</b></span>`,
+      `<span>Fire rate <b>${ST.fmt.int(rpm)} rpm</b></span>`,
+      `<span>Bullet speed <b>${n(w.speed)} u/s</b></span>`,
+      `<span>Range <b>${n(w.range)} units</b></span>`,
+      `<span>Spread <b>${n(w.spread)}° still, +${n(w.moveSpread)}° moving</b></span>`,
       `<span>Mag <b>${w.mag}</b></span>`,
-      `<span>Reload <b>${w.reload}s${w.reloadPerShell ? ' per shell' : ''}</b></span>`,
+      `<span>Reload <b>${ST.fmt.sec(w.reload, w.reload % 1 ? 1 : 0)}${w.reloadPerShell ? ' per shell' : ''}</b></span>`,
       // survev applies these two on every hit; both were missing from the trainer before.
-      `<span>Damage at max range <b>${Math.round(w.dmg * w.falloff * 10) / 10}</b> <small>(${Math.round(w.falloff * 100)}% falloff floor)</small></span>`,
-      `<span>Headshot <b>×${w.headshotMult}</b> <small>(15% of hits)</small></span>`,
-      `<span>Switch delay <b>${w.switchDelay}s</b>${w.deployGroup !== undefined ? ` <small>(deploy group ${w.deployGroup})</small>` : ''}</span>`,
+      `<span>Damage at max range <b>${n(w.dmg * w.falloff, 1)}</b> <small>(${ST.fmt.pct(w.falloff)} falloff floor)</small></span>`,
+      `<span>Headshot <b>×${n(w.headshotMult)}</b> <small>(${ST.fmt.pct(0.15)} of hits)</small></span>`,
+      `<span>Switch delay <b>${ST.fmt.sec(w.switchDelay, 2)}</b>${w.deployGroup !== undefined ? ` <small>(deploy group ${w.deployGroup})</small>` : ''}</span>`,
     ].join('');
     const sec = ST.WEAPONS[fields.secondary.value];
     const note = $('switch-note');
@@ -180,12 +193,7 @@
     if (selection.kind === 'routine') return `routine:${selection.item.id}`;
     return drillKey(readSettings());
   }
-  function relDay(day) {
-    const today = ST.history.today();
-    if (day === today) return 'today';
-    const d = Math.round((new Date(today) - new Date(day)) / 86400000);
-    return d === 1 ? 'yesterday' : `${d} days ago`;
-  }
+  const relDay = (day) => ST.fmt.relDay(day, ST.history.today());
   function updateBestAndTrend() {
     const key = currentKey();
     const runs = ST.history.forKey(key).slice(-40);
@@ -195,7 +203,9 @@
     const b = ST.history.best(key, 'score');
     const el = $('best');
     if (!b) { el.textContent = runs.length ? `Only warm-up runs so far. ${WARMUP_COPY}` : 'No previous runs.'; return; }
-    const parts = [`Best ${Math.round(b.score)}`, `${b.hitsPerSec.toFixed(2)} hits/s`, `${(b.accuracy * 100).toFixed(0)}% accuracy`];
+    const parts = [`Best ${Math.round(b.score)}`];
+    if (b.hitsPerSec !== null && b.hitsPerSec !== undefined) parts.push(`${ST.fmt.num(b.hitsPerSec)} hits/s`);
+    if (b.accuracy !== null && b.accuracy !== undefined) parts.push(`${ST.fmt.pct(b.accuracy)} accuracy`);
     if (selection.kind === 'routine' && selection.item.id === 'benchmark') parts.push(`average tier ${tierFromFrac(b.score / 100).name}`);
     parts.push(relDay(b.day));
     el.textContent = parts.join(' · ');
@@ -223,12 +233,38 @@
     // Length is derived from the steps and rests, so it can never drift from what actually runs.
     const secs = ST.routineSeconds(r, stepSpec);
     r._seconds = secs;
+    if (r.hidden) continue;   // the re-test runs only from a week plan
     const mins = Math.round(secs / 60);
-    r._btn = makeButton($('routine-list'), r.name, `${r.steps.length} steps · ${mins} min`, () => select('routine', r));
+    r._btn = makeButton($('routine-list'), r.name, `${r.steps.length} ${r.test ? 'tests' : 'steps'} · ${mins} min`, () => select('routine', r));
   }
-  for (const m of ST.MODES) {
-    m._btn = makeButton($('mode-list'), m.name, m.settings.weapon ? ST.WEAPONS[m.settings.weapon].name + ' · ' + m.settings.scope : 'Your rules', () => select('mode', m));
-  }
+  // Drills grouped by the skill they train, so sixteen buttons read as four short lists. Custom
+  // comes last on its own: it is the whole parameter set.
+  const DRILL_GROUPS = [
+    ['Clicking', ['flick', 'pistol', 'sniper', 'swarm']],
+    ['Tracking', ['tracking', 'duel']],
+    ['Moving', ['chase', 'dodge', 'spin']],
+    ['Utility', ['quickswitch', 'shotgun', 'frag', 'cook', 'ricochet', 'barrel']],
+    ['Your own', ['custom']],
+  ];
+  (function buildDrillList() {
+    const host = $('mode-list');
+    const placed = new Set();
+    const group = (name, ids) => {
+      const modes = ids.map(id => ST.MODES.find(m => m.id === id)).filter(Boolean);
+      if (!modes.length) return;
+      host.insertAdjacentHTML('beforeend', `<h3 class="group-title">${name}</h3>`);
+      const list = document.createElement('div');
+      list.className = 'list compact';
+      host.appendChild(list);
+      for (const m of modes) {
+        placed.add(m.id);
+        m._btn = makeButton(list, m.name, m.settings.weapon ? ST.WEAPONS[m.settings.weapon].name + ' · ' + m.settings.scope : 'Your rules', () => select('mode', m));
+      }
+    };
+    for (const [name, ids] of DRILL_GROUPS) group(name, ids);
+    const rest = ST.MODES.filter(m => !placed.has(m.id)).map(m => m.id);
+    if (rest.length) group('More', rest);
+  })();
 
   function stepSpec(step) {
     // Resolve a routine step into { label, key, settings, scenario?, mode?, scored, tip }.
@@ -243,7 +279,10 @@
       const key = custom
         ? `${step.scenario}:${settings.weapon}:${settings.duration}:v${ST.BENCHMARK_VERSION}`
         : `${step.scenario}:v${ST.BENCHMARK_VERSION}`;
-      return { label: sc.name, key, settings, scenario: step.scenario, scored, benchmark: !custom, tip: sc.tip || '' };
+      const out = { label: sc.name, key, settings, scenario: step.scenario, scored, benchmark: !custom, tip: sc.tip || '' };
+      // Test routines pin a seed per step, so a re-test replays the same spawns.
+      if (step.seed !== undefined) out.seed = step.seed;
+      return out;
     }
     const m = ST.MODES.find(x => x.id === step.mode);
     const settings = normalize({ ...base, ...m.settings, ...(step.settings || {}), mode: m.id, label: m.name });
@@ -252,15 +291,20 @@
 
   function select(kind, item) {
     selection = { kind, item };
-    for (const x of ST.ROUTINES) { x._btn.classList.toggle('active', x === item); x._btn.setAttribute('aria-current', x === item ? 'true' : 'false'); }
+    for (const x of ST.ROUTINES) { if (!x._btn) continue; x._btn.classList.toggle('active', x === item); x._btn.setAttribute('aria-current', x === item ? 'true' : 'false'); }
     for (const x of ST.MODES) { x._btn.classList.toggle('active', x === item); x._btn.setAttribute('aria-current', x === item ? 'true' : 'false'); }
     $('mode-title').textContent = item.name;
     $('mode-desc').textContent = item.desc;
     $('mode-tip').textContent = item.tip || '';
     const isRoutine = kind === 'routine';
+    // Locked: every preset still plays, but its weapon and settings are fixed until the account has
+    // a verified email. With no backend there are no accounts, so nothing is ever locked.
+    const locked = !isRoutine && !!(gate && gate());
     $('drill-form').classList.toggle('hidden', isRoutine);
+    $('drill-form').classList.toggle('locked', locked);
     $('routine-steps').classList.toggle('hidden', !isRoutine);
-    $('btn-reset').classList.toggle('hidden', isRoutine);
+    $('btn-reset').classList.toggle('hidden', isRoutine || locked);
+    $('btn-start').disabled = locked && item.id === 'custom';
     $('form-note').textContent = '';
     if (isRoutine) {
       const steps = item.steps.map(stepSpec);
@@ -273,15 +317,20 @@
         }).join('') + '</ol>';
       updateBestAndTrend();
     } else {
-      const saved = LS.get('st.lastSettings.' + item.id, null);
+      const saved = locked ? null : LS.get('st.lastSettings.' + item.id, null);
       writeSettings(modeDefaults(item));         // the drill's own preset is the floor
       if (saved) writeSettings(saved);           // then whatever of the saved run still makes sense
       // Custom is the one drill whose point is the full parameter set.
       $('advanced').open = item.id === 'custom';
+      const s = readSettings();
+      const w = ST.WEAPONS[s.weapon];
+      const extra = [s.secondary && ST.WEAPONS[s.secondary] ? ' + ' + ST.WEAPONS[s.secondary].name : '', s.throwable && ST.THROWABLES[s.throwable] ? ' + ' + ST.THROWABLES[s.throwable].name : ''].join('');
+      $('preset-line').textContent = item.id === 'custom' ? 'Custom sets every weapon and scenario setting yourself.' : `${w ? w.name : s.weapon}${extra} · ${s.scope} · ${s.duration} s`;
     }
     LS.set('st.lastSelection', { kind, id: item.id });
   }
   $('btn-reset').addEventListener('click', () => writeSettings(modeDefaults(selection.item)));
+  $('btn-verify').addEventListener('click', () => emit('gate-click', selection.item.id));
 
   // ---------- screens ----------
   function show(name) {
@@ -291,13 +340,17 @@
     hud.classList.toggle('hidden', !inRun && name !== 'pause');
     hud.setAttribute('aria-hidden', inRun ? 'false' : 'true');
     // The world runs behind the menu and results, and stops while a drill is on the same canvas stack.
-    const wantBackdrop = name === 'menu' || name === 'results';
+    const wantBackdrop = backdropScreens.has(name);
     backdrop.classList.toggle('hidden', !wantBackdrop);
+    // The drill canvas sits above the backdrop and keeps its last frame, so it must step aside or
+    // the finished drill (often the arena's edge) covers the drifting field.
+    canvas.style.visibility = wantBackdrop ? 'hidden' : '';
     if (wantBackdrop) ST.menuScene.start(backdrop); else ST.menuScene.stop();
-    if (name === 'menu') updateSession();
+    if (name === 'menu') { updateSession(); requestAnimationFrame(updateBestAndTrend); }
     if (name === 'pause') { disarmQuit(); $('btn-resume').focus(); }
     if (name === 'rest') $('btn-rest-skip').focus();
     if (name === 'results') $('btn-menu').focus();
+    emit('screen', name);
   }
   function updateSession() {
     const min = ST.history.minutesToday();
@@ -331,18 +384,35 @@
       for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
       steps = head.concat(rest);
     }
-    seq = { steps, index: 0, results: [], routine: spec.routine || null, aborted: false };
+    seq = {
+      steps, index: 0, results: [], routine: spec.routine || null, aborted: false, challengeId: spec.challengeId || null,
+      // 'aim', 'diagnostic' or 'retest': measurements, never flagged warm-up.
+      test: spec.test || (spec.routine && spec.routine.test) || null,
+      // Where the run was started from, so Done goes back there.
+      origin: spec.origin || current,
+    };
+    emit('sequence-start', seq);
     runStep();
   }
 
   function runStep() {
     const step = seq.steps[seq.index];
+    // A first-ever player gets one card of controls before the first drill starts.
+    if (seq.index === 0 && !seq.briefed && briefing) {
+      seq.briefed = true;
+      if (briefing(step, runStep)) return;
+    }
     if (game) game.stop();
     const settings = { ...step.settings };
     LS.set('st.prefs', { sound: settings.sound, hitmarker: settings.hitmarker });
-    step.warmup = step.scored ? ST.history.isWarmup() : false;
+    step.warmup = step.scored && !seq.test ? ST.history.isWarmup() : false;
+    // Benchmark scenarios run on a recorded seed, so any of them can become a challenge with the
+    // same spawns. A challenge step carries the creator's seed instead of drawing a new one.
+    step.seedUsed = step.seed !== undefined ? step.seed : (step.benchmark ? ST.newSeed() : null);
     // Sprites are tiny SVGs, but the first run must not start before they exist.
     ST.assets.load().then(() => {
+      if (rng) rng.restore();
+      rng = step.seedUsed !== null ? ST.seededRandom(step.seedUsed) : null;
       game = new ST.Game(canvas, settings, {
         onHud: updateHud,
         onPause: (paused) => show(paused ? 'pause' : null),
@@ -356,14 +426,21 @@
   }
 
   function onStepFinish(step, r) {
+    if (rng) { rng.restore(); rng = null; }
     const entry = { step, result: r, scenario: step.scenario, key: step.key, recorded: false };
     if (r.time >= step.settings.duration * 0.5) {
       const w = ST.WEAPONS[step.settings.weapon];
       if (step.scored) entry.prevBest = ST.history.best(step.key, 'score');
+      const tier = step.scored && step.benchmark && !step.warmup && step.scenario ? ST.tierFor(step.scenario, r.score) : null;
+      entry.prevTier = tier ? bestTier(step.key, step.scenario) : null;
       entry.run = ST.history.add({
         key: step.key, label: step.label, weapon: w.name, scope: step.settings.scope, duration: r.time,
         score: step.scored ? r.score : null, hitsPerSec: r.hitsPerSec, accuracy: r.accuracy, kills: r.kills, avgTtk: r.avgTtk,
         difficulty: step.settings.adaptive ? r.difficulty : null, warmup: step.warmup, benchmark: !!step.benchmark,
+        scenario: step.scenario || null, mode: step.mode || null, tier: tier ? tier.name : null, seed: step.seedUsed,
+        accMoving: r.accMoving, accStill: r.accStill, dmgTakenPerMin: step.settings.enemyShoots ? r.dmgTakenPerMin : null,
+        quickSwitchShots: r.quickSwitchShots, ricochetHits: r.ricochetHits,
+        challengeId: seq.challengeId || null, test: seq.test,
       });
       entry.recorded = true;
     }
@@ -376,9 +453,9 @@
   function showRest(entry) {
     const next = seq.steps[seq.index];
     const r = entry.result;
-    $('rest-step').textContent = `Step ${seq.index} of ${seq.steps.length} done`;
+    $('rest-step').textContent = `${seq.test ? 'Test' : 'Step'} ${seq.index} of ${seq.steps.length} done`;
     $('rest-last').innerHTML = entry.step.scored
-      ? `${entry.step.label}: <b>${Math.round(r.score)}</b> score · ${r.hitsPerSec.toFixed(2)} hits/s · ${Math.round(r.accuracy * 100)}% accuracy${entry.step.warmup ? ' · warm-up, not counted' : ''}`
+      ? `${entry.step.label}: <b>${ST.fmt.int(r.score)}</b> score · ${ST.fmt.num(r.hitsPerSec)} hits/s · ${ST.fmt.pct(r.accuracy)} accuracy${entry.step.warmup ? ' · warm-up, not counted' : ''}`
       : `${entry.step.label} done.`;
     const w = ST.WEAPONS[next.settings.weapon];
     $('rest-next').textContent = `Next: ${next.label} · ${w.name} · ${next.settings.scope} · ${next.settings.duration}s`;
@@ -397,24 +474,37 @@
 
   function finishSequence() {
     if (game) { game.stop(); game = null; }
+    if (rng) { rng.restore(); rng = null; }
     const scored = seq.results.filter(e => e.step.scored);
-    if (seq.routine && scored.length) {
+    // A routine record marks the session. It counts toward the streak only if every step ran:
+    // ending early still saves the steps you played, but not the day.
+    seq.completed = !!seq.routine && !seq.aborted && seq.results.length === seq.steps.length;
+    if (seq.routine && seq.results.length) {
       const fracs = scored.map(e => e.scenario && ST.SCENARIOS[e.scenario].ref ? e.result.score / ST.SCENARIOS[e.scenario].ref : null).filter(x => x !== null);
-      if (fracs.length) {
-        const avg = fracs.reduce((a, b) => a + b, 0) / fracs.length;
-        ST.history.add({
-          key: `routine:${seq.routine.id}`, label: seq.routine.name, duration: scored.reduce((a, e) => a + e.result.time, 0),
-          score: avg * 100, hitsPerSec: scored.reduce((a, e) => a + e.result.hitsPerSec, 0) / scored.length,
-          accuracy: scored.reduce((a, e) => a + e.result.accuracy, 0) / scored.length, warmup: false,
-        });
-      }
+      const avg = fracs.length ? fracs.reduce((a, b) => a + b, 0) / fracs.length : null;
+      seq.record = ST.history.add({
+        key: `routine:${seq.routine.id}`, label: seq.routine.name, duration: seq.results.reduce((a, e) => a + e.result.time, 0),
+        score: avg !== null ? avg * 100 : null,
+        hitsPerSec: scored.length ? scored.reduce((a, e) => a + e.result.hitsPerSec, 0) / scored.length : null,
+        accuracy: scored.length ? scored.reduce((a, e) => a + e.result.accuracy, 0) / scored.length : null,
+        warmup: false, routineCompleted: seq.completed, test: seq.test,
+      });
     }
+    emit('sequence-finish', seq);
     showResults();
+  }
+  // The best tier reached before this run, for "tier up" headlines.
+  function bestTier(key, scenario) {
+    const b = ST.history.best(key, 'score');
+    const t = b ? ST.tierFor(scenario, b.score) : null;
+    return t ? t.name : null;
   }
 
   function startFromMenu() {
     if (selection.kind === 'routine') {
       startSequence({ routine: selection.item, steps: selection.item.steps.map(stepSpec) });
+    } else if ($('btn-start').disabled) {
+      return;
     } else {
       const s = readSettings();
       LS.set('st.lastSettings.' + s.mode, s);
@@ -444,7 +534,12 @@
     }
     seq.aborted = true; game.paused = false; game.finish();
   });
-  $('btn-menu').addEventListener('click', () => { ST.menuScene.rebuild(); show('menu'); select(selection.kind, selection.item); });
+  // Done goes back to where the run was started: the picker, or the home screen.
+  $('btn-menu').addEventListener('click', () => {
+    ST.menuScene.rebuild();
+    if (handlers.home && !(seq && seq.origin === 'menu')) emit('home');
+    else app.openPicker();
+  });
   $('btn-again').addEventListener('click', () => lastSeqSpec && startSequence(lastSeqSpec));
 
   // Keyboard accelerators on screens (the game binds its own keys while running).
@@ -453,9 +548,14 @@
     const t = e.target;
     const isListItem = t && t.classList && t.classList.contains('mode-btn');
     if (t && !isListItem && (t.tagName === 'SELECT' || t.tagName === 'BUTTON' || t.tagName === 'A' || t.tagName === 'SUMMARY')) return;
-    if (current === 'menu') { e.preventDefault(); startFromMenu(); }
+    if (current === 'menu') { e.preventDefault(); if (!$('btn-start').disabled) startFromMenu(); }
     else if (current === 'rest') { e.preventDefault(); clearInterval(restTimer); runStep(); }
     else if (current === 'results') { e.preventDefault(); $('btn-menu').click(); }
+    else if (current && screens[current]) {
+      // Platform screens mark their one primary action; Enter presses it.
+      const b = [...screens[current].querySelectorAll('[data-primary]')].find(x => x.offsetParent !== null && !x.disabled);
+      if (b) { e.preventDefault(); b.click(); }
+    }
   });
 
   // ---------- HUD ----------
@@ -503,12 +603,12 @@
 
   // ---------- results ----------
   const fmt = {
-    pct: (v) => (v * 100).toFixed(1) + '%',
-    sec: (v) => v === null || v === undefined ? '—' : v.toFixed(2) + 's',
+    pct: (v) => ST.fmt.pct(v, 1),
+    sec: (v) => v === null || v === undefined ? '—' : ST.fmt.sec(v),
     num: (v) => v === null || v === undefined ? '—' : (Math.round(v * 10) / 10).toString(),
     int: (v) => String(v),
   };
-  const tierHtml = (t) => t ? `<span class="tier ${t.name}" title="Provisional tier: ${Math.round(t.frac * 100)}% of the reference score">${t.name}</span>` : '';
+  const tierHtml = (t) => t ? `<span class="tier ${t.name}" title="Provisional tier: ${ST.fmt.pct(t.frac)} of the reference score">${t.name}</span>` : '';
   const TIER_TITLE = 'Provisional: tiers are fractions of a hand-set reference score until real player data exists.';
 
   function heroBlock(r, prevBest, warmup, unit) {
@@ -518,7 +618,7 @@
       delta = d >= 0.5 ? `<span class="delta up">▲ +${Math.round(d)} vs best</span>` : d <= -0.5 ? `<span class="delta down">▼ ${Math.round(d)} vs best</span>` : `<span class="delta flat">matches best</span>`;
     } else if (!warmup) delta = '<span class="delta flat">first counted run</span>';
     $('hero').innerHTML = `<span class="num ${warmup ? 'muted' : ''}">${Math.round(r.score)}</span><span class="unit">${unit}</span>${delta}`;
-    $('substats').innerHTML = `<div><b>${r.hitsPerSec.toFixed(2)}</b> hits/s</div><div><b>${Math.round(r.accuracy * 100)}%</b> accuracy <small>(${r.hits}/${r.pellets})</small></div><div><b>${r.kills}</b> kills</div>`;
+    $('substats').innerHTML = `<div><b>${ST.fmt.num(r.hitsPerSec)}</b> hits/s</div><div><b>${ST.fmt.pct(r.accuracy)}</b> accuracy <small>(${r.hits}/${r.pellets})</small></div><div><b>${r.kills}</b> kills</div>`;
   }
 
   function showResults() {
@@ -539,13 +639,19 @@
       const fracs = scored.map(e => e.scenario && e.step.benchmark && ST.SCENARIOS[e.scenario].ref ? e.result.score / ST.SCENARIOS[e.scenario].ref : null).filter(x => x !== null);
       const avgFrac = fracs.length ? fracs.reduce((a, b) => a + b, 0) / fracs.length : null;
       const avgTier = avgFrac !== null ? tierFromFrac(avgFrac) : null;
-      // Hero: overall tier for a benchmark, otherwise the number of counted steps.
+      // Hero: overall tier for a benchmark, otherwise the number of counted steps. A first session has
+      // nothing to beat, so it reports the baselines it set rather than "0 new bests".
+      const counted = scored.filter(e => e.recorded && !e.step.warmup);
+      const firsts = counted.filter(e => !e.prevBest).length;
+      const bests = counted.filter(e => e.prevBest && e.result.score > e.prevBest.score).length;
+      const bestStat = firsts && !bests ? `<div><b>${firsts}</b> baseline${firsts === 1 ? '' : 's'} set</div>` : `<div><b>${bests}</b> new best${bests === 1 ? '' : 's'}</div>`;
+      const mins = Math.round(entries.reduce((a, e) => a + e.result.time, 0) / 60);
       if (avgTier) {
         $('hero').innerHTML = `<span class="num">${Math.round(avgFrac * 100)}</span><span class="unit">% of reference · overall <span class="tier ${avgTier.name}" title="${TIER_TITLE}">${avgTier.name}</span></span>`;
-        $('substats').innerHTML = `<div><b>${scored.length}</b> scored steps</div><div><b>${scored.filter(e => e.prevBest && e.result.score > e.prevBest.score).length}</b> new bests</div><div><b>${Math.round(entries.reduce((a, e) => a + e.result.time, 0) / 60)}</b> min</div>`;
+        $('substats').innerHTML = `<div><b>${scored.length}</b> scored steps</div>${bestStat}<div><b>${mins}</b> min</div>`;
       } else {
         $('hero').innerHTML = `<span class="num">${scored.length}</span><span class="unit">steps done</span>`;
-        $('substats').innerHTML = `<div><b>${scored.filter(e => e.prevBest && e.result.score > e.prevBest.score).length}</b> new bests</div><div><b>${Math.round(entries.reduce((a, e) => a + e.result.time, 0) / 60)}</b> min</div>`;
+        $('substats').innerHTML = `${bestStat}<div><b>${mins}</b> min</div>`;
       }
       table.innerHTML = `<tr><th>Scenario</th><th>Score</th><th>Tier</th><th>vs best</th></tr>` + entries.map(e => {
         const r = e.result;
@@ -555,8 +661,9 @@
         else if (e.step.scored && !e.recorded) delta = '<td><small>ended early</small></td>';
         else if (e.step.scored && e.prevBest) { const d = r.score - e.prevBest.score; delta = `<td class="${d >= 0 ? 'delta-up' : 'delta-down'}">${d >= 0 ? '+' : ''}${Math.round(d)}</td>`; }
         else if (e.step.scored) delta = '<td><small>first</small></td>';
-        const scoreCell = e.step.scored ? `${Math.round(r.score)}<br><small>${r.hitsPerSec.toFixed(2)} hits/s · ${Math.round(r.accuracy * 100)}%</small>` : `<small>${r.hitsPerSec.toFixed(2)} hits/s · ${Math.round(r.accuracy * 100)}%</small>`;
-        return `<tr><td>${e.step.label}</td><td>${scoreCell}</td><td>${tierHtml(t)}</td>${delta}</tr>`;
+        const scoreCell = e.step.scored ? `${ST.fmt.int(r.score)}<br><small>${ST.fmt.num(r.hitsPerSec)} hits/s · ${ST.fmt.pct(r.accuracy)}</small>` : `<small>${ST.fmt.num(r.hitsPerSec)} hits/s · ${ST.fmt.pct(r.accuracy)}</small>`;
+        const challengeable = e.recorded && e.step.scored && !e.step.warmup && e.step.benchmark && e.run && e.run.seed !== null;
+        return `<tr${challengeable ? ` data-run="${e.run.id}"` : ''}><td>${e.step.label}</td><td>${scoreCell}</td><td>${tierHtml(t)}</td>${delta}</tr>`;
       }).join('');
       const hasWarm = scored.some(e => e.step.warmup);
       if (hasWarm) { warm.textContent = `Rows marked warm-up: ${WARMUP_COPY}`; warm.classList.remove('hidden'); }
@@ -567,7 +674,9 @@
       const weakest = scored.filter(e => e.scenario && ST.SCENARIOS[e.scenario].ref).sort((a, b) => a.result.score / ST.SCENARIOS[a.scenario].ref - b.result.score / ST.SCENARIOS[b.scenario].ref)[0] || scored[scored.length - 1];
       if (weakest) {
         const ins = ST.insights(weakest.result, weakest.step.settings).concat(ST.utilityInsights(weakest.result, weakest.step.settings)).slice(0, 3);
-        insightsEl.innerHTML = `<p class="insight-from">From ${weakest.step.label}, your weakest step</p>` + (ins.length ? ins.map(i => `<div class="insight">${i.text}</div>`).join('') : '<div class="insight ok">Nothing stands out. Keep the tempo up.</div>');
+        insightsEl.innerHTML = ins.length
+          ? `<p class="insight-from">From ${weakest.step.label}, your weakest step</p>` + ins.map(i => `<div class="insight">${i.text}</div>`).join('')
+          : '<div class="insight ok">Nothing stands out. Keep the tempo up.</div>';
       }
       // Pool flick directions across every step that measured them.
       roseSectors = mergeSectors(entries.map(e => e.result.kinematics).filter(Boolean));
@@ -591,7 +700,7 @@
         row('Flicks analysed', fmt.int(k.n), '', false);
         row('Reaction (target appears → move starts)', fmt.sec(k.reaction), '', false);
         row('Movement time (move starts → hit)', fmt.sec(k.moveTime), '', false);
-        row('Overshoot gain', k.gain === null ? '—' : `${k.gain.toFixed(2)} <small>(1.00 = exact)</small>`, '', false);
+        row('Overshoot gain', k.gain === null ? '—' : `${ST.fmt.num(k.gain)} <small>(${ST.fmt.num(1)} = exact)</small>`, '', false);
         row('Movements per target', fmt.num(k.peaks), '', false);
       }
       section('Movement');
@@ -648,11 +757,26 @@
       insightsEl.innerHTML = ins.length ? ins.map(i => `<div class="insight">${i.text}</div>`).join('') : '<div class="insight ok">Nothing stands out. Keep the tempo up.</div>';
       roseSectors = k ? k.sectors : [];
     }
+    // A routine's summary leads with the headline; its per-step table folds away. A single drill's
+    // table is the result itself, so it stays open with no disclosure.
+    const more = $('results-more');
+    more.open = !multi;
+    more.classList.toggle('flat', !multi);
     // Draw the rose only once the panel is visible so the canvas has real dimensions.
     const roseValid = roseSectors.filter(s => s.n > 0 && s.firstHit !== null).length >= 2;
     $('rose-block').classList.toggle('hidden', !roseValid);
+    pendingRose = roseValid ? roseSectors : null;
+    // Tests (the aim test, the diagnostic, the re-test) get their own screen; the tables stay one
+    // click away through showClassicResults.
+    if (intercept && intercept(seq)) return;
+    showClassicResults();
+  }
+
+  function showClassicResults() {
     show('results');
-    if (roseValid) requestAnimationFrame(() => { $('rose-text').textContent = ST.charts.rose($('rose'), roseSectors, tip); });
+    emit('results', seq);
+    const sectors = pendingRose;
+    if (sectors) requestAnimationFrame(() => { $('rose-text').textContent = ST.charts.rose($('rose'), sectors, tip); });
   }
 
   function mergeSectors(list) {
@@ -677,6 +801,44 @@
   else if (last) initial = ['mode', ST.MODES.find(m => m.id === last.id)];
   if (!initial || !initial[1]) initial = ['routine', ST.ROUTINES[0]];
   select(initial[0], initial[1]);
-  show('menu');
+
+  // ---------- API for the platform layer ----------
+  const app = {
+    on(name, fn) { (handlers[name] = handlers[name] || []).push(fn); },
+    show,
+    current: () => current,
+    running: () => !!game,
+    registerScreen(name, el, opts = {}) { screens[name] = el; if (opts.backdrop) backdropScreens.add(name); },
+    pause() { if (game && current === null && !game.paused) game.togglePause(); },
+    // Open the routine and drill picker, optionally on one item.
+    openPicker(kind, id) {
+      const item = kind === 'routine' ? ST.ROUTINES.find(r => r.id === id) : kind === 'mode' ? ST.MODES.find(m => m.id === id) : null;
+      if (item) select(kind, item); else select(selection.kind, selection.item);
+      show('menu');
+    },
+    startRoutine(id) {
+      const r = ST.ROUTINES.find(x => x.id === id);
+      if (!r) return;
+      if (!r.hidden) select('routine', r);
+      startSequence({ routine: r, steps: r.steps.map(stepSpec) });
+    },
+    // One Benchmark scenario on a given seed: how a challenge, and the aim test, are played.
+    startScenario(scenarioId, opts = {}) {
+      const st = stepSpec(scenarioId);
+      if (opts.seed !== undefined && opts.seed !== null) st.seed = opts.seed;
+      startSequence({ steps: [st], challengeId: opts.challengeId || null, test: opts.test || null });
+    },
+    stepSpec,
+    lastSequence: () => seq,
+    showClassicResults,
+    setBriefing(fn) { briefing = fn; },
+    setResultsIntercept(fn) { intercept = fn; },
+    // The advanced-settings gate: fn() is true while custom weapons and settings are locked.
+    setGate(fn) { gate = fn; if (current === 'menu') select(selection.kind, selection.item); },
+    refreshPicker() { select(selection.kind, selection.item); },
+  };
+  ST.app = app;
+  if (ST.platform && ST.platform.start) ST.platform.start(app);
+  else show('menu');
   ST.assets.load().then(() => { if (current === 'menu' || current === 'results') ST.menuScene.start(backdrop); });
 })();

@@ -2,9 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Served over http(s), every route (/u/name, /c/id) resolves files from the site root. Opened from
+     disk, there is no root, so relative paths are left alone. -->
+<script>if (/^https?:$/.test(location.protocol)) document.write('<base href="/">');</script>
 <title>Surviv Aim Trainer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Aim trainer for surviv.io and survev.io: top-down drills with real bullet travel time, weapon spread and movement.">
+<meta name="theme-color" content="#1a1f16">
+<link rel="icon" href="platform/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -32,7 +37,7 @@
   <div id="hud-hint">WASD move &middot; LMB shoot &middot; RMB/Q swap &middot; R reload &middot; 1/2/4 slots &middot; Esc pause</div>
 </div>
 
-<main id="menu" class="screen">
+<main id="menu" class="screen hidden">
   <div class="panel wide">
     <div class="titlebar">
       <div>
@@ -47,9 +52,9 @@
     <div class="cols">
       <div class="col modes">
         <h2>Routines</h2>
-        <div id="routine-list" class="list"></div>
+        <div id="routine-list" class="list compact"></div>
         <h2 class="mt">Drills</h2>
-        <div id="mode-list" class="list compact"></div>
+        <div id="mode-list" class="drill-groups"></div>
       </div>
       <div class="col settings">
         <h2 id="mode-title">Tracking</h2>
@@ -57,7 +62,9 @@
         <p id="mode-tip" class="tip-text"></p>
         <div id="routine-steps" class="steps hidden"></div>
         <div id="drill-form">
-          <div class="grid">
+          <p id="preset-line" class="preset-line"></p>
+          <p class="gate-line">Custom weapons and settings unlock with a verified email. <button id="btn-verify" class="link" type="button">Verify email</button></p>
+          <div class="grid editable">
             <label>Weapon <select id="f-weapon"></select></label>
             <label>Scope <select id="f-scope"></select></label>
             <label>Duration (seconds) <input id="f-duration" type="number" min="10" max="600" step="5"></label>
@@ -65,9 +72,9 @@
             <label>Throwable (key 4 / G) <select id="f-throwable"></select></label>
             <label>Barrels <input id="f-barrels" type="number" min="0" max="40"><span class="field-hint">Metal: bullets bounce off them and they explode.</span></label>
           </div>
-          <p id="switch-note" class="field-hint"></p>
-          <div id="weapon-info" class="weapon-info"></div>
-          <details id="advanced" class="advanced">
+          <p id="switch-note" class="field-hint editable"></p>
+          <div id="weapon-info" class="weapon-info editable"></div>
+          <details id="advanced" class="advanced editable">
             <summary>Scenario settings</summary>
             <div class="grid">
               <label>Enemies <input id="f-enemies" type="number" min="1" max="8"></label>
@@ -103,13 +110,209 @@
     </div>
     <p class="foot">
       <span>Score = 100 × hits per second × √accuracy: speed at acceptable accuracy, because hit rate plateaus in days while speed keeps improving for months.</span>
-      <span>Your first ~40 s of practice each day is warm-up and doesn't count toward bests.</span>
+      <span>Your first ~30 s of practice each day is warm-up and doesn't count toward bests.</span>
       <span>Enter starts. Data stays in this browser.</span>
       <span>Hold left mouse with a throwable out to cook it; release to throw. Cursor distance is throw strength.</span>
       <button id="btn-clear" class="link" type="button">Clear history</button>
     </p>
   </div>
 </main>
+
+
+<main id="home" class="screen hidden">
+  <div class="panel home">
+    <div class="titlebar">
+      <div>
+        <h1 class="logo">SURVIV<span class="dot">.</span>AIM</h1>
+        <p class="sub tagline">Aim drills built on survev's own guns, bullets and spread.</p>
+      </div>
+      <div class="titlebar-end"><button id="btn-account" class="ghost account-btn hidden" type="button"></button></div>
+    </div>
+
+    <!-- First visit: one thing to do. -->
+    <section id="home-new" class="stage hidden">
+      <button id="btn-aimtest" class="primary today" data-primary type="button">Take the 30-second aim test</button>
+      <p class="quiet-row"><button class="link" data-skip type="button">Skip to all drills</button><span class="sep signin-only" aria-hidden="true">·</span><button class="link signin-only" data-signin type="button">Sign in</button></p>
+    </section>
+
+    <!-- A phone or tablet: say so instead of starting something it cannot play. -->
+    <section id="home-device" class="stage hidden">
+      <p class="lead">This trainer needs a mouse and keyboard.</p>
+      <button id="btn-remind-desk" class="secondary hidden" type="button">Remind me on my computer</button>
+      <p class="quiet-row"><button class="link" data-tryanyway type="button">Try anyway</button></p>
+    </section>
+
+    <!-- After the aim test: the score, and the diagnostic. -->
+    <section id="home-tested" class="stage hidden">
+      <p class="score-line"><span id="tested-score" class="score-num"></span><span class="score-unit">aim score</span><span id="tested-tier"></span></p>
+      <button id="btn-diagnostic" class="primary today" data-primary type="button">Find your weak spots</button>
+      <p class="today-sub">Five 30-second tests, about 3 minutes. Then a plan for your week.</p>
+      <p class="quiet-row"><button class="link" data-skip type="button">Skip to all drills</button></p>
+    </section>
+
+    <!-- A week plan: today's session, then the week. -->
+    <section id="home-plan" class="stage hidden">
+      <p id="plan-meta" class="meta-line"></p>
+      <div id="plan-card" class="plan-card"></div>
+      <ol id="plan-strip" class="plan-strip" aria-label="Your week"></ol>
+    </section>
+
+    <!-- Everyone else: today's five minutes. -->
+    <section id="home-free" class="stage hidden">
+      <p id="free-meta" class="meta-line"></p>
+      <button id="btn-today" class="primary today" data-primary type="button">Start today's 5</button>
+      <p id="today-sub" class="today-sub">Warm up before you queue: a 30-second warm-up, then six adaptive drills. Five minutes.</p>
+    </section>
+
+    <div id="reminder-card" class="card hidden"></div>
+    <nav id="home-links" class="home-links hidden" aria-label="More">
+      <button id="btn-all" class="ghost" type="button">All drills</button>
+      <button id="btn-profile" class="ghost" type="button">Progress</button>
+      <button id="btn-getplan" class="link hidden" type="button">Get your plan · 3-minute diagnostic</button>
+    </nav>
+    <p id="home-foot" class="foot hidden">
+      <span id="home-data-note">Data stays in this browser.</span>
+      <button class="link feedback-link hidden" type="button">Feedback</button>
+    </p>
+  </div>
+</main>
+
+<!-- The aim test's result: one number, one sentence, one next step. -->
+<main id="aimtest" class="screen hidden">
+  <div class="panel result-card">
+    <div class="result-head">
+      <p class="score-line big-score"><span id="at-score" class="score-num"></span><span class="score-unit">aim score</span></p>
+      <p id="at-tier" class="result-tier"></p>
+    </div>
+    <p id="at-line" class="result-fact"></p>
+    <div class="result-actions">
+      <button id="at-next" class="primary" data-primary type="button">Find your weak spots <span class="btn-meta">3 min</span></button>
+      <span class="result-links"><button id="at-later" class="link" type="button">Not now</button><button id="at-details" class="link" type="button">See details</button></span>
+    </div>
+  </div>
+</main>
+
+<!-- The diagnostic's result (your profile and week), and day 7's re-test (your week, measured). -->
+<main id="plan" class="screen hidden">
+  <div class="panel plan">
+    <h1 id="pl-title">Your aim</h1>
+    <p id="pl-sub" class="sub"></p>
+    <ul id="pl-skills" class="skills"></ul>
+    <h2 id="pl-week-title">Your week</h2>
+    <ol id="pl-week" class="week-list"></ol>
+    <p id="pl-note" class="plan-note" aria-live="polite"></p>
+    <div id="pl-action" class="plan-action"></div>
+    <p class="quiet-row"><button id="pl-later" class="link" type="button">Not now</button><span id="pl-save-sep" class="sep hidden" aria-hidden="true">·</span><button id="pl-save" class="link hidden" type="button">Save your plan to an account</button><span id="pl-details-sep" class="sep" aria-hidden="true">·</span><button id="pl-details" class="link" type="button">See details</button></p>
+  </div>
+</main>
+
+<main id="profile" class="screen hidden">
+  <div class="panel wide">
+    <div class="titlebar">
+      <div class="who">
+        <span id="pf-avatar" class="avatar-slot"></span>
+        <div>
+          <h1 id="pf-name">Progress</h1>
+          <p id="pf-sub" class="sub" style="margin:0"></p>
+        </div>
+      </div>
+      <div class="row tight">
+        <button id="pf-account" class="ghost hidden" type="button"></button>
+        <button id="pf-back" class="secondary small" type="button">Back</button>
+      </div>
+    </div>
+    <div id="pf-handle-row" class="handle-row hidden"></div>
+    <!-- One answer first; everything below appears only when there is enough data to say something. -->
+    <section class="pf-hero">
+      <p id="pf-headline" class="pf-headline"></p>
+      <p id="pf-support" class="pf-support"></p>
+      <button id="pf-start" class="primary hidden" type="button">Take the 30-second aim test</button>
+    </section>
+    <div id="pf-overview" class="pf-row">
+      <section class="pf-section" id="pf-practice">
+        <h2>Practice</h2>
+        <canvas id="pf-calendar" class="calendar" role="img" aria-label="Days practised, recent weeks"></canvas>
+      </section>
+      <section class="pf-section" id="pf-bests-block">
+        <h2>Best scores</h2>
+        <table id="pf-bests" class="plain bests"></table>
+      </section>
+    </div>
+    <div id="pf-charts" class="pf-row">
+      <section class="pf-section" id="pf-bench-block">
+        <div class="pf-label"><h2>Benchmark</h2><select id="pf-scenario" aria-label="Benchmark scenario"></select></div>
+        <canvas id="pf-bench" class="chart" role="img" aria-label="Benchmark score over runs"></canvas>
+      </section>
+      <section class="pf-section" id="pf-throughput-block">
+        <div class="pf-label"><h2>Hits per second</h2><span id="pf-throughput-note" class="pf-note"></span></div>
+        <canvas id="pf-throughput" class="chart" role="img" aria-label="Hits per second by day"></canvas>
+      </section>
+      <section class="pf-section" id="pf-acc-block">
+        <div class="pf-label"><h2>Moving vs standing</h2><span id="pf-acc-legend" class="pf-note"></span></div>
+        <canvas id="pf-acc" class="chart" role="img" aria-label="Accuracy while moving and while standing, by week"></canvas>
+      </section>
+      <section class="pf-section" id="pf-points-block">
+        <div class="pf-label"><h2>Points</h2><span id="pf-points-total" class="pf-note"></span></div>
+        <ol id="pf-points" class="points-strip" aria-label="Points per day, last 14 days"></ol>
+      </section>
+    </div>
+    <div id="pf-more" class="pf-row">
+      <section class="pf-section" id="pf-ach-block">
+        <h2>Achievements</h2>
+        <ul id="pf-achievements" class="achievements"></ul>
+        <details id="pf-locked" class="locked hidden"><summary></summary><p></p></details>
+      </section>
+      <section class="pf-section" id="pf-survev">
+        <div class="pf-label"><h2>In survev</h2><span id="pf-survev-legend" class="pf-note"></span></div>
+        <div id="pf-survev-body"></div>
+      </section>
+    </div>
+    <section class="pf-section hidden" id="pf-boards">
+      <h2>Boards</h2>
+      <div id="pf-boards-body"></div>
+    </section>
+    <p class="foot">
+      <button class="link feedback-link hidden" type="button">Feedback</button>
+    </p>
+  </div>
+</main>
+
+<main id="challenge" class="screen hidden">
+  <div class="panel">
+    <h1 id="ch-title">Loading</h1>
+    <p id="ch-sub" class="sub"></p>
+    <p id="ch-tip" class="tip-text"></p>
+    <p id="ch-spec" class="desc"></p>
+    <ol id="ch-results" class="board"></ol>
+    <div class="row">
+      <span id="ch-note" class="legend spacer"></span>
+      <button id="ch-home" class="secondary" type="button">Home</button>
+      <button id="ch-start" class="primary" type="button">Start</button>
+    </div>
+  </div>
+</main>
+
+<div id="overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
+  <div class="panel sheet">
+    <h1 id="overlay-title"></h1>
+    <div id="overlay-body"></div>
+    <div class="row">
+      <span id="overlay-note" class="legend spacer" aria-live="polite"></span>
+      <button id="overlay-close" class="ghost" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="brief" class="screen hidden" role="dialog" aria-modal="true" aria-labelledby="brief-title">
+  <div class="panel">
+    <h1 id="brief-title">Aim test</h1>
+    <ul id="brief-list" class="brief-list"></ul>
+    <div class="row">
+      <span class="legend spacer">Enter to start</span>
+      <button id="brief-go" class="primary" data-primary type="button">Start</button>
+    </div>
+  </div>
+</div>
 
 <div id="pause" class="screen hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
   <div class="panel">
@@ -142,12 +345,16 @@
   <div class="panel wide">
     <h1 id="results-title">RESULTS</h1>
     <p id="results-sub" class="sub"></p>
+    <div id="headline" class="headline hidden" aria-live="polite"></div>
     <div class="cols">
       <div class="col">
         <div id="hero" class="hero"></div>
         <div id="substats" class="substats"></div>
         <p id="warmup-note" class="warmup-note hidden"></p>
-        <table id="results-table"></table>
+        <details id="results-more" class="advanced results-more" open>
+          <summary>All measurements</summary>
+          <table id="results-table"></table>
+        </details>
         <div id="strategy" class="insight hidden"></div>
       </div>
       <div class="col narrow">
@@ -163,7 +370,7 @@
     <div class="row">
       <span id="results-note" class="legend spacer"></span>
       <button id="btn-again" class="secondary" type="button">Run again</button>
-      <button id="btn-menu" class="primary" type="button">Menu</button>
+      <button id="btn-menu" class="primary" type="button">Done</button>
     </div>
   </div>
 </div>
@@ -175,6 +382,7 @@
 <script src="vendor/survev/defs/explosionDefs.js"></script>
 <script src="vendor/survev/defs/obstacleDefs.js"></script>
 <script src="vendor/survev/defs/bunkerDefs.js"></script>
+<script src="js/fmt.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/weapons.js"></script>
 <script src="js/behaviors.js"></script>
@@ -184,8 +392,33 @@
 <script src="js/insights.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/rng.js"></script>
 <script src="js/game.js"></script>
 <script src="js/menuscene.js"></script>
+<script src="platform/shared/streak.js"></script>
+<script src="platform/shared/plan.js"></script>
+<script src="platform/shared/points.js"></script>
+<script src="platform/shared/achievements.js"></script>
+<script src="platform/shared/headline.js"></script>
+<script src="platform/shared/warmup.js"></script>
+<script src="platform/ui.js"></script>
+<script src="platform/api.js"></script>
+<script src="platform/analytics.js"></script>
+<script src="platform/events.js"></script>
+<script src="platform/router.js"></script>
+<script src="platform/account.js"></script>
+<script src="platform/sync.js"></script>
+<script src="platform/survev.js"></script>
+<script src="platform/charts.js"></script>
+<script src="platform/onboarding.js"></script>
+<script src="platform/home.js"></script>
+<script src="platform/results-headline.js"></script>
+<script src="platform/challenge.js"></script>
+<script src="platform/boards.js"></script>
+<script src="platform/profile.js"></script>
+<script src="platform/reminders.js"></script>
+<script src="platform/feedback.js"></script>
+<script src="platform/start.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

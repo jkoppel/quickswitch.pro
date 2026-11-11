@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trainer KPIs</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/style.css">
+<style>
+  /* The admin view is a plain reading page: the game's panels without the game. */
+  body { overflow: auto; background: var(--night); }
+  .admin { max-width: 960px; margin: 32px auto; padding: 0 20px 48px; }
+  .admin h1 { margin: 0 0 4px; }
+  .admin h2 { margin: 28px 0 8px; }
+  .admin table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .admin td, .admin th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .admin th { color: var(--sage); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .admin td.n, .admin th.n { text-align: right; }
+  .admin .muted { color: var(--ink-muted); font-size: 13px; }
+  .admin form { display: flex; gap: 8px; margin-top: 16px; }
+  .admin form input { flex: 1; }
+</style>
+</head>
+<body>
+<main class="admin">
+  <h1>Trainer KPIs</h1>
+  <p id="when" class="muted">Paste the ADMIN_TOKEN from the Vercel project's environment variables. It stays in this browser.</p>
+  <form id="auth"><input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="off" aria-label="Admin token"><button class="primary small" type="submit">Load</button></form>
+  <div id="out"></div>
+</main>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Dates in the reader's locale; 'YYYY-MM-DD' strings are local calendar days.
+  const dayFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  const whenFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const day = (v) => { const [y, m, dd] = String(v).slice(0, 10).split('-').map(Number); return dayFmt.format(new Date(y, m - 1, dd, 12)); };
+  const when = (v) => whenFmt.format(new Date(v));
+  const pct = (a, b) => b ? ` <span class="muted">${Math.round(100 * a / b)}%</span>` : '';
+  const table = (head, rows) => `<table><tr>${head.map(h => `<th${h.n ? ' class="n"' : ''}>${esc(h.t)}</th>`).join('')}</tr>${rows.map(r => `<tr>${r.map((c, i) => `<td${head[i].n ? ' class="n"' : ''}>${c}</td>`).join('')}</tr>`).join('')}</table>`;
+
+  function render(d) {
+    $('when').textContent = `Generated ${when(d.generatedAt)}`;
+    const f = d.funnel30d;
+    const parts = [];
+    parts.push(`<h2>Funnel, last 30 days</h2>` + table([{ t: 'Step' }, { t: 'Visitors', n: 1 }], [
+      ['Landed', f.landing],
+      ['Finished a routine', f.routine_complete + pct(f.routine_complete, f.landing)],
+      ['Signed in', f.signup + pct(f.signup, f.landing)],
+      ['Came back another day', f.returned_later_day + pct(f.returned_later_day, f.landing)],
+    ]));
+    parts.push(`<h2>Retention by weekly cohort</h2>` + (d.cohorts.length ? table(
+      [{ t: 'Week of' }, { t: 'Visitors', n: 1 }, { t: 'D1', n: 1 }, { t: 'D7', n: 1 }, { t: 'D30', n: 1 }],
+      // A cohort's D7 only counts players who joined at least 7 days ago; the rest show as a dash.
+      d.cohorts.map(c => [esc(day(c.cohort_week)), c.size,
+        ...[['d1', 'd1_eligible'], ['d7', 'd7_eligible'], ['d30', 'd30_eligible']].map(([k, e]) => c[e] ? c[k] + pct(c[k], c[e]) : '–')])
+    ) : '<p class="muted">No users yet.</p>'));
+    parts.push(`<h2>Daily active visitors, last 14 days</h2>` + (d.dau.length ? table([{ t: 'Day' }, { t: 'Visitors', n: 1 }], d.dau.map(r => [esc(day(r.day)), r.active])) : '<p class="muted">No practice yet.</p>'));
+    const s = d.streakDistribution;
+    parts.push(`<h2>Current streaks</h2>` + table([{ t: 'Days' }, { t: 'Users', n: 1 }], Object.keys(s).map(k => [esc(k), s[k]])));
+    const c = d.challenges;
+    parts.push(`<h2>Challenges</h2>` + table([{ t: 'Created', n: 1 }, { t: 'Opened', n: 1 }, { t: 'Completed', n: 1 }], [[c.created, c.opened, c.completed]]));
+    const u = d.users;
+    parts.push(`<h2>Users</h2>` + table([{ t: 'Guests', n: 1 }, { t: 'Signed in', n: 1 }, { t: 'Runs', n: 1 }], [[u.anon, u.members, u.runs]]));
+    parts.push(`<h2>Feedback</h2>` + (d.feedback.length ? table([{ t: 'When' }, { t: 'Text' }, { t: 'Where' }],
+      d.feedback.map(x => [esc(when(x.created_at)), esc(x.text), esc(x.context && x.context.route)])) : '<p class="muted">None yet.</p>'));
+    parts.push(`<h2>Recent errors</h2>` + (d.errors.length ? table([{ t: 'When' }, { t: 'Error' }],
+      d.errors.map(x => [esc(when(x.ts)), esc(x.props && (x.props.message || JSON.stringify(x.props)))])) : '<p class="muted">None.</p>'));
+    $('out').innerHTML = parts.join('');
+  }
+
+  async function load(token) {
+    const r = await fetch('/api/admin/kpis', { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) { $('out').innerHTML = `<p class="muted">The server said ${r.status}. Check the token.</p>`; return; }
+    localStorage.setItem('st.adminToken', token);
+    $('auth').classList.add('hidden');
+    render(await r.json());
+  }
+  $('auth').addEventListener('submit', (e) => { e.preventDefault(); load($('token').value.trim()); });
+  const saved = localStorage.getItem('st.adminToken');
+  if (saved) load(saved);
+})();
+</script>
+</body>
+</html>

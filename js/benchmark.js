@@ -20,7 +20,7 @@ ST.SCENARIOS = {
     settings: { weapon: 'mk12', scope: '8x', duration: 30, enemies: 3, behavior: 'hold', enemyHp: 1, minDist: 18, maxDist: 32 } },
   dynamicClick:   { name: 'Dynamic clicking',   cat: 'Clicking',  ref: 110, tip: 'Juking targets, one hit each. Fire on the direction change, when they are briefly still.',
     settings: { weapon: 'mk12', scope: '2x', duration: 30, enemies: 2, behavior: 'juke', enemyHp: 1, minDist: 6, maxDist: 17 } },
-  preciseTrack:   { name: 'Precise tracking',   cat: 'Tracking',  ref: 650, tip: 'Invincible bot, smooth strafe. Hold the trigger and lead by about a body width.',
+  preciseTrack:   { name: 'Precise tracking',   cat: 'Tracking',  ref: 650, tip: 'A tough bot on a smooth orbit. Hold the trigger and lead by about a body width.',
     settings: { weapon: 'mp5', scope: '2x', duration: 30, enemies: 1, behavior: 'orbit', enemyHp: 500, minDist: 10, maxDist: 14 } },
   reactiveTrack:  { name: 'Reactive tracking',  cat: 'Tracking',  ref: 520, tip: 'Sudden reversals. Move your crosshair with the bot, and reset the instant it flips.',
     settings: { weapon: 'mp5', scope: '1x', duration: 30, enemies: 1, behavior: 'strafe', enemyHp: 500, minDist: 6, maxDist: 10 } },
@@ -119,6 +119,16 @@ ST.ROUTINES = [
     ],
   },
   {
+    id: 'switching', name: 'Switching focus', shuffle: true, rest: 10,
+    desc: 'Five minutes of kill, switch, kill: several bots at once, a couple of bullets each. Commit to one target, drop it, and be on the next before it moves.',
+    steps: ['warmup',
+      { scenario: 'speedSwitch', settings: { duration: F, adaptive: true } },
+      { scenario: 'evasiveSwitch', settings: { duration: F, adaptive: true } },
+      { scenario: 'speedSwitch', settings: { duration: F, adaptive: true, weapon: 'mp5', scope: '1x', maxDist: 10 } },
+      { scenario: 'evasiveSwitch', settings: { duration: F, adaptive: true, weapon: 'ak47' } },
+    ],
+  },
+  {
     id: 'utility', name: 'Utility focus', shuffle: true, rest: 10,
     desc: 'Five minutes on the things that win fights without out-aiming anyone: quick switching off a shotgun, frag placement, bank shots off barrels and spinning off an enemy’s aim.',
     steps: ['warmup',
@@ -136,6 +146,30 @@ ST.ROUTINES = [
       { mode: 'sniper', settings: { duration: F, leadHint: true } },
       { mode: 'sniper', settings: { duration: F, leadHint: false } },
       { mode: 'sniper', settings: { duration: F, leadHint: false, weapon: 'awm' } },
+    ],
+  },
+  {
+    id: 'diagnostic', name: 'Diagnostic', shuffle: false, rest: 8, test: 'diagnostic',
+    desc: 'Five 30-second tests, one for each skill the aim test did not measure: dynamic clicking, reactive tracking, switching, chasing and dodging under fire. Fixed difficulty, so it can be compared with a re-test later.',
+    steps: [
+      { scenario: 'dynamicClick', seed: 1101 },
+      { scenario: 'reactiveTrack', seed: 1102 },
+      { scenario: 'speedSwitch', seed: 1103 },
+      { scenario: 'chase', seed: 1104 },
+      { scenario: 'dodge', seed: 1105 },
+    ],
+  },
+  {
+    // Day 7 of a week plan: the aim test and the diagnostic again, on the same seeds.
+    id: 'retest', name: 'Re-test', shuffle: false, rest: 8, test: 'retest', hidden: true,
+    desc: 'The aim test and the five diagnostic tests again, on the same spawns as before, to measure the week.',
+    steps: [
+      { scenario: 'staticClick', seed: 1100 },
+      { scenario: 'dynamicClick', seed: 1101 },
+      { scenario: 'reactiveTrack', seed: 1102 },
+      { scenario: 'speedSwitch', seed: 1103 },
+      { scenario: 'chase', seed: 1104 },
+      { scenario: 'dodge', seed: 1105 },
     ],
   },
 ];

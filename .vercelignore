@@ -1,0 +1,10 @@
+.DS_Store
+.impeccable
+docs
+demo
+tests
+node_modules
+*.md
+!README.md
+.env*
+.vercel
