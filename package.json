@@ -1,5 +1,5 @@
 {
-  "name": "surviv-trainer",
+  "name": "quickswitch",
   "private": true,
   "description": "Server functions for the trainer. The site itself is static with no build step.",
   "license": "GPL-3.0-only",

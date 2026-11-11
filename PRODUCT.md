@@ -14,7 +14,7 @@ static host and is then a complete guest trainer with history in localStorage.
 
 Since Phase 1 (2026-11-10) there is also a small backend for accounts and the
 engagement loop: three Vercel functions (`api/`) over Postgres on Neon, live at
-https://surviv-trainer.vercel.app. It adds email and Discord sign-in, history sync,
+https://quickswitch.pro. It adds email and Discord sign-in, history sync,
 streaks, challenges, friend and Discord-server boards, the survev match-history panel,
 web-push reminders, feedback and first-party analytics. `platform/README.md` is its spec.
 
@@ -108,17 +108,18 @@ confirmed this as the claim future work should protect.
   Auth); presets are open to everyone, and nothing is locked without a backend.
 - The streak has no freezes or repairs (user decision, 2026-11-10). No ads or ad code until
   the user decides to turn ads on.
-- Undecided: final domain (currently surviv-trainer.vercel.app); whether touch/mobile play is supported
-  (survev has a mobile mode, but the trainer is mouse-and-keyboard today);
-  whether the real games' names may appear in a shared/public version
-  (trademark question not yet considered); public name of the app.
+- Name and domain: Quickswitch at quickswitch.pro (user decision, 2026-11-11). "surviv" stays
+  out of the brand because SURVIV.IO is a live trademark; naming survev or surviv.io to describe
+  what the trainer is for is fine. Each future game's trainer gets its own unrelated brand.
+- Undecided: whether touch/mobile play is supported (survev has a mobile mode, but the trainer
+  is mouse-and-keyboard today).
 - Benchmark tier thresholds are hand-set placeholders until real player data
   exists; do not present them as normed.
 
 ## Brand Commitments
 
-Working title "Surviv Aim Trainer"; not confirmed as final. No logo or brand
-assets exist. Visual references the real game's look (grass field, grid, tan
+Name: Quickswitch (survev slang for swapping guns to skip a shotgun's pump). The logo is the
+wordmark QUICKSWITCH.PRO in the display face, with the dot in orange. Visual references the real game's look (grass field, grid, tan
 player circles, weapon tracers) for fidelity, not as a binding brand.
 
 ## Evidence on Hand
@@ -126,7 +127,7 @@ player circles, weapon tracers) for fidelity, not as a binding brand.
 - `docs/RESEARCH.md`: literature review and critique with sources (Listman et
   al. 2021, KovaaK's reliability pilot, Aimlabs kinematics study, Sala & Gobet
   2018, contextual-interference meta-analysis, and others).
-- `demo/surviv-trainer-demo.mp4`: one recording of a simulated user (`demo/bot.mjs`)
+- `demo/quickswitch-demo.mp4`: one recording of a simulated user (`demo/bot.mjs`)
   running the Benchmark, Flick, Sniper Leads, Chase and Dodge drills. Recorded before
   the mechanics audit, so it does not show the barrels, grenades, weapon slots or the
   survev-style menu.

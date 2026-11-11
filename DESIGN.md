@@ -1,5 +1,5 @@
 ---
-name: Surviv Aim Trainer
+name: Quickswitch
 description: A dark range-card interface laid over surviv's grass field, with one yellow tracer accent.
 colors:
   field-grass: "#80af49"
@@ -124,7 +124,7 @@ components:
     padding: "1px 7px"
 ---
 
-# Design System: Surviv Aim Trainer
+# Design System: Quickswitch
 
 ## Overview
 
@@ -225,7 +225,7 @@ uses a plain sans, and the trainer should feel like part of the same toolkit.
 
 ### Hierarchy
 - **Display** (900, 30px, letter-spacing 3px, uppercase, yellow): screen titles only
-  (`SURVIV AIM TRAINER`, `RESULTS`, `PAUSED`, `REST`).
+  (`QUICKSWITCH.PRO`, `RESULTS`, `PAUSED`, `REST`).
 - **Headline number** (900, 56px, yellow): a single hero figure such as the rest
   countdown. Reserved for one number per screen.
 - **HUD number** (800, 28 to 30px, white with `0 1px 3px rgba(0,0,0,.8)` text shadow):

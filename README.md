@@ -1,11 +1,13 @@
-# surviv-trainer
+# Quickswitch
 
 A browser aim trainer for [surviv.io](https://surviv.io) / [survev.io](https://survev.io).
 Top-down view, absolute mouse cursor, WASD movement, and bullets that actually travel,
 so you practice leading targets the way the real game demands.
 
+Quickswitch is a fan project. It isn't affiliated with survev.io, Kongregate or surviv.io.
+
 Demo of a simulated user running the Benchmark, an adaptive Flick drill, the
-Bullet-leads drill, and the Chase and Dodge drills: `demo/surviv-trainer-demo.mp4`.
+Bullet-leads drill, and the Chase and Dodge drills: `demo/quickswitch-demo.mp4`.
 
 ## Run
 
@@ -23,7 +25,7 @@ streak reminders, challenges and boards need the backend; everything else works 
 
 ### With the backend
 
-Live at https://surviv-trainer.vercel.app. The backend is three Vercel functions (`api/`) over
+Live at https://quickswitch.pro. The backend is three Vercel functions (`api/`) over
 Postgres on Neon, described in `platform/README.md`. To run it locally:
 
 ```

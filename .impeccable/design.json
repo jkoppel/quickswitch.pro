@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-09-04T14:00:00-04:00",
-  "title": "Design System: Surviv Aim Trainer",
+  "title": "Design System: Quickswitch",
   "extensions": {
     "colorMeta": {
       "tracer-yellow": { "role": "primary", "displayName": "Tracer Yellow", "canonical": "#ffd35c", "tonalRamp": ["#2e2408", "#5c470f", "#8a6a17", "#b88e1f", "#e6b12b", "#ffd35c", "#ffe08a", "#fff0c4"] },
@@ -15,7 +15,7 @@
       "danger-red": { "role": "status-critical", "displayName": "Danger Red", "canonical": "#ff5b5b" }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "Screen titles only: SURVIV AIM TRAINER, RESULTS, PAUSED, REST." },
+      "display": { "displayName": "Display", "purpose": "Screen titles only: QUICKSWITCH.PRO, RESULTS, PAUSED, REST." },
       "headline": { "displayName": "Headline number", "purpose": "One hero figure per screen, e.g. the rest countdown." },
       "hud": { "displayName": "HUD number", "purpose": "Timer and magazine count over the field, with text shadow." },
       "title": { "displayName": "Section title", "purpose": "Uppercase sage section headers." },

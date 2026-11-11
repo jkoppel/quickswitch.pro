@@ -3,7 +3,7 @@
 // offers email and Discord → survev panel for a real player. Prints the ids of the users it created so
 // they can be removed afterwards (tests/e2e/cleanup.mjs).
 //
-//   node tests/e2e/flows.mjs https://surviv-trainer.vercel.app [outDir] [survevSlug]
+//   node tests/e2e/flows.mjs https://quickswitch.pro [outDir] [survevSlug]
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';

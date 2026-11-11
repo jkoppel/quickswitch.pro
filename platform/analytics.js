@@ -7,7 +7,7 @@
 window.ST = window.ST || {};
 
 ST.analytics = (function () {
-  const HOSTS = ['surviv-trainer.vercel.app'];
+  const HOSTS = ['quickswitch.pro'];
   const POSTHOG_KEY = 'phc_ACmDdg2oaiAJcE5zMC4NVgLoJEzLSDMVuw8bkPmjGaBL';
   const POSTHOG_HOST = 'https://eu.i.posthog.com';
   const GA_ID = 'G-NE05TEV8GY';
