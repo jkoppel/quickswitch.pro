@@ -95,8 +95,8 @@ events(id bigserial pk, anon_id text, user_id uuid null, name text, props jsonb,
 | `GET /api/push/key` | — | `{publicKey}` (VAPID) |
 | `POST /api/feedback` | `{text, context}` | `{ok}` |
 | `POST /api/e` | `{anonId, events: [{name, props, ts}]}` (max 50) | `{ok}`; no session needed |
-| `GET /api/cron/reminders` | header `Authorization: Bearer $CRON_SECRET` | sends due pushes |
-| `GET /api/cron/digest` | header `Authorization: Bearer $CRON_SECRET` | emails yesterday's usage report to `DIGEST_TO` (`?dry=1` returns it unsent, `?day=YYYY-MM-DD` picks the day) |
+| `GET /api/cron/hourly` | header `Authorization: Bearer $CRON_SECRET` | sends due pushes, and the usage report when it is 8 am for its reader |
+| `GET /api/cron/digest` | header `Authorization: Bearer $CRON_SECRET` | emails yesterday's usage report to `DIGEST_TO` now, whatever the hour (`?dry=1` returns it unsent, `?day=YYYY-MM-DD` picks the day) |
 | `GET /api/admin/kpis` | header `Authorization: Bearer $ADMIN_TOKEN` | funnel, D1/D7/D30 cohorts, streak distribution, challenges, recent feedback, recent errors |
 
 Rate-limit nothing in Phase 1 beyond body-size caps; validate every input.
@@ -172,4 +172,5 @@ Events: `landing`, `routine_start`, `routine_complete`, `signup` `{method}`, `st
 - Secrets live only in Vercel env vars: `SESSION_SECRET`, `CRON_SECRET`, `ADMIN_TOKEN`,
   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `DISCORD_CLIENT_ID`,
   `DISCORD_CLIENT_SECRET`, `DATABASE_URL`, `APP_ORIGIN`, and for the daily report `RESEND_API_KEY` and
-  `DIGEST_TO` (optional `DIGEST_FROM`, `DIGEST_TZ`, default America/New_York).
+  `DIGEST_TO`, and `DIGEST_HANDLE`, the account whose time zone sets the report's days and its 8 am
+  send time (optional `DIGEST_FROM`, and `DIGEST_TZ` to pin a zone).

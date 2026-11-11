@@ -287,8 +287,8 @@ test('push subscriptions and the reminder cron', { skip: !hasDb }, async () => {
   assert.equal(r.removed, 1, 'expired subscriptions are dropped');
   assert.equal((await q('SELECT count(*)::int AS n FROM push_subscriptions WHERE endpoint = $1', [endpoint]))[0].n, 0);
 
-  assert.equal((await call('GET', 'cron/reminders')).status, 401);
-  const viaHttp = await call('GET', `cron/reminders?dry=1`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
+  assert.equal((await call('GET', 'cron/hourly')).status, 401);
+  const viaHttp = await call('GET', `cron/hourly?dry=1`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
   assert.equal(viaHttp.status, 200);
   assert.equal(typeof viaHttp.body.checked, 'number');
 });
@@ -306,6 +306,9 @@ test('events, feedback and the admin KPIs', { skip: !hasDb }, async () => {
   assert.equal(k.status, 200);
   for (const f of ['funnel30d', 'cohorts', 'dau', 'streakDistribution', 'challenges', 'users', 'feedback', 'errors']) assert.ok(f in k.body, f);
   assert.ok(k.body.funnel30d.landing >= 1);
+  const kt = await call('GET', 'admin/kpis?tz=Pacific/Kiritimati', { headers: { authorization: `Bearer ${process.env.ADMIN_TOKEN}` } });
+  assert.equal(kt.body.tz, 'Pacific/Kiritimati');
+  assert.equal((await call('GET', 'admin/kpis?tz=Not/AZone', { headers: { authorization: `Bearer ${process.env.ADMIN_TOKEN}` } })).body.tz, 'UTC');
   assert.ok(k.body.feedback.some(f => f.text === 'More sniper drills'));
 });
 
@@ -325,6 +328,27 @@ test('the daily digest', { skip: !hasDb }, async () => {
   assert.match(d.subject, new RegExp(`^Quickswitch ${today}: \\d+ visitors?, \\d+ finished a routine$`));
   assert.match(d.text, /Took the aim test/);
   assert.match(d.html, /<table/);
+
+  // The reader's zone comes from their account unless DIGEST_TZ pins one; the report goes out at 8 am there.
+  const { digestIfDue, readerTimeZone } = await import('../../lib/digest.mjs');
+  const reader = await newUser();
+  const handle = `dg${Date.now().toString(36)}`;
+  await q('UPDATE users SET handle = $2, tz = $3 WHERE id = $1', [reader.user.id, handle, 'Asia/Tokyo']);
+  const saved = { tz: process.env.DIGEST_TZ, handle: process.env.DIGEST_HANDLE };
+  delete process.env.DIGEST_TZ;
+  process.env.DIGEST_HANDLE = handle;
+  try {
+    assert.equal(await readerTimeZone(), 'Asia/Tokyo');
+    // 23:30 UTC is 08:30 the next day in Tokyo, 17:30 in New York.
+    const due = await digestIfDue({ now: new Date('2026-11-11T23:30:00Z'), dryRun: true });
+    assert.deepEqual(due, { due: true, tz: 'Asia/Tokyo', sent: false, day: '2026-11-11' });
+    assert.equal((await digestIfDue({ now: new Date('2026-11-11T22:30:00Z'), dryRun: true })).due, false);
+    process.env.DIGEST_TZ = 'America/New_York';
+    assert.equal(await readerTimeZone(), 'America/New_York');
+  } finally {
+    if (saved.tz === undefined) delete process.env.DIGEST_TZ; else process.env.DIGEST_TZ = saved.tz;
+    if (saved.handle === undefined) delete process.env.DIGEST_HANDLE; else process.env.DIGEST_HANDLE = saved.handle;
+  }
 
   assert.equal((await call('GET', 'cron/digest?dry=1')).status, 401);
   const dry = await call('GET', `cron/digest?dry=1&day=${today}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });

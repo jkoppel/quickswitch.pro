@@ -71,7 +71,8 @@
   }
 
   async function load(token) {
-    const r = await fetch('/api/admin/kpis', { headers: { Authorization: 'Bearer ' + token } });
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const r = await fetch('/api/admin/kpis?tz=' + encodeURIComponent(tz), { headers: { Authorization: 'Bearer ' + token } });
     if (!r.ok) { $('out').innerHTML = `<p class="muted">The server said ${r.status}. Check the token.</p>`; return; }
     localStorage.setItem('st.adminToken', token);
     $('auth').classList.add('hidden');
