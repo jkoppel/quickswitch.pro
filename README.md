@@ -18,6 +18,48 @@ python3 -m http.server 8000
 
 Use the Fullscreen button so pixel geometry matches the game.
 
+Opened this way the trainer is fully playable as a guest, with history in the browser. Accounts,
+streak reminders, challenges and boards need the backend; everything else works without it.
+
+### With the backend
+
+Live at https://surviv-trainer.vercel.app. The backend is three Vercel functions (`api/`) over
+Postgres on Neon, described in `platform/README.md`. To run it locally:
+
+```
+npm install
+vercel env pull .env.local     # needs access to the Vercel project
+npm run migrate                # the development database, never production
+vercel dev
+```
+
+Tests: `npm test` (unit and API flows, against the development database) and
+`node tests/e2e/smoke.mjs <url>` / `node tests/e2e/flows.mjs <url>` in headless Chrome. Runs
+against the live URL create real users; remove them with
+`node --env-file=.env.local tests/e2e/cleanup.mjs <out>/created-users.json`.
+
+## Streaks, challenges and progress
+
+- **First visit:** one button, a 30-second aim test. Then an optional five-test diagnostic
+  (3 minutes) that builds a one-week plan around your weakest skill and offers a daily reminder.
+  "Skip to all drills" goes straight to the full trainer. The flow is specified in
+  `platform/ONBOARDING.md`.
+- **Points** for training (10 a minute, up to the 45-minute daily budget), for finishing a plan
+  day, for beating your best score, and for sharper accuracy at the same speed
+  (`platform/shared/points.js`).
+- Finishing any routine extends your streak; ending one early doesn't count, and there are no
+  streak freezes.
+- **Custom weapons and settings** unlock with a verified email (a six-digit code; no password).
+  Every preset drill and routine is open to everyone, and with no backend nothing is locked.
+- **Sign in** with an email code or Discord (once it's configured) to keep your streak and history
+  if the browser is cleared, and to carry them to another device. You can play without it.
+- **Challenge a friend** from any Benchmark result: the link replays the same scenario on the same
+  spawns, and playing it makes you friends on the boards.
+- **Progress** shows a practice calendar, Benchmark trends, throughput, moving vs standing accuracy,
+  friends and Discord-server boards, and, if you link your survev name, damage per minute in your
+  real games, split by whether you warmed up within the hour before.
+- Reminders are opt-in web push, offered from your second day.
+
 ## Routines
 
 Every routine except the Benchmark is five minutes end to end, rests included. The lengths shown
@@ -174,6 +216,10 @@ The research behind these choices, including what was cut and why, is in
 - Esc: pause
 
 ## Fidelity and licensing
+
+The game (`js/`, `vendor/`) is GPL-3.0. `platform/` (accounts, streaks, challenges, progress) is
+MIT, see `platform/LICENSE`. `CONTRIBUTING.md` says which applies to a change. The sprites and
+sounds in `vendor/survev/` come from surviv.io via survev and remain their owners' property.
 
 Definitions are survev's own, extracted verbatim into `vendor/survev/defs/`: guns and
 bullets from `shared/defs/gameObjects/gunDefs.ts` and `bulletDefs.ts`, throwables and

@@ -8,10 +8,15 @@ web
 
 ## Stack
 
-Static site: plain HTML, CSS and browser JavaScript with no build step and no
-server. Confirmed by the user as the preferred shape ("static site would be
-nice"). Data persists in the browser's localStorage only. Opens from `index.html`
-directly or from any static host.
+Static front end: plain HTML, CSS and browser JavaScript with no build step
+("static site would be nice"). It still opens from `index.html` directly or from any
+static host and is then a complete guest trainer with history in localStorage.
+
+Since Phase 1 (2026-11-10) there is also a small backend for accounts and the
+engagement loop: three Vercel functions (`api/`) over Postgres on Neon, live at
+https://surviv-trainer.vercel.app. It adds email and Discord sign-in, history sync,
+streaks, challenges, friend and Discord-server boards, the survev match-history panel,
+web-push reminders, feedback and first-party analytics. `platform/README.md` is its spec.
 
 Reuses survev (the open-source surviv.io continuation, GPL-3.0) as much as
 possible, at the user's request: gun, bullet, throwable, explosion, obstacle and
@@ -21,15 +26,16 @@ falloff, headshot, ricochet, blast, throw-physics, weapon-switch, hand/gun place
 tracer and particle rules re-implemented in plain JavaScript in `js/game.js`. Every one
 of those rules has been audited against survev's source; the results, including the
 deliberate deviations, are the "Mechanics audit" table in `README.md`. The project is
-therefore GPL-3.0 (`LICENSE`).
+therefore GPL-3.0 (`LICENSE`). The platform layer (`platform/`, `api/`, `lib/`,
+`db/`) is MIT so it can be reused by other trainers; `CONTRIBUTING.md` has the split.
 
 ## Users
 
 Primary user: the author, a surviv.io / survev.io player, practicing aim at a desk
 with a mouse and keyboard in short sessions before or between games.
 
-Secondary audience (confirmed as possible, not yet active): other surviv/survev
-players the author may share the app with. Skill level of that audience is
+Secondary audience (the launch audience as of 2026-11-10): other surviv/survev
+players, reached mainly through the survev Discord. Skill level of that audience is
 undecided; the app should not assume beginners or experts.
 
 ## Product Purpose
@@ -56,7 +62,8 @@ confirmed this as the claim future work should protect.
   the real game.
 - Routines run in sequence with rest screens; a Benchmark (fixed difficulty) is
   meant weekly, adaptive drills daily.
-- All progress data lives in the browser; there is no account, server, or sync.
+- Progress lives in the browser first. Signing in (email or Discord) is optional and
+  only adds sync, streak protection across devices, boards and challenges.
 - The research and design rationale lives in `docs/RESEARCH.md`; drill and
   routine definitions in `js/modes.js` and `js/benchmark.js`; weapon numbers in
   `js/weapons.js`.
@@ -92,8 +99,16 @@ confirmed this as the claim future work should protect.
   the menu warns when a hand-set one does not fit.
 - Terminology follows the games: scopes 1x/2x/4x/8x/15x, weapon names as in
   survev, "units" for world distance.
-- Must remain a static site with no build step (confirmed).
-- Undecided: deploy target and URL; whether touch/mobile play is supported
+- The front end must remain static with no build step (confirmed), and must stay fully
+  playable with the backend down.
+- First run (2026-11-10 redesign, `platform/ONBOARDING.md`): one 30 s aim test, then an
+  optional 5 × 30 s diagnostic, then a one-week plan with a daily reminder; skippable at every
+  step. Points reward practice time, plan days, new bests and accuracy at the same speed, never
+  sharing or signing in. Custom weapons and settings require a verified email (codes sent by Neon
+  Auth); presets are open to everyone, and nothing is locked without a backend.
+- The streak has no freezes or repairs (user decision, 2026-11-10). No ads or ad code until
+  the user decides to turn ads on.
+- Undecided: final domain (currently surviv-trainer.vercel.app); whether touch/mobile play is supported
   (survev has a mobile mode, but the trainer is mouse-and-keyboard today);
   whether the real games' names may appear in a shared/public version
   (trademark question not yet considered); public name of the app.
@@ -138,5 +153,5 @@ player circles, weapon tracers) for fidelity, not as a binding brand.
    game itself gives.
 4. Short, daily, and honest: warm-up excluded, session budget visible, tiers
    labeled provisional until data exists.
-5. Stay light: static files, no accounts, works from a double-click on
+5. Stay light: static files, accounts optional, works from a double-click on
    `index.html`.

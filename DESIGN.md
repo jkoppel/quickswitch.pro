@@ -163,8 +163,11 @@ A dark moss palette pulled from the grass field, one tracer-yellow accent, and a
 set of reserved status colors that mirror in-game meanings.
 
 ### Primary
-- **Surviv Orange** (`#d45500`, survev's own): the primary button, the active list item,
-  the active weapon slot's edge, the dot in the wordmark. Hover lightens to `#f06a10`.
+- **Surviv Orange** (`#d45500`, survev's own): the active weapon slot's edge and the dot in the
+  wordmark.
+- **Button Orange** (`#c84f00`, hover `#b84900`): every filled orange surface that carries white
+  text, the primary button and the active list item. survev's own orange carries white text at
+  only 4.1:1; one step darker it is 4.6:1, and still reads as the same orange.
 - **Barrel Brown** (`#8f5827`, survev's own): secondary buttons.
 - **Tracer Yellow** (`{colors.tracer-yellow}`): data only now — the trend line, the rose
   wedges, the countdown numeral, the reload and spin bars, new-best marks.
@@ -252,8 +255,14 @@ or a fixed 260px right column for insights (results), and a fluid main column. B
 760px both collapse to a single column, the form grid drops from two columns to one,
 and fixed column widths reset.
 
-Spacing rhythm is a 4px base: 4, 6, 8, 12, 16, 24. Lists use 6px gaps, form grids
-8px row and 16px column gaps, button rows 10px, and 14 to 18px between blocks. The HUD
+Spacing rhythm is a 4px base, as tokens `--space-1` to `--space-7`: 4, 8, 12, 16, 20, 24, 32.
+Tight inside a group, wide between groups: a label sits 6px above its field, lists use 6px
+gaps, form grids 12px row and 16px column gaps, button rows 10px. A screen's title block
+(title plus one-line sub, or the titlebar) is always followed by 24px before the content,
+and a button row or sheet footer by 24px above it; sections on Progress are 32px apart.
+Controls on the right of a titlebar are centred on the title's line, and a ghost button at
+the start or end of a row is pulled out by its own padding so its text meets the panel edge.
+Inside a sheet the lead paragraph has no margin; whatever follows it brings its own gap. The HUD
 pins the timer and step label to the top center, the health bar and magazine to the
 bottom center, and hints to the bottom corners at 8 to 12px insets.
 

@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "roboto condensed",
+        "createdAt": "2026-11-10T17:49:13.384Z",
+        "reason": "Claude: Roboto Condensed is the existing title/HUD font declared in style.css (--font-title, --font-hud) and inherited by admin.html's h1; admin.html adds no font"
+      }
+    ]
+  }
+}
