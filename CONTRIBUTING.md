@@ -24,3 +24,27 @@ game.
   you checked it.
 - `npm test` must pass. For UI changes, run `node tests/e2e/smoke.mjs` against `vercel dev` or a
   static server and look at the screenshots.
+
+## Running the backend
+
+The live site is three Vercel functions (`api/`) over Postgres on Neon, described in
+`platform/README.md`. To run it locally:
+
+```
+npm install
+vercel env pull .env.local     # needs access to the Vercel project
+npm run migrate                # the development database, never production
+vercel dev
+```
+
+Tests: `npm test` (unit and API flows, against the development database) and
+`node tests/e2e/smoke.mjs <url>` / `node tests/e2e/flows.mjs <url>` in headless Chrome. Runs
+against the live URL create real users; remove them with
+`node --env-file=.env.local tests/e2e/cleanup.mjs <out>/created-users.json`.
+
+## Demo bot
+
+`demo/bot.mjs` is a simulated human player (reaction delay, Fitts-style movement
+time, minimum-jerk flicks with endpoint noise and overshoot, corrective
+submovements, partial lead). `demo/record.mjs` drives it through the trainer in
+headless Chrome and writes the video.

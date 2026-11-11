@@ -25,7 +25,7 @@ sprites, sounds and font under `vendor/survev/`, and its camera, spread, damage
 falloff, headshot, ricochet, blast, throw-physics, weapon-switch, hand/gun placement,
 tracer and particle rules re-implemented in plain JavaScript in `js/game.js`. Every one
 of those rules has been audited against survev's source; the results, including the
-deliberate deviations, are the "Mechanics audit" table in `README.md`. The project is
+deliberate deviations, are the "Mechanics audit" table in `docs/FIDELITY.md`. The project is
 therefore GPL-3.0 (`LICENSE`). The platform layer (`platform/`, `api/`, `lib/`,
 `db/`) is MIT so it can be reused by other trainers; `CONTRIBUTING.md` has the split.
 
