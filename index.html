@@ -141,9 +141,25 @@
       <div class="titlebar-end"><button id="btn-account" class="ghost account-btn hidden" type="button"></button></div>
     </div>
 
-    <!-- First visit: one thing to do. -->
+    <!-- First visit: what this is, what it trains, what happens next, and one thing to do. -->
     <section id="home-new" class="stage hidden">
+      <p class="intro">An aim trainer for <b>survev.io</b>, built on the game's own guns, bullets and spread. It trains the aim survev asks for: a cursor on a top-down field, bullets that take time to land, and WASD while you shoot.</p>
+      <h2>What you'll train</h2>
+      <dl class="skill-list">
+        <div><dt>Clicking</dt><dd>Snap to targets and tap them down, with each gun's real spread.</dd></div>
+        <div><dt>Tracking</dt><dd>Stay on bots that strafe, juke and spin.</dd></div>
+        <div><dt>Switching</dt><dd>Swap guns between shots to skip the shotgun's pump. That's the quickswitch.</dd></div>
+        <div><dt>Moving</dt><dd>Strafe, chase and dodge return fire while you shoot.</dd></div>
+      </dl>
+      <p class="skill-more">Plus frags, sniper leads, barrels and ricochets off bunker walls.</p>
+      <h2>How it starts</h2>
+      <ol class="first-steps">
+        <li class="now"><b>Aim test</b><span class="dur">30 s</span><p>Three targets at a time. Hit as many as you can.</p></li>
+        <li><b>Weak spots</b><span class="dur">3 min</span><p>Five short tests across the four skills. Optional.</p></li>
+        <li><b>Your week</b><span class="dur">5 min a day</span><p>Drills for your weakest skill. Day 7 re-tests you.</p></li>
+      </ol>
       <button id="btn-aimtest" class="primary today" data-primary type="button">Take the 30-second aim test</button>
+      <p class="today-sub">Free, no sign-up. Needs a mouse and keyboard.</p>
       <p class="quiet-row"><button class="link" data-skip type="button">Skip to all drills</button><span class="sep signin-only" aria-hidden="true">·</span><button class="link signin-only" data-signin type="button">Sign in</button></p>
     </section>
 

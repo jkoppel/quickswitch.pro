@@ -33,10 +33,17 @@ A returning player with history from before the redesign lands in `free`, never 
 ## Screens
 
 ### 1. First visit (`new`)
-- Wordmark, one sentence: what this is ("Aim drills built on survev's own guns, bullets and spread.").
-- **One button: "Take the 30-second aim test".**
-- One quiet line under it: `Skip to all drills` · `Sign in` (for players arriving on a second
+- Wordmark, then a short intro in place of the tagline: an aim trainer for survev.io, built on
+  its guns, bullets and spread, training cursor aim on a top-down field.
+- What you'll train: the four skills the diagnostic measures (Clicking, Tracking, Switching,
+  Moving), one line each, plus a line for the utility drills.
+- How it starts: the three stages as a ruler (aim test 30 s, weak spots 3 min, your week 5 min a
+  day), the first marked in orange because the button starts it.
+- **One button: "Take the 30-second aim test"**, with "Free, no sign-up. Needs a mouse and
+  keyboard." under it.
+- One quiet line under that: `Skip to all drills` · `Sign in` (for players arriving on a second
   device). No streak widget, no zero, no feedback link, no progress link.
+- Fits a 1280×720 window without scrolling.
 - **Phones and touch-only devices:** instead of the button, "This trainer needs a mouse and
   keyboard." with "Remind me on my computer" hidden unless push is supported, and a quiet
   "Try anyway".

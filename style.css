@@ -283,6 +283,30 @@ label.inline { flex-direction: row; align-items: center; gap: var(--space-2); }
 .lead { margin: 6px 0 16px; font-size: 17px; line-height: 1.45; color: var(--ink); }
 .quiet-row { margin: var(--space-5) 0 0; display: flex; justify-content: center; align-items: center; gap: 4px 12px; flex-wrap: wrap; font-size: 14px; color: var(--ink-muted); }
 .quiet-row .sep { color: var(--ink-muted); }
+/* First visit: the intro replaces the tagline, so the panel says once what this is. */
+#home[data-stage="new"] .panel.home { width: min(700px, 100%); }
+#home[data-stage="new"] .tagline { display: none; }
+#home[data-stage="new"] .titlebar { margin-bottom: var(--space-3); }
+.intro { margin: 0 0 var(--space-6); font-size: 17px; line-height: 1.5; color: var(--ink); max-width: 60ch; }
+.intro b { color: #fff; }
+#home-new h2 { margin-bottom: var(--space-3); }
+.skill-list { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-6); }
+.skill-list dt { font-family: var(--font-title); font-size: 17px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: #fff; }
+.skill-list dd { margin: 2px 0 0; font-size: 14px; line-height: 1.45; color: var(--ink-soft); }
+.skill-more { margin: var(--space-3) 0 var(--space-6); font-size: 14px; color: var(--sage-tip); }
+/* The three stages as a ruler: a tick per stage, the one the button starts marked in orange. */
+.first-steps { list-style: none; margin: 0 0 var(--space-6); padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); counter-reset: step; }
+.first-steps li { position: relative; padding-top: var(--space-4); border-top: 2px solid var(--line); counter-increment: step; }
+.first-steps li::before { content: counter(step); position: absolute; top: -12px; left: 0; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-title); font-size: 13px; font-weight: 700; background: #2b3226; color: var(--ink); border: 1px solid var(--line); }
+.first-steps li.now { border-top-color: var(--orange); }
+.first-steps li.now::before { background: var(--orange-fill); border-color: var(--orange-fill); color: #fff; }
+.first-steps b { font-family: var(--font-title); font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; color: #fff; }
+.first-steps .dur { margin-left: var(--space-2); font-size: 13px; font-weight: 700; color: var(--sage); white-space: nowrap; }
+.first-steps p { margin: 4px 0 0; font-size: 14px; line-height: 1.45; color: var(--ink-soft); }
+@media (max-width: 600px) {
+  .skill-list, .first-steps { grid-template-columns: 1fr; }
+  .first-steps { gap: var(--space-5); }
+}
 .score-line { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 var(--space-5); }
 .score-num { font-family: var(--font-title); font-size: 56px; font-weight: 700; line-height: 1; color: var(--yellow); }
 .big-score .score-num { font-size: 72px; }
