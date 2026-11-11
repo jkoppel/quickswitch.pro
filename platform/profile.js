@@ -374,7 +374,13 @@ ST.profile = (function () {
       btn.disabled = true;
       const r = await ST.survev.link(f.slug.value).catch(() => ({ ok: false, error: 'Could not reach survev’s stats API.' }));
       btn.disabled = false;
-      if (!r.ok) { let n = f.parentElement.querySelector('.field-hint'); n.textContent = r.error; n.classList.add('warn'); return; }
+      if (!r.ok) {
+        // A sync or sign-in can re-render the panel while the request is out, detaching this form.
+        const form = f.isConnected ? f : $('profile').querySelector('[data-survev-form]');
+        const n = form && form.parentElement.querySelector('.field-hint');
+        if (n) { n.textContent = r.error; n.classList.add('warn'); }
+        return;
+      }
       renderSurvev();
     });
     ST.account.onChange(() => { if (app.current() === 'profile' && mode === 'own') renderOwn(); });

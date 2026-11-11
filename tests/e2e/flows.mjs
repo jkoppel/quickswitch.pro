@@ -27,7 +27,7 @@ const exe = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacO
 const browser = await chromium.launch({ headless: true, executablePath: exe, args: ['--no-sandbox'] });
 
 const CAPTURE = () => {
-  const log = (a) => { try { const el = document.documentElement; const arr = JSON.parse(el.dataset.qaErrors || '[]'); arr.push([...a].map(x => x && x.stack ? x.stack.split('\n')[0] : String(x)).join(' ').slice(0, 300)); el.dataset.qaErrors = JSON.stringify(arr); } catch (e) { /* ignore */ } };
+  const log = (a) => { try { const el = document.documentElement; const arr = JSON.parse(el.dataset.qaErrors || '[]'); arr.push([...a].map(x => x && x.stack ? x.stack.split('\n').slice(0, 3).join(' ') : String(x)).join(' ').slice(0, 500)); el.dataset.qaErrors = JSON.stringify(arr); } catch (e) { /* ignore */ } };
   const ce = console.error.bind(console);
   console.error = (...a) => { log(a); ce(...a); };
   addEventListener('error', (e) => log([`${e.message} @${(e.filename || '').split('/').pop()}:${e.lineno}`]));
