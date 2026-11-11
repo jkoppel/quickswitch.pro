@@ -147,7 +147,7 @@ ST.account = (function () {
     const showCode = () => {
       steps.address.classList.add('hidden');
       steps.code.classList.remove('hidden');
-      steps.code.querySelector('[data-sent]').textContent = `We sent a code to ${email}. It expires in 15 minutes.`;
+      steps.code.querySelector('[data-sent]').textContent = `We sent a code to ${email}. It expires in 10 minutes.`;
       steps.code.querySelector('input').focus();
     };
     const run = async (btn, fn) => {
