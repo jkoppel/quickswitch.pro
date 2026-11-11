@@ -39,12 +39,13 @@ ST.analytics = (function () {
       ph._i.push([key, config, 'posthog']);
     };
     ph.__SV = 1;
-    loadScript(POSTHOG_HOST.replace('.i.posthog.com', '-assets.i.posthog.com') + '/static/array.js');
     ph.init(POSTHOG_KEY, {
       api_host: POSTHOG_HOST,
       person_profiles: 'identified_only',
       capture_pageview: 'history_change',   // the app routes with pushState
       persistence: 'localStorage',          // no PostHog cookie
+      disable_surveys: true,                // no surveys.js: 140 KB nobody asked for
+      disable_session_recording: true,
     });
   }
 
@@ -56,6 +57,12 @@ ST.analytics = (function () {
     window.gtag('consent', 'default', { ...none, analytics_storage: 'granted' });
     window.gtag('js', new Date());
     window.gtag('config', GA_ID);   // page views on history changes come from enhanced measurement
+  }
+
+  // The two scripts weigh about 1 MB between them, ten times the game, so they wait until the page
+  // has loaded and gone idle. The stubs above queue every call made before then; nothing is lost.
+  function loadScripts() {
+    loadScript(POSTHOG_HOST.replace('.i.posthog.com', '-assets.i.posthog.com') + '/static/array.js');
     loadScript(`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`);
   }
 
@@ -90,6 +97,12 @@ ST.analytics = (function () {
     try { window.posthog.reset(); } catch (e) { /* ignore */ }
   }
 
-  if (on) { initPosthog(); initGa(); }
+  if (on) {
+    initPosthog();
+    initGa();
+    const idle = () => (window.requestIdleCallback || ((fn) => setTimeout(fn, 1)))(loadScripts);
+    if (document.readyState === 'complete') idle();
+    else addEventListener('load', idle, { once: true });
+  }
   return { capture, identify, reset, enabled: () => on };
 })();
