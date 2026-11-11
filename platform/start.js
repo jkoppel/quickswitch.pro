@@ -2,6 +2,27 @@
 // once the game's own menu is ready.
 window.ST = window.ST || {};
 
+function takeSignInOutcome() {
+  const q = new URLSearchParams(location.search);
+  const outcome = q.get('signin');
+  if (!outcome) return null;
+  q.delete('signin');
+  const rest = q.toString();
+  try { history.replaceState(history.state, '', location.pathname + (rest ? '?' + rest : '') + location.hash); } catch (e) { /* ignore */ }
+  return outcome;
+}
+
+function reportSignIn(outcome) {
+  if (outcome === 'discord') {
+    if (ST.account.isMember()) ST.ui.toast('Signed in with Discord.');
+    return;
+  }
+  if (outcome === 'discord-cancelled') { ST.ui.toast('Discord sign-in cancelled.'); return; }
+  const why = outcome === 'discord-unavailable' ? 'Discord sign-in isn’t available right now. Email works.' : 'Discord sign-in didn’t go through. Try again, or use email.';
+  ST.account.openSheet();
+  ST.ui.sheetNote(why, true);
+}
+
 ST.platform = {
   start(app) {
     const { $ } = ST.ui;
@@ -47,10 +68,13 @@ ST.platform = {
     // Back during a drill pauses it rather than tearing the canvas down.
     R.setGuard(() => { if (app.running()) { app.pause(); return true; } return false; });
 
+    // Discord sends the browser back with ?signin=<outcome>; say what happened and drop the parameter.
+    const signin = takeSignInOutcome();
     R.start();
     ST.account.init().then(() => {
       if (app.current() === 'home') ST.home.render();
       else if (app.current() === 'profile' && R.path() === '/profile') ST.profile.show(app);
+      if (signin) reportSignIn(signin);
     });
   },
 };
