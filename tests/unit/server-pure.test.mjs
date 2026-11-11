@@ -118,3 +118,23 @@ test('local time follows the user time zone and falls back to UTC', () => {
   assert.deepEqual(localNow('Not/AZone', t), { day: '2026-11-10', hour: 3 });
   assert.deepEqual(localNow(null, t), { day: '2026-11-10', hour: 3 });
 });
+
+test('share text names scenarios as the app does, and the home card gives way to a page card', async () => {
+  const { SCENARIO_NAMES, prettyScenario, inject } = await import('../../lib/page.mjs');
+  // js/benchmark.js is browser code; run it against a stub window to read the names it shows.
+  const vm = await import('node:vm');
+  const { readFileSync } = await import('node:fs');
+  const ctx = { window: {} };
+  ctx.ST = ctx.window.ST = {};
+  vm.runInNewContext(readFileSync(new URL('../../js/benchmark.js', import.meta.url), 'utf8').split('\nfor (const sc of')[0], ctx);
+  const names = Object.fromEntries(Object.entries(ctx.window.ST.SCENARIOS).map(([id, sc]) => [id, sc.name]));
+  assert.deepEqual(SCENARIO_NAMES, names);
+  assert.equal(prettyScenario('staticClick'), 'Static clicking');
+  assert.equal(prettyScenario('someNewThing'), 'Some new thing');
+  const tpl = '<head>\n<meta property="og:title" content="site">\n<meta name="twitter:card" content="x">\n<meta name="description" content="keep">\n</head>';
+  const page = inject(tpl, 'https://s', { title: 'p', description: 'd', image: '/i' }, 'https://s/u/p');
+  assert.equal((page.match(/og:title/g) || []).length, 1);
+  assert.doesNotMatch(page, /content="site"/);
+  assert.match(page, /name="description" content="keep"/);
+  assert.match(inject(tpl, 'https://s', null, 'https://s/'), /og:title" content="site"/);
+});
