@@ -12,11 +12,11 @@
 
   // Inputs (all optional except run):
   //   before / after: { streak }            streak length before and after this run
-  //   run:            { label, score, prevBest, warmup, tier, prevTier, insight }
+  //   run:            { label, score, prevBest, warmup, tier, prevTier, insight, aborted, routine }
   //   challenge:      { name, theirScore, yourScore }   a friend this run overtook
   //   survev:         compareWarmVsCold() result
   // Priority: streak milestone > benchmark tier up > personal best > friend overtaken >
-  //           real-game change > run insight.
+  //           real-game change > run insight. A run ended early says so instead of "done".
   function pickHeadline({ before = {}, after = {}, run = {}, challenge = null, survev = null } = {}) {
     const s0 = before.streak || 0, s1 = after.streak || 0;
     if (s1 > s0 && isMilestone(s1)) {
@@ -40,6 +40,9 @@
         title: `${d >= 0 ? '+' : ''}${round(d)} damage per minute after warming up`,
         detail: `In survev: ${round(survev.warm.dmgPerMin)} in ${survev.warm.n} games within an hour of a routine, ${round(survev.cold.dmgPerMin)} in ${survev.cold.n} games without.`,
       };
+    }
+    if (run.aborted) {
+      return { kind: 'done', title: run.label ? `${run.label} ended early` : 'Run ended early', detail: run.routine ? 'Only a finished routine counts toward your streak.' : '' };
     }
     if (run.insight) return { kind: 'insight', title: 'One thing to work on', detail: run.insight };
     return { kind: 'done', title: run.label ? `${run.label} done` : 'Run done', detail: run.score !== null && run.score !== undefined && !run.warmup ? `Score ${round(run.score)}.` : '' };

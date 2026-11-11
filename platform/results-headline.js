@@ -30,7 +30,7 @@ ST.resultsHeadline = (function () {
     const e = seq.results[seq.results.length - 1];
     const label = seq.routine ? seq.routine.name : (e && e.step.label);
     const single = seq.results.length === 1 && e;
-    return { label, score: single && e.step.scored ? e.result.score : null, prevBest: null, warmup: single ? e.step.warmup : false, insight };
+    return { label, score: single && e.step.scored ? e.result.score : null, prevBest: null, warmup: single ? e.step.warmup : false, insight, aborted: !!seq.aborted, routine: !!seq.routine };
   }
 
   function shareTargets(a) {

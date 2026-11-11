@@ -41,3 +41,11 @@ test('warm-up runs never claim a best or a tier', () => {
 test('a first counted run is not a personal best', () => {
   assert.notEqual(pickHeadline({ run: { label: 'Flick', score: 300, prevBest: null } }).kind, 'best');
 });
+
+test('a run ended early says so instead of "done", and a routine names the streak rule', () => {
+  const r = pickHeadline({ run: { label: 'Daily 5', score: 437, insight: 'Something', aborted: true, routine: true } });
+  assert.equal(r.title, 'Daily 5 ended early');
+  assert.match(r.detail, /finished routine/);
+  assert.equal(pickHeadline({ run: { label: 'Flick', aborted: true } }).detail, '');
+  assert.equal(pickHeadline({ run: { label: 'Flick', aborted: true, insight: 'x' } }).kind, 'done');
+});
