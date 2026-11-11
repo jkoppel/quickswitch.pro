@@ -309,6 +309,31 @@ test('events, feedback and the admin KPIs', { skip: !hasDb }, async () => {
   assert.ok(k.body.feedback.some(f => f.text === 'More sniper drills'));
 });
 
+test('the daily digest', { skip: !hasDb }, async () => {
+  const { previousDay, buildDigest } = await import('../../lib/digest.mjs');
+  // 03:00 UTC on the 12th is still the 11th in New York, so "yesterday" there is the 10th.
+  assert.equal(previousDay(new Date('2026-11-12T03:00:00Z'), 'America/New_York'), '2026-11-10');
+  assert.equal(previousDay(new Date('2026-11-12T03:00:00Z'), 'UTC'), '2026-11-11');
+
+  const anon = `${ANON}-digest`;
+  await call('POST', 'e', { body: { anonId: anon, events: [{ name: 'landing' }, { name: 'aim_test_done' }, { name: 'routine_complete' }] } });
+  const today = new Date().toISOString().slice(0, 10);
+  const d = await buildDigest({ day: today, tz: 'UTC' });
+  assert.equal(d.days.length, 8);
+  assert.equal(d.days[7].day, today);
+  assert.ok(d.days[7].visitors >= 1 && d.days[7].aim_tests >= 1 && d.days[7].trainers >= 1);
+  assert.match(d.subject, new RegExp(`^Quickswitch ${today}: \\d+ visitors?, \\d+ finished a routine$`));
+  assert.match(d.text, /Took the aim test/);
+  assert.match(d.html, /<table/);
+
+  assert.equal((await call('GET', 'cron/digest?dry=1')).status, 401);
+  const dry = await call('GET', `cron/digest?dry=1&day=${today}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
+  assert.equal(dry.status, 200);
+  assert.equal(dry.body.sent, false);
+  assert.equal((await call('GET', 'cron/digest?dry=1&day=nope', { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } })).status, 400);
+  await q('DELETE FROM events WHERE anon_id = $1', [anon]);
+});
+
 test('unknown routes and wrong methods', { skip: !hasDb }, async () => {
   assert.equal((await call('GET', 'nope')).status, 404);
   assert.equal((await call('DELETE', 'health')).status, 405);
