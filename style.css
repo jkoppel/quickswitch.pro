@@ -89,6 +89,12 @@ canvas#backdrop { position: fixed; inset: 0; display: block; z-index: 0; }
 #hud-slots .slot .n { flex: 1; text-transform: uppercase; letter-spacing: 0.5px; }
 #hud-slots .slot .a { font-weight: 700; font-variant-numeric: tabular-nums; }
 /* Spin meter: the one live readout, because you cannot feel your own angular velocity. */
+/* Perks, as survev shows them: a dark tile with each perk's loot icon, left of the health bar. A
+   perk whose haste is running lights up. */
+#hud-perks { position: absolute; right: calc(50% + 162px); bottom: 18px; max-width: 260px; display: flex; flex-wrap: wrap-reverse; justify-content: flex-end; gap: 4px; }
+#hud-perks .perk { width: 44px; height: 44px; padding: 6px; background: rgba(0, 0, 0, 0.4); border: 2px solid transparent; border-radius: var(--radius-sm); }
+#hud-perks .perk img { display: block; width: 100%; height: 100%; }
+#hud-perks .perk.on { border-color: var(--yellow); }
 #hud-spin { position: absolute; left: 12px; bottom: 32px; display: flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.9; visibility: hidden; text-shadow: var(--text-shadow-field); }
 #hud-spin .bar { width: 96px; height: 5px; background: rgba(0, 0, 0, 0.5); border-radius: 3px; overflow: hidden; }
 #hud-spin-fill { height: 100%; width: 100%; background: var(--yellow); transform-origin: left center; transform: scaleX(0); }

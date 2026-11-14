@@ -176,9 +176,12 @@ await start('/drill/dodge?perk=steelskin,flak_jacket,gotw');
 r = await inPage(`const g = ST.currentGame, p = g.player;
   const rnd = Math.random; Math.random = () => 0.99;
   const b = g.makeBullet(p.pos.x - 1, p.pos.y, 0, ST.WEAPONS.ak47, 'enemy', {});
+  const full = g.rollDamage(b).dmg;
   p.hp = 100; g.damagePlayer(b, p.pos.x, p.pos.y); Math.random = rnd;
-  return { taken: 100 - p.hp, full: g.rollDamage(b).dmg, scale: p.scale };`);
+  return { taken: 100 - p.hp, full, scale: p.scale };`);
 ok(near(r.taken, r.full * 0.9 * 0.55) && near(r.scale, 1.7), `body perks stack: Flak Jacket then Ironskin take ${r.taken} of ${r.full}; their sizes add up to ${r.scale}× the size`);
+const icons = await page.evaluate(() => [...document.querySelectorAll('#hud-perks img')].map((i) => (i.naturalWidth > 0 ? '' : '!') + i.alt).join(', '));
+ok(icons === 'Cast Ironskin, Flak Jacket, Gift of the Woods', `the HUD shows your perks' icons (${icons})`);
 await page.screenshot({ path: join(out, 'perks.png') });
 
 ok(!errors.length, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`);

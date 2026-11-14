@@ -662,6 +662,7 @@ window.ST = window.ST || {};
         reloadFrac: !g.throwable && g.reloading ? 1 - g.reloadT / g.def.reload : 0,
         weapon: g.def.name,
         slots, spin: this.spinFrac(), cooking: !!(g.throwable && g.cooking),
+        perks: [...this.perks], haste: p.hasteT > 0 ? p.hasteType : '',
         kills: this.stats.kills, deaths: this.stats.deaths,
         accuracy: this.stats.pellets ? this.stats.hits / this.stats.pellets : 0,
         hits: this.stats.hits,

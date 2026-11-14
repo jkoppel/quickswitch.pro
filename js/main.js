@@ -604,8 +604,9 @@
     timer: $('hud-timer'), kills: $('hud-kills'), deaths: $('hud-deaths'), step: $('hud-step'),
     health: $('hud-health-fill'), healthText: $('hud-health-text'), weapon: $('hud-weapon'), mag: $('hud-mag'),
     reload: $('hud-reload'), reloadFill: $('hud-reload-fill'), diff: $('hud-diff'), slots: $('hud-slots'),
-    spin: $('hud-spin'), spinFill: $('hud-spin-fill'),
+    spin: $('hud-spin'), spinFill: $('hud-spin-fill'), perks: $('hud-perks'),
   };
+  let lastPerks = null;
   let lastHud = '';
   let lastSlots = '';
   function updateHud(h) {
@@ -636,6 +637,12 @@
       hudEls.diff.textContent = h.difficulty === null ? '' : `adaptive difficulty ${Math.round(h.difficulty * 100)} / 100`;
     }
     hudEls.reloadFill.style.width = (h.reloadFrac * 100) + '%';
+    // Your perks, with Windwalk or Takedown lit while the haste it gave you lasts.
+    const perkKey = `${h.perks.join()}|${h.haste}`;
+    if (perkKey !== lastPerks) {
+      lastPerks = perkKey;
+      hudEls.perks.innerHTML = h.perks.map((id) => `<div class="perk${h.haste === id ? ' on' : ''}" title="${ST.PERKS[id].name}"><img src="vendor/survev/img/perks/${id}.svg" alt="${ST.PERKS[id].name}"></div>`).join('');
+    }
     // The only live readout the trainer adds: how hard you are spinning, because you cannot see your
     // own angular velocity and the whole point of the drill is learning what "spinning" feels like.
     hudEls.spin.style.visibility = h.spin > 0.02 ? 'visible' : 'hidden';
