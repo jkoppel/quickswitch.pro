@@ -250,9 +250,8 @@ ${peers.length ? `<h2>Other ${esc(x.ammo)} guns</h2>
 function guidesIndexPage() {
   const body = `<article>
 <h1>survev.io and surviv.io guides</h1>
-<p class="lead">Guides built from survev's source code, so the numbers match the game.</p>
 <ul class="guide-list">
-<li><a href="/guides/how-to-get-better/"><b>How to get better</b></a>: evanthebouncy's five drills, with timestamps.</li>
+<li><a href="/guides/how-to-get-better/"><b>The five drills to help you become a pro</b></a></li>
 <li><a href="/guides/quickswitch/"><b>How to quickswitch</b></a>: the exact switch rule, and the ${SLOW.length} guns that gain most from it.</li>
 <li><a href="/guides/bunker-codes/"><b>All bunker codes</b></a>: every puzzle door's code, in one page.</li>
 <li><a href="/guns/tier-list/"><b>Gun tier list</b></a>: vote on the best guns, next to a ranking by damage per second.</li>
