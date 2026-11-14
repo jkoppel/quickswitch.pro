@@ -39,19 +39,28 @@ body { overflow: auto; background: var(--night); }
 .vote button[aria-pressed="true"][data-v="1"] { border-color: var(--good); color: var(--good-text); }
 .vote button[aria-pressed="true"][data-v="-1"] { border-color: var(--danger); color: var(--warn); }
 .vote-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.tiers { margin: 12px 0; }
-.trow { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
-.tlabel { font-family: var(--font-title); font-weight: 700; font-size: 22px; text-align: center; border-radius: 4px; padding: 4px 0; color: #1a1f16; }
-.t-s { background: #ff7f7f; } .t-a { background: #ffbf7f; } .t-b { background: #ffdf7f; } .t-c { background: #bfff7f; } .t-d { background: #7fbfff; }
-.tguns { line-height: 1.8; }
-.trange { font-size: 12px; white-space: nowrap; }
+.ranking { margin: 16px 0 8px; }
+.tier-group + .tier-group { margin-top: 22px; }
+.doc .tier-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 4px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.tier-letter { font-family: var(--font-title); font-size: 24px; font-weight: 700; line-height: 1; color: var(--ink); min-width: 1ch; }
+.tier-note { font-family: var(--font-title); font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--sage); }
+.doc .bars { list-style: none; margin: 0; padding: 0; }
+.doc .bars li { display: grid; grid-template-columns: minmax(8em, 13em) 7em 1fr 3.5em; align-items: center; gap: 14px; margin: 0; padding: 5px 0; }
+.doc .bars a { color: var(--ink); text-decoration: none; }
+.doc .bars a:hover { color: var(--yellow); text-decoration: underline; text-underline-offset: 3px; }
+.bars .ammo { font-size: 13px; color: var(--ink-muted); }
+.bars .bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.bars .bar i { display: block; height: 100%; border-radius: 2px; background: var(--yellow); }
+.bars .num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.vote button svg { display: block; }
+.vote button { display: inline-flex; align-items: center; gap: 5px; }
 .doc blockquote { margin: 12px 0; padding: 4px 0 4px 16px; border-left: 1px solid var(--line); }
 .doc blockquote p { margin: 0 0 4px; color: var(--ink); }
 .doc blockquote footer { font-size: 13px; color: var(--ink-muted); }
 .video { position: relative; aspect-ratio: 16 / 9; margin: 16px 0 8px; background: #000; }
 .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 @media (max-width: 560px) {
-  .trow { grid-template-columns: 36px 1fr; }
-  .trange { grid-column: 2; }
+  .doc .bars li { grid-template-columns: 1fr 5em 3em; gap: 10px; }
+  .bars .ammo { display: none; }
 }
 .doc table.lists td:nth-child(4) { white-space: nowrap; }

@@ -31,15 +31,19 @@
       .map(([gun, t]) => ({ gun, t, score: wilson(t.up, t.up + t.down) })).sort((a, b) => b.score - a.score || b.t.up - a.t.up);
     const votes = rated.reduce((n, r) => n + r.t.up + r.t.down, 0);
     if (!rated.length) { board.innerHTML = '<p class="muted">No votes yet. Vote below and you set the first ranking.</p>'; return; }
-    const cuts = [['S', 0.1], ['A', 0.3], ['B', 0.6], ['C', 0.85], ['D', 1]];
+    const cuts = [['S', 0.1, 'top 10%'], ['A', 0.3, 'next 20%'], ['B', 0.6, 'next 30%'], ['C', 0.85, 'next 25%'], ['D', 1, 'the rest']];
     let i = 0;
-    const rows = cuts.map(([tier, upTo]) => {
+    const rows = cuts.map(([tier, upTo, note]) => {
       const xs = [];
       while (i < rated.length && i < Math.ceil(upTo * rated.length)) xs.push(rated[i++]);
-      return `<div class="trow"><span class="tlabel t-${tier.toLowerCase()}">${tier}</span><span class="tguns">${xs.map((r) =>
-        `<a href="/guns/${r.gun}/">${names[r.gun] || r.gun}</a> <span class="muted">${r.t.up}▲ ${r.t.down}▼</span>`).join(' · ') || '<span class="muted">none yet</span>'}</span></div>`;
+      if (!xs.length) return '';
+      return `<section class="tier-group"><h3 class="tier-head"><span class="tier-letter">${tier}</span><span class="tier-note">${note} of rated guns</span></h3><ol class="bars">${xs.map((r) => {
+        const n = r.t.up + r.t.down;
+        const share = Math.round(100 * r.t.up / n);
+        return `<li><a href="/guns/${r.gun}/">${names[r.gun] || r.gun}</a><span class="ammo">${n} vote${n === 1 ? '' : 's'}</span><span class="bar" aria-hidden="true"><i style="width:${share}%"></i></span><b class="num" title="${r.t.up} up, ${r.t.down} down">${share}%</b></li>`;
+      }).join('')}</ol></section>`;
     });
-    board.innerHTML = rows.join('') + `<p class="muted">${votes} vote${votes === 1 ? '' : 's'} on ${rated.length} gun${rated.length === 1 ? '' : 's'} so far.</p>`;
+    board.innerHTML = rows.join('') + `<p class="muted">${votes} vote${votes === 1 ? '' : 's'} on ${rated.length} gun${rated.length === 1 ? '' : 's'} so far. The number is each gun's share of upvotes; guns with few votes rank lower until more come in.</p>`;
   }
 
   // Votes go one at a time: the first one creates the session cookie that every later one must carry,

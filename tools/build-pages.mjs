@@ -136,7 +136,8 @@ ${rows.map((r) => `<tr>${r.map((c, i) => `<td${head[i].n ? ' class="n"' : ''}>${
 </tbody></table>`;
 const gunLink = (x) => `<a href="/guns/${x.id}/">${esc(x.name)}</a>`;
 // Up and down buttons for one gun; /guides/votes.js fills in the counts and sends the votes.
-const voteButtons = (x) => `<span class="vote" data-gun="${x.id}"><button type="button" data-v="1" aria-label="Upvote the ${esc(x.name)}">▲ <span class="up">·</span></button><button type="button" data-v="-1" aria-label="Downvote the ${esc(x.name)}">▼ <span class="down">·</span></button></span>`;
+const CHEVRON = (dir) => `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="${dir === 'up' ? 'M2.5 7.5 6 4l3.5 3.5' : 'M2.5 4.5 6 8l3.5-3.5'}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const voteButtons = (x) => `<span class="vote" data-gun="${x.id}"><button type="button" data-v="1" aria-label="Upvote the ${esc(x.name)}">${CHEVRON('up')}<span class="up">·</span></button><button type="button" data-v="-1" aria-label="Downvote the ${esc(x.name)}">${CHEVRON('down')}<span class="down">·</span></button></span>`;
 
 function quickswitchPage() {
   const m870 = stats('m870');
@@ -286,7 +287,7 @@ function tierListPage() {
 <p class="lead">Vote on any gun below and the community tier list re-sorts as the votes come in. Under it, the same ${ALL.length} guns ranked by the numbers from survev's source.</p>
 
 <h2>Community tier list</h2>
-<div id="community-tiers" class="tiers"><p class="muted">Loading votes…</p></div>
+<div id="community-tiers" class="ranking"><p class="muted">Loading votes…</p></div>
 
 <h2>Vote</h2>
 <p>One vote per gun, and you can change it any time. No account needed.</p>
@@ -295,8 +296,13 @@ ${table([{ t: 'Gun' }, { t: 'Ammo' }, { t: 'Your vote' }],
 
 <h2>By the numbers: damage per second, with reloads</h2>
 <p>Damage per second at close range, averaged over a full magazine and its reload, if every round hits the body, with no armor and no headshots. It rewards guns that keep firing and says nothing about range, so most snipers sit low here even though players rate them highest: the AWM-S is in the top picks of ${AWM_TOP} of the ${FULL_LISTS.length} <a href="/guns/community-tier-lists/">published rankings</a> that name them.</p>
-<div class="tiers">
-${tiers.map(([t, min, xs], i) => `<div class="trow"><span class="tlabel t-${t.toLowerCase()}">${t}</span><span class="tguns">${xs.map((x) => `${gunLink(x)} <span class="muted">${Math.round(x.sustained)}</span>`).join(' · ') || '<span class="muted">none</span>'}</span><span class="trange muted">${i === 0 ? `${min}+` : `${min}–${DPS_TIERS[i - 1][1]}`} damage/s</span></div>`).join('\n')}
+<div class="ranking">
+${tiers.map(([t, min, xs], i) => `<section class="tier-group">
+<h3 class="tier-head"><span class="tier-letter">${t}</span><span class="tier-note">${i === 0 ? `${min}+` : `${min}–${DPS_TIERS[i - 1][1]}`} damage per second</span></h3>
+${xs.length ? `<ol class="bars">
+${xs.map((x) => `<li><a href="/guns/${x.id}/">${esc(x.name)}</a><span class="ammo">${esc(x.ammo)}</span><span class="bar" aria-hidden="true"><i style="width:${Math.round(100 * x.sustained / byDps[0].sustained)}%"></i></span><b class="num">${Math.round(x.sustained)}</b></li>`).join('\n')}
+</ol>` : '<p class="muted">None.</p>'}
+</section>`).join('\n')}
 </div>
 </article>`;
   return page({
