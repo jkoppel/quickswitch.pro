@@ -8,7 +8,10 @@ Definitions are survev's own, extracted verbatim into `vendor/survev/defs/`: gun
 bullets from `shared/defs/gameObjects/gunDefs.ts` and `bulletDefs.ts`, throwables and
 explosions from `throwableDefs.ts` and `explosionsDefs.ts`, the stone and barrel
 obstacles from `shared/defs/mapObjects/obstacles/mapObstacleDefs.ts`, and the constants
-the simulation needs from `shared/gameConfig.ts`. Player, gun, obstacle, projectile,
+the simulation needs from `shared/gameConfig.ts`. The guide pages also use perks (`perkDefs.json`:
+`perkDefs.ts`, each role's perks from `roleDefs.ts`, each map's `tier_perks` loot and the English
+names and descriptions from `client/src/en.json`) and the puzzle codes (`puzzles.json`, from
+`shared/defs/puzzles.ts`). Player, gun, obstacle, projectile,
 particle and crosshair sprites, gun and explosion sounds, and the Roboto Condensed font
 are copied from the survev client into `vendor/survev/`. Player radius is 1 unit and
 movement is 12 units/s.
