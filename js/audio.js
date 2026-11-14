@@ -16,14 +16,14 @@ ST.audio = (function () {
     frag_pin_01: 'sfx/frag_pin_01.mp3', frag_throw_01: 'sfx/frag_throw_01.mp3', frag_ground_01: 'sfx/frag_ground_01.mp3',
     bullet_whiz_01: 'sfx/bullet_whiz_01.mp3', bullet_whiz_02: 'sfx/bullet_whiz_02.mp3', bullet_whiz_03: 'sfx/bullet_whiz_03.mp3',
   };
-  for (const w of ['m9', 'mp5', 'vector', 'ak47', 'm4a1', 'scar', 'dp28', 'mk12', 'm39', 'm870', 'spas12', 'mosin', 'sv98', 'awc']) {
-    FILES[`${w}_01`] = `guns/${w}_01.mp3`;
-    FILES[`${w}_reload_01`] = `guns/${w}_reload_01.mp3`;
+  // Every gun's own shot, reload, pump and pull sounds, named in its survev definition.
+  for (const w of Object.values(ST.WEAPONS || {})) {
+    for (const k of ['shoot', 'reload', 'cycle', 'pull']) {
+      const name = w.sound && w.sound[k];
+      if (name && !FILES[name]) FILES[name] = `guns/${name}.mp3`;
+    }
   }
-  for (const w of ['m870', 'spas12', 'mosin', 'sv98', 'awc']) {
-    FILES[`${w}_cycle_01`] = `guns/${w}_cycle_01.mp3`;
-    FILES[`${w}_pull_01`] = `guns/${w}_pull_01.mp3`;
-  }
+
   const GROUPS = {
     player_bullet_hit: ['player_bullet_hit_01', 'player_bullet_hit_02'],
     bullet_whiz: ['bullet_whiz_01', 'bullet_whiz_02', 'bullet_whiz_03'],

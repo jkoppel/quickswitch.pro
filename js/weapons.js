@@ -23,11 +23,18 @@ window.ST = window.ST || {};
     '50AE': { color: '#fff088', label: '.50 AE' },
     '308sub': { color: '#252b00', label: '.308 Subsonic' },
     '45acp': { color: '#ecbeff', label: '.45 ACP' },
+    // Not ammo types but tracer styles: the USAS-12's explosive slugs and silenced guns' rounds,
+    // which survev draws black (tint 0) so they barely show against the grass.
+    frag: { color: '#cb0000', label: '12 gauge' },
+    invis: { color: '#000000', label: 'silenced' },
   };
   ST.AMMO = ST.TRACER;
 
-  // The trainer's weapon list, in survev's own ids. AWM-S is "awc" in survev.
-  const LIST = ['m9', 'mp5', 'vector', 'ak47', 'm4a1', 'scar', 'dp28', 'mk12', 'm39', 'm870', 'spas12', 'mosin', 'sv98', 'awc'];
+  // The trainer's weapon list, in survev's own ids: every gun that drops in a normal match (the guide
+  // pages list the same ones). Event variants (potato, winter, flare, cursed) and the dual-wield forms
+  // are left out. AWM-S is "awc" in survev.
+  const AMMO_OK = new Set(['9mm', '762mm', '556mm', '12gauge', '45acp', '308sub', '50AE']);
+  const LIST = Object.keys(G).filter((id) => !G[id].noDrop && !G[id].isDual && AMMO_OK.has(G[id].ammo) && !/_winter$/.test(id));
 
   function build(id) {
     const g = G[id];
@@ -36,7 +43,8 @@ window.ST = window.ST || {};
     return {
       id,
       name: g.name,
-      ammo: b.tracerColor,
+      ammo: b.tracerColor,                 // the tracer style; ammoType is what the gun loads
+      ammoType: g.ammo,
       auto: g.fireMode === 'auto',
       burst: g.fireMode === 'burst' ? { count: g.burstCount || 3, delay: g.burstDelay || 0.05 } : null,
       fireDelay: g.fireDelay,
@@ -71,6 +79,8 @@ window.ST = window.ST || {};
       noDistAdj: !!b.noDistAdj,            // shotgun pellets skip the +-1 unit range jitter
       obstacleDamage: b.obstacleDamage !== undefined ? b.obstacleDamage : 1,
       shrapnel: !!b.shrapnel,
+      onHit: b.onHit || null,              // explosive rounds (the USAS-12's) blow up where they stop
+      fireMode: g.fireMode,
       slot: 'gun',
     };
   }
@@ -83,9 +93,23 @@ window.ST = window.ST || {};
   // Legacy key used by drills/scenarios.
   if (ST.WEAPONS.awm) ST.WEAPONS.awm.id = 'awc';
 
+  // A gun's class, worked out from its survev numbers rather than listed by hand: 12-gauge guns are
+  // shotguns, pistols say so, automatics are SMGs on pistol ammo, LMGs with a big belt or drum and
+  // assault rifles otherwise, and single-shot guns are snipers if they cycle slowly, DMRs if not.
+  ST.WEAPON_CLASSES = ['Pistols', 'SMGs', 'Assault rifles', 'LMGs', 'DMRs', 'Shotguns', 'Snipers'];
+  ST.weaponClass = (w) => {
+    if (w.ammoType === '12gauge') return 'Shotguns';
+    if (w.pistol) return 'Pistols';
+    if (w.fireMode === 'auto' || w.fireMode === 'burst') {
+      if (w.ammoType === '9mm' || w.ammoType === '45acp') return 'SMGs';
+      return w.mag > 45 ? 'LMGs' : 'Assault rifles';
+    }
+    return w.fireDelay >= 0.5 ? 'Snipers' : 'DMRs';
+  };
+
   // Shrapnel is a bullet like any other; frag grenades and barrels fire it.
   ST.SHRAPNEL = {};
-  for (const id of ['shrapnel_frag', 'shrapnel_barrel']) {
+  for (const id of ['shrapnel_frag', 'shrapnel_barrel', 'shrapnel_usas']) {
     const b = B[id];
     if (!b) continue;
     ST.SHRAPNEL[id] = {

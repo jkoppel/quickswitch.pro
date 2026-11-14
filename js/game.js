@@ -1084,7 +1084,8 @@ window.ST = window.ST || {};
       ST.audio.play(Math.random() < 0.5 ? 'explosion_01' : 'explosion_02', { dist: this.distToPlayer(q), volume: 0.9 });
       this.spawnFragBurst(x, y);
       if (def.dmg > 0) {
-        const targets = [{ o: this.player, kind: 'player' }].concat(this.enemies.map(e => ({ o: e, kind: 'enemy' })));
+        // As with bullets, bots' blasts only hurt the player; the player's hurt everyone, the player included.
+        const targets = [{ o: this.player, kind: 'player' }].concat(q.owner === 'enemy' ? [] : this.enemies.map(e => ({ o: e, kind: 'enemy' })));
         for (const t of targets) {
           const o = t.o;
           const dx = o.pos.x - x, dy = o.pos.y - y;
@@ -1093,8 +1094,13 @@ window.ST = window.ST || {};
           if (this.blocked(x, y, o.pos.x, o.pos.y)) continue;
           const dmg = dist <= def.radMin ? def.dmg : remap(dist, 0, def.radMax, def.dmg, 0);
           if (dmg <= 0) continue;
-          if (t.kind === 'enemy') this.damageEnemy(o, { dmg, dx: dx, dy: dy, source: 'explosion' }, o.pos.x, o.pos.y);
-          else { this.stats.nadeSelfDmg += Math.min(dmg, this.player.hp); this.damagePlayer({ dmg, dx, dy, source: 'explosion', owner: q.owner }, o.pos.x, o.pos.y); }
+          // An explosive round's blast is the gun's damage, not a grenade's, so it stays out of the grenade stats.
+          const source = q.round ? 'round' : 'explosion';
+          if (t.kind === 'enemy') this.damageEnemy(o, { dmg, dx: dx, dy: dy, source }, o.pos.x, o.pos.y);
+          else {
+            if (q.owner === 'player' && !q.round) this.stats.nadeSelfDmg += Math.min(dmg, this.player.hp);
+            this.damagePlayer({ dmg, dx, dy, source: 'explosion', owner: q.owner }, o.pos.x, o.pos.y);
+          }
         }
       }
       // Shrapnel: real bullets, fired outward, that can come back at you.
@@ -1417,6 +1423,15 @@ window.ST = window.ST || {};
         b.traveled += step;
         if (b.traveled >= b.range) b.dead = true;
       }
+      // bullet.ts: a round with an onHit effect (the USAS-12's) explodes where it stops, hit or not,
+      // unless it bounced off metal; 0.1 units back along its path, so never inside an obstacle.
+      for (const b of this.bullets.slice()) {
+        if (!b.dead || b.reflected || !b.def.onHit) continue;
+        const x = ST.EXPLOSIONS[b.def.onHit];
+        if (!x) continue;
+        this.explode({ x: b.x - b.dx * 0.1, y: b.y - b.dy * 0.1, owner: b.owner, round: true,
+          def: { dmg: x.damage, radMin: x.rad.min, radMax: x.rad.max, shrapnelCount: x.shrapnelCount, shrapnelType: x.shrapnelType } });
+      }
       this.bullets = this.bullets.filter(b => !b.dead);
       for (const b of spawned) this.bullets.push(b);
     }
@@ -1474,9 +1489,10 @@ window.ST = window.ST || {};
     // survev server player.ts: every bullet hit rolls a 15% headshot, which multiplies the damage by
     // the gun's headshotMult. Explosions never headshot.
     rollDamage(b) {
-      let dmg = b.source === 'explosion' ? b.dmg : this.bulletDamage(b);
+      const blast = b.source === 'explosion' || b.source === 'round';
+      let dmg = blast ? b.dmg : this.bulletDamage(b);
       let head = false;
-      if (b.source !== 'explosion' && b.headshotMult > 1 && Math.random() < GC.player.headshotChance) {
+      if (!blast && b.headshotMult > 1 && Math.random() < GC.player.headshotChance) {
         dmg *= b.headshotMult;
         head = true;
       }
@@ -1487,7 +1503,9 @@ window.ST = window.ST || {};
       const st = this.stats;
       const roll = this.rollDamage(b);
       const amount = roll.dmg;
-      if (b.source !== 'explosion') {
+      if (b.source === 'round') {
+        // An explosive round's blast: damage dealt, but neither a bullet hit nor a grenade's.
+      } else if (b.source !== 'explosion') {
         st.hits++;
         this.adaptWindow.hits++;
         if (b.moving) st.movingHits++;

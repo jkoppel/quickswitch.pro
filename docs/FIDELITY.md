@@ -56,6 +56,13 @@ Wrong, now fixed:
 | Scope choices | several drills spawned targets further away than the scope could show | a 16:9 view reaches `zoomRadius` sideways but only `zoomRadius · 9/16` up and down, so targets past that only ever appeared to the left and right. Every drill and scenario now picks the smallest scope that shows its spawn range in every direction, and the menu says so if you set one that does not. |
 | Arena size | fixed ±100 units | scales with the scope, because at 15x the view is 104 units wide and you could see past the edge of the world. |
 
+Every gun that drops in a normal survev match is in the trainer: the 55 in `gunDefs.ts` that aren't
+event variants (potato, winter, flare, cursed) or dual-wield forms, each with its own sprites and
+sounds from the survev client. The USAS-12's slugs explode where they stop, hit or miss, unless they
+bounced (`bullet.ts`): `explosion_usas` does 42 damage out to 3.5 units, fading to nothing at 6.5,
+with nine shrapnel rounds. As in survev, the blast hurts the shooter too: `player.damage` spares
+teammates but not the source. Silenced guns draw survev's black tracer, the USAS-12 its red one.
+
 Missing, now implemented: ricochet at `maxReflect` 3 with half damage per bounce, off everything
 survev makes of metal — barrels in the open and the walls, columns and control panels of a bunker,
 all of which inherit `reflectBullets` from the `metal` material in `mapObjectHelpers.ts`. Rectangular

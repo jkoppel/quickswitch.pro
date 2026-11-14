@@ -53,6 +53,12 @@ ST.assets = (function () {
 
   function load() {
     if (ready) return ready;
+    // Every gun's own sprites (its body and any separate top or magazine), from its worldImg.
+    for (const w of Object.values(ST.WEAPONS || {})) {
+      for (const name of [w.worldImg && w.worldImg.sprite, w.worldImg && w.worldImg.magImg && w.worldImg.magImg.sprite]) {
+        if (name && !SPRITES[name]) SPRITES[name] = `guns/${name.replace(/\.img$/, '.svg')}`;
+      }
+    }
     ready = Promise.all(Object.entries(SPRITES).map(([key, file]) => new Promise((resolve) => {
       const img = new Image();
       img.onload = () => { images[key] = img; resolve(); };

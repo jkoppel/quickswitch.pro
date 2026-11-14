@@ -50,18 +50,17 @@
       select.appendChild(o);
     }
   }
-  // Weapons grouped by class so the 14-item list scans.
-  const WEAPON_CLASS = [
-    ['Pistols', ['m9']], ['SMGs', ['mp5', 'vector']], ['Assault rifles', ['ak47', 'm4a1', 'scar']], ['LMG', ['dp28']],
-    ['DMRs', ['mk12', 'm39']], ['Shotguns', ['m870', 'spas12']], ['Snipers', ['mosin', 'sv98', 'awm']],
-  ];
+  // Weapons grouped by class (ST.weaponClass), alphabetical inside each, so the long list scans.
+  const WEAPON_CLASS = ST.WEAPON_CLASSES.map((cls) => [cls, Object.keys(ST.WEAPONS)
+    .filter((id) => ST.weaponClass(ST.WEAPONS[id]) === cls)
+    .sort((a, b) => ST.WEAPONS[a].name.localeCompare(ST.WEAPONS[b].name))]);
   (function fillWeapons() {
     const sel = fields.weapon;
     sel.innerHTML = '';
     const seen = new Set();
     for (const [group, ids] of WEAPON_CLASS) {
       const og = document.createElement('optgroup'); og.label = group;
-      for (const id of ids) { const w = ST.WEAPONS[id]; if (!w) continue; seen.add(id); const o = document.createElement('option'); o.value = id; o.textContent = `${w.name} (${ST.AMMO[w.ammo].label})`; og.appendChild(o); }
+      for (const id of ids) { const w = ST.WEAPONS[id]; if (!w) continue; seen.add(id); const o = document.createElement('option'); o.value = id; o.textContent = `${w.name} (${ST.AMMO[w.ammoType].label})`; og.appendChild(o); }
       sel.appendChild(og);
     }
     for (const [id, w] of Object.entries(ST.WEAPONS)) if (!seen.has(id)) { const o = document.createElement('option'); o.value = id; o.textContent = w.name; sel.appendChild(o); }
@@ -289,8 +288,9 @@
     return { label: m.name, key: drillKey(settings), settings, mode: m.id, scored: true, tip: m.tip || '' };
   }
 
-  function select(kind, item) {
-    selection = { kind, item };
+  // overrides: settings a link brings with it (/drill/<id>?gun=<id>), laid over the drill's own.
+  function select(kind, item, overrides) {
+    selection = { kind, item, overrides };   // kept, so a refresh of the picker keeps a link's gun
     for (const x of ST.ROUTINES) { if (!x._btn) continue; x._btn.classList.toggle('active', x === item); x._btn.setAttribute('aria-current', x === item ? 'true' : 'false'); }
     for (const x of ST.MODES) { x._btn.classList.toggle('active', x === item); x._btn.setAttribute('aria-current', x === item ? 'true' : 'false'); }
     $('mode-title').textContent = item.name;
@@ -320,6 +320,7 @@
       const saved = locked ? null : LS.get('st.lastSettings.' + item.id, null);
       writeSettings(modeDefaults(item));         // the drill's own preset is the floor
       if (saved) writeSettings(saved);           // then whatever of the saved run still makes sense
+      if (overrides) writeSettings(overrides);   // and a guide's link picks the gun, locked or not
       // Custom is the one drill whose point is the full parameter set.
       $('advanced').open = item.id === 'custom';
       const s = readSettings();
@@ -369,7 +370,7 @@
   let clearArmed = null;
   $('btn-clear').addEventListener('click', () => {
     const b = $('btn-clear');
-    if (clearArmed) { clearTimeout(clearArmed); clearArmed = null; ST.history.clear(); b.textContent = 'History cleared'; select(selection.kind, selection.item); updateSession(); setTimeout(() => { b.textContent = 'Clear history'; }, 2000); return; }
+    if (clearArmed) { clearTimeout(clearArmed); clearArmed = null; ST.history.clear(); b.textContent = 'History cleared'; select(selection.kind, selection.item, selection.overrides); updateSession(); setTimeout(() => { b.textContent = 'Clear history'; }, 2000); return; }
     b.textContent = 'Click again to clear all runs';
     clearArmed = setTimeout(() => { clearArmed = null; b.textContent = 'Clear history'; }, 4000);
   });
@@ -813,9 +814,9 @@
     registerScreen(name, el, opts = {}) { screens[name] = el; if (opts.backdrop) backdropScreens.add(name); },
     pause() { if (game && current === null && !game.paused) game.togglePause(); },
     // Open the routine and drill picker, optionally on one item.
-    openPicker(kind, id) {
+    openPicker(kind, id, overrides) {
       const item = kind === 'routine' ? ST.ROUTINES.find(r => r.id === id) : kind === 'mode' ? ST.MODES.find(m => m.id === id) : null;
-      if (item) select(kind, item); else select(selection.kind, selection.item);
+      if (item) select(kind, item, overrides); else select(selection.kind, selection.item, selection.overrides);
       show('menu');
     },
     startRoutine(id) {
@@ -836,8 +837,8 @@
     setBriefing(fn) { briefing = fn; },
     setResultsIntercept(fn) { intercept = fn; },
     // The advanced-settings gate: fn() is true while custom weapons and settings are locked.
-    setGate(fn) { gate = fn; if (current === 'menu') select(selection.kind, selection.item); },
-    refreshPicker() { select(selection.kind, selection.item); },
+    setGate(fn) { gate = fn; if (current === 'menu') select(selection.kind, selection.item, selection.overrides); },
+    refreshPicker() { select(selection.kind, selection.item, selection.overrides); },
   };
   ST.app = app;
   if (ST.platform && ST.platform.start) ST.platform.start(app);
