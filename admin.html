@@ -37,6 +37,7 @@
   const whenFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const day = (v) => { const [y, m, dd] = String(v).slice(0, 10).split('-').map(Number); return dayFmt.format(new Date(y, m - 1, dd, 12)); };
   const when = (v) => whenFmt.format(new Date(v));
+  const mins = (a, b) => { const m = Math.round((new Date(b) - new Date(a)) / 60000); return m < 1 ? '<1 min' : `${m} min`; };
   const pct = (a, b) => b ? ` <span class="muted">${Math.round(100 * a / b)}%</span>` : '';
   const table = (head, rows) => `<table><tr>${head.map(h => `<th${h.n ? ' class="n"' : ''}>${esc(h.t)}</th>`).join('')}</tr>${rows.map(r => `<tr>${r.map((c, i) => `<td${head[i].n ? ' class="n"' : ''}>${c}</td>`).join('')}</tr>`).join('')}</table>`;
 
@@ -44,6 +45,19 @@
     $('when').textContent = `Generated ${when(d.generatedAt)}`;
     const f = d.funnel30d;
     const parts = [];
+    const v = d.recentVisitors || [];
+    const steps = { aim_test_start: 'started the aim test', aim_test_done: 'did the aim test', skipped: 'skipped to the drills',
+      diagnostic_start: 'started the diagnostic', diagnostic_done: 'finished the diagnostic', plan_created: 'got a plan', reminder_set: 'set a reminder' };
+    const got = (x) => x.routines.length ? `finished ${x.routines.map(esc).join(', ')}` : x.last_step ? esc(steps[x.last_step] || x.last_step.replace(/_/g, ' ')) : 'looked around';
+    parts.push(`<h2>Visitors, last 24 hours</h2>` + (v.length ? table(
+      [{ t: 'Arrived' }, { t: 'From' }, { t: 'Aim test' }, { t: 'Got as far as' }, { t: 'Stayed', n: 1 }],
+      v.map(x => [
+        esc(when(x.first_ts)) + (x.returning ? ' <span class="muted">returning</span>' : ''),
+        esc(x.ref ? `?ref=${x.ref}` : x.referrer || '—'),
+        x.aim_tier ? `${esc(x.aim_tier)} <span class="muted">${esc(x.aim_score)}</span>` : '—',
+        got(x) + (x.member ? ` <span class="muted">@${esc(x.member)}</span>` : x.signed_up ? ' <span class="muted">signed in</span>' : ''),
+        esc(mins(x.first_ts, x.last_ts)),
+      ])) : '<p class="muted">Nobody yet.</p>'));
     parts.push(`<h2>Funnel, last 30 days</h2>` + table([{ t: 'Step' }, { t: 'Visitors', n: 1 }], [
       ['Landed', f.landing],
       ['Finished a routine', f.routine_complete + pct(f.routine_complete, f.landing)],

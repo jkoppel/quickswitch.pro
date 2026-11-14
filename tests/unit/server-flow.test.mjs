@@ -294,8 +294,10 @@ test('push subscriptions and the reminder cron', { skip: !hasDb }, async () => {
 });
 
 test('events, feedback and the admin KPIs', { skip: !hasDb }, async () => {
-  const e = await call('POST', 'e', { body: { anonId: `${ANON}-a`, events: [{ name: 'landing' }, { name: 'routine_complete', props: { routine: 'daily5' } }, { name: 'Bad Name' }, { name: 'error', props: { message: 'x' } }] } });
+  const e = await call('POST', 'e', { body: { anonId: `${ANON}-a`, events: [{ name: 'landing', props: { referrer: null, ref: 'discord' } }, { name: 'onboarding_step', props: { step: 'aim_test_done', tier: 'Gold', score: 104.6 } }, { name: 'routine_complete', props: { routine: 'daily5' } }, { name: 'Bad Name' }] } });
   assert.deepEqual(e.body, { ok: true, accepted: 3 });
+  await call('POST', 'e', { body: { anonId: `${ANON}-a`, events: [{ name: 'error', props: { message: 'x' } }] } });
+  await call('POST', 'e', { body: { anonId: `${ANON}-b`, events: [{ name: 'landing', props: { referrer: 'www.google.com' } }] } });
   assert.equal((await call('POST', 'e', { body: { events: 'nope' } })).status, 400);
   assert.equal((await call('POST', 'feedback', { body: { text: '  ', anonId: ANON } })).status, 400);
   assert.deepEqual((await call('POST', 'feedback', { body: { text: 'More sniper drills', context: { route: '/' }, anonId: `${ANON}-f` } })).body, { ok: true });
@@ -304,8 +306,16 @@ test('events, feedback and the admin KPIs', { skip: !hasDb }, async () => {
   assert.equal((await call('GET', 'admin/kpis', { headers: { authorization: 'Bearer wrong' } })).status, 401);
   const k = await call('GET', 'admin/kpis', { headers: { authorization: `Bearer ${process.env.ADMIN_TOKEN}` } });
   assert.equal(k.status, 200);
-  for (const f of ['funnel30d', 'cohorts', 'dau', 'streakDistribution', 'challenges', 'users', 'feedback', 'errors']) assert.ok(f in k.body, f);
+  for (const f of ['funnel30d', 'cohorts', 'dau', 'streakDistribution', 'challenges', 'users', 'feedback', 'errors', 'recentVisitors']) assert.ok(f in k.body, f);
   assert.ok(k.body.funnel30d.landing >= 1);
+  const visitor = k.body.recentVisitors.find(x => x.ref === 'discord' && x.aim_score === 105);
+  assert.ok(visitor, 'the visitor posted above is listed');
+  assert.equal(visitor.aim_tier, 'Gold');
+  assert.equal(visitor.last_step, 'aim_test_done');
+  assert.deepEqual(visitor.routines, ['daily5']);
+  assert.equal(visitor.returning, false);
+  const looker = k.body.recentVisitors.find(x => x.referrer === 'www.google.com' && x.last_step === null && !x.aim_tier);
+  assert.deepEqual(looker && looker.routines, [], 'a visitor who finished nothing has an empty list, not null');
   const kt = await call('GET', 'admin/kpis?tz=Pacific/Kiritimati', { headers: { authorization: `Bearer ${process.env.ADMIN_TOKEN}` } });
   assert.equal(kt.body.tz, 'Pacific/Kiritimati');
   assert.equal((await call('GET', 'admin/kpis?tz=Not/AZone', { headers: { authorization: `Bearer ${process.env.ADMIN_TOKEN}` } })).body.tz, 'UTC');
