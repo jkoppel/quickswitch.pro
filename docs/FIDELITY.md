@@ -58,10 +58,13 @@ Wrong, now fixed:
 
 Every gun that drops in a normal survev match is in the trainer: the 55 in `gunDefs.ts` that aren't
 event variants (potato, winter, flare, cursed) or dual-wield forms, each with its own sprites and
-sounds from the survev client. The USAS-12's slugs explode where they stop, hit or miss, unless they
-bounced (`bullet.ts`): `explosion_usas` does 42 damage out to 3.5 units, fading to nothing at 6.5,
-with nine shrapnel rounds. As in survev, the blast hurts the shooter too: `player.damage` spares
-teammates but not the source. Silenced guns draw survev's black tracer, the USAS-12 its red one.
+sounds from the survev client. The USAS-12 is `toMouseHit`: each slug flies only to the cursor, less
+the barrel (`weaponManager.ts`), and explodes where it stops, hit or miss, unless it bounced
+(`bullet.ts`). `explosion_usas` does 42 damage out to 3.5 units, fading to nothing at 6.5, with nine
+shrapnel rounds, and plays `explosion_03` with a burst at 0.75 scale. As in survev, the blast hurts
+the shooter too: `player.damage` spares teammates but not the source. Frags and barrels play
+`explosion_01`, survev's sound for an explosion on grass. Silenced guns draw survev's black tracer,
+the USAS-12 its red one.
 
 Missing, now implemented: ricochet at `maxReflect` 3 with half damage per bounce, off everything
 survev makes of metal — barrels in the open and the walls, columns and control panels of a bunker,

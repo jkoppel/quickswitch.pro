@@ -80,6 +80,7 @@ window.ST = window.ST || {};
       obstacleDamage: b.obstacleDamage !== undefined ? b.obstacleDamage : 1,
       shrapnel: !!b.shrapnel,
       onHit: b.onHit || null,              // explosive rounds (the USAS-12's) blow up where they stop
+      toMouseHit: !!g.toMouseHit,          // rounds travel only as far as the cursor (the USAS-12)
       fireMode: g.fireMode,
       slot: 'gun',
     };

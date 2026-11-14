@@ -11,7 +11,7 @@ ST.audio = (function () {
     stone_bullet_hit_01: 'hits/stone_bullet_hit_01.mp3',
     metal_bullet_hit_01: 'hits/metal_bullet_hit_01.mp3', metal_bullet_hit_02: 'hits/metal_bullet_hit_02.mp3',
     // Throwables and explosions (frag grenades, barrels).
-    explosion_01: 'sfx/explosion_01.mp3', explosion_02: 'sfx/explosion_02.mp3',
+    explosion_01: 'sfx/explosion_01.mp3', explosion_02: 'sfx/explosion_02.mp3', explosion_03: 'sfx/explosion_03.mp3',
     barrel_break_01: 'sfx/barrel_break_01.mp3',
     frag_pin_01: 'sfx/frag_pin_01.mp3', frag_throw_01: 'sfx/frag_throw_01.mp3', frag_ground_01: 'sfx/frag_ground_01.mp3',
     bullet_whiz_01: 'sfx/bullet_whiz_01.mp3', bullet_whiz_02: 'sfx/bullet_whiz_02.mp3', bullet_whiz_03: 'sfx/bullet_whiz_03.mp3',

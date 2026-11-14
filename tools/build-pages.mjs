@@ -234,7 +234,7 @@ function gunPage(x) {
   facts.push(`A headshot does ×${x.headshotMult} damage, and ${Math.round(HEADSHOT * 100)}% of hits are headshots, so the average hit does ${r2(x.avgMult)}× its listed damage.`);
   if (x.blast) {
     const e = EXPLOSIONS[BULLETS[g.bulletType].onHit];
-    facts.push(`Each slug explodes where it stops, hit or miss: ${e.damage} damage within ${e.rad.min} units, fading to nothing at ${e.rad.max}. The blast hurts you too, so keep your distance.`);
+    facts.push(`Each slug flies only as far as your cursor (up to ${x.range} units) and explodes there, hit or miss: ${e.damage} damage within ${e.rad.min} units, fading to nothing at ${e.rad.max}. Aim on the enemy, not past them, and not close to yourself: the blast hurts you too.`);
   }
   if (x.falloff < 1) facts.push(`Damage falls off with distance: a round that travels its full ${x.range} units does ${Math.round(x.falloff * 100)}% of its damage.`);
   if (x.cycle > SWITCH * 2) facts.push(`Its next shot comes ${s(x.cycle)} after the last, so <a href="/guides/quickswitch/">quickswitching</a> to your other gun (${s(SWITCH)}) saves ${s(x.cycle - SWITCH)} per shot.`);

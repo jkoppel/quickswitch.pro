@@ -921,7 +921,8 @@ window.ST = window.ST || {};
           if (gap < this.slowestFireDelay()) { this.stats.quickSwitchShots++; this.stats.switchGaps.push(gap); }
         }
         this.lastFireT = this.time;
-        this.fireGun(p, g.def, p.aim, p.moving, 'player', { firstShot });
+        const m = this.mouseWorld();
+        this.fireGun(p, g.def, p.aim, p.moving, 'player', { firstShot, toMouseLen: Math.hypot(m.x - p.pos.x, m.y - p.pos.y) });
       });
     }
 
@@ -1081,8 +1082,10 @@ window.ST = window.ST || {};
       const def = q.def;
       const x = q.x, y = q.y;
       this.explosions.push({ x, y, life: 0.5, maxLife: 0.5, radMax: def.radMax });
-      ST.audio.play(Math.random() < 0.5 ? 'explosion_01' : 'explosion_02', { dist: this.distToPlayer(q), volume: 0.9 });
-      this.spawnFragBurst(x, y);
+      // explosion.ts effect defs: a frag or barrel bursts with explosion_01 on grass (02 is the water
+      // sound), the USAS-12's slug with explosion_03 and a burst three-quarters the size.
+      ST.audio.play(q.round ? 'explosion_03' : 'explosion_01', { dist: this.distToPlayer(q), volume: 0.9 });
+      this.spawnFragBurst(x, y, q.round ? 0.75 : 1);
       if (def.dmg > 0) {
         // As with bullets, bots' blasts only hurt the player; the player's hurt everyone, the player included.
         const targets = [{ o: this.player, kind: 'player' }].concat(q.owner === 'enemy' ? [] : this.enemies.map(e => ({ o: e, kind: 'enemy' })));
@@ -1276,7 +1279,7 @@ window.ST = window.ST || {};
           const bursting = ST.aimBurst(e, c);
           const wantFire = e.reactT <= 0 && los && inRange && (bursting || !e.gun.def.auto);
           updateGun(e.gun, dt, wantFire, () => {
-            this.fireGun(e, e.gun.def, e.aim, vl > 0, 'enemy');
+            this.fireGun(e, e.gun.def, e.aim, vl > 0, 'enemy', { toMouseLen: c.dist });   // a bot's "cursor" is on you
           }, e.gun.def.auto ? 0 : 0.22);
         }
       }
@@ -1302,7 +1305,8 @@ window.ST = window.ST || {};
       // perfectly repeatable. Shotgun pellets opt out (noDistAdj) because they already jitter.
       const distAdj = def.noDistAdj ? 0 : remap(randInt(0, 16), 0, 16, -1, 1);
       const reflectCount = opts.reflectCount || 0;
-      const range = Math.max(1, (opts.range !== undefined ? opts.range : def.range) + distAdj);
+      // bullet.ts clamps a clipped round's distance at 0, so a slug fired at your feet bursts at the muzzle.
+      const range = Math.max(opts.clip ? 0 : 1, (opts.range !== undefined ? opts.range : def.range) + distAdj);
       return {
         x, y, sx: x, sy: y, dx: Math.cos(angle), dy: Math.sin(angle),
         speed: def.speed, dmg: def.dmg, range, traveled: 0, owner, ammo: def.ammo,
@@ -1329,11 +1333,14 @@ window.ST = window.ST || {};
       const gx = shooter.pos.x + -dy * def.barrelOffset, gy = shooter.pos.y + dx * def.barrelOffset;
       const dist = owner === 'enemy' ? Math.hypot(shooter.pos.x - this.player.pos.x, shooter.pos.y - this.player.pos.y) : 0;
       const spinning = owner === 'player' && this.spinFrac() > 0.5;
+      // weaponManager.ts: a toMouseHit gun (the USAS-12) fires each round only as far as the cursor,
+      // less the barrel, so an explosive slug bursts where you aim rather than at full range.
+      const clip = def.toMouseHit && opts.toMouseLen !== undefined ? Math.min(def.range, Math.max(opts.toMouseLen - def.barrel, 0)) : undefined;
       for (let i = 0; i < n; i++) {
         const a = aim + rand(-0.5, 0.5) * spread * DEG;
         let sx = gx + dx * def.barrel, sy = gy + dy * def.barrel;
         if (i > 0) { sx += rand(-jitter, jitter) * 1.11; sy += rand(-jitter, jitter) * 1.11; }
-        this.bullets.push(this.makeBullet(sx, sy, a, def, owner, { moving, spin: spinning }));
+        this.bullets.push(this.makeBullet(sx, sy, a, def, owner, { moving, spin: spinning, range: clip, clip: clip !== undefined }));
         if (owner === 'player') {
           this.stats.pellets++; this.adaptWindow.pellets++;
           if (moving) this.stats.movingPellets++;
@@ -1631,14 +1638,14 @@ window.ST = window.ST || {};
       }
     }
     // particles.ts frag burst: a few sprite puffs thrown outward from the blast.
-    spawnFragBurst(x, y) {
+    spawnFragBurst(x, y, scale = 1) {
       const S = ST.SURVEV.fragBurst;
       for (let i = 0; i < 10; i++) {
         const a = rand(0, TAU), sp = rand(4, 14), life = rand(0.35, 0.7);
         this.particles.push({
           kind: 'burst', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life, maxLife: life,
           drag: rand(3, 5), rot: rand(0, TAU), rotVel: rand(-4, 4),
-          scaleStart: 0.06, scaleEnd: rand(0.18, 0.3),
+          scaleStart: 0.06 * scale, scaleEnd: rand(0.18, 0.3) * scale,
           sprite: S.sprites[Math.floor(Math.random() * S.sprites.length)], color: '#ffd9a0', r: 0.3,
         });
       }
