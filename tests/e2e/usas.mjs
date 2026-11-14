@@ -75,6 +75,8 @@ ok(onBot.every((x) => x.toCursor < 2.5), 'each burst on the bot is at the cursor
 ok(onBot.some((x) => x.botDmg > 0), 'a burst on the bot hurts it');
 
 // 2. Cursor on an empty spot 8 units out: the slug must stop there, not fly its full 24 units.
+// Wait first for the last slugs aimed at the bot to land, so none bursts after the cursor moves.
+await page.waitForTimeout(600);
 const before = (await blasts()).length;
 const ppu = Number(await page.evaluate(() => document.body.dataset.ppu));
 await page.mouse.move(600 + 8 * ppu, 375);
