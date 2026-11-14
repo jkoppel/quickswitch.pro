@@ -24,6 +24,7 @@
 <body>
 <main class="admin">
   <h1>Trainer KPIs</h1>
+  <p class="muted"><a class="link" href="/admin-feedback.html">Feedback</a></p>
   <p id="when" class="muted">Paste the ADMIN_TOKEN from the Vercel project's environment variables. It stays in this browser.</p>
   <form id="auth"><input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="off" aria-label="Admin token"><button class="primary small" type="submit">Load</button></form>
   <div id="out"></div>
@@ -77,7 +78,7 @@
     parts.push(`<h2>Challenges</h2>` + table([{ t: 'Created', n: 1 }, { t: 'Opened', n: 1 }, { t: 'Completed', n: 1 }], [[c.created, c.opened, c.completed]]));
     const u = d.users;
     parts.push(`<h2>Users</h2>` + table([{ t: 'Guests', n: 1 }, { t: 'Signed in', n: 1 }, { t: 'Runs', n: 1 }], [[u.anon, u.members, u.runs]]));
-    parts.push(`<h2>Feedback</h2>` + (d.feedback.length ? table([{ t: 'When' }, { t: 'Text' }, { t: 'Where' }],
+    parts.push(`<h2>Feedback</h2><p class="muted"><a class="link" href="/admin-feedback.html">All feedback, with who sent it and from where</a></p>` + (d.feedback.length ? table([{ t: 'When' }, { t: 'Text' }, { t: 'Where' }],
       d.feedback.map(x => [esc(when(x.created_at)), esc(x.text), esc(x.context && x.context.route)])) : '<p class="muted">None yet.</p>'));
     parts.push(`<h2>Recent errors</h2>` + (d.errors.length ? table([{ t: 'When' }, { t: 'Error' }],
       d.errors.map(x => [esc(when(x.ts)), esc(x.props && (x.props.message || JSON.stringify(x.props)))])) : '<p class="muted">None.</p>'));

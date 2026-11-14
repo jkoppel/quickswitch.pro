@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Feedback · Quickswitch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/style.css">
+<style>
+  /* Every message players sent through the Feedback link, newest first. Same token as admin.html. */
+  body { overflow: auto; background: var(--night); }
+  .admin { max-width: 820px; margin: 32px auto; padding: 0 20px 48px; }
+  .admin h1 { margin: 0 0 4px; }
+  .admin .muted { color: var(--ink-muted); font-size: 13px; }
+  .admin form { display: flex; gap: 8px; margin-top: 16px; }
+  .admin form input { flex: 1; }
+  .fb { padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .fb-text { margin: 0 0 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.5; color: var(--ink); }
+  .fb-meta { margin: 0; font-size: 13px; color: var(--ink-muted); }
+  .fb-meta b { color: var(--ink-soft); font-weight: 600; }
+  .more { margin-top: 20px; }
+</style>
+</head>
+<body>
+<main class="admin">
+  <h1>Feedback</h1>
+  <p id="when" class="muted"><a class="link" href="/admin.html">KPIs</a> · Paste the ADMIN_TOKEN from the Vercel project's environment variables. It stays in this browser.</p>
+  <form id="auth"><input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="off" aria-label="Admin token"><button class="primary small" type="submit">Load</button></form>
+  <div id="out"></div>
+  <button id="more" class="ghost more hidden" type="button">Older feedback</button>
+</main>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const whenFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  let token = null;
+  let next = null;
+  let shown = 0;
+
+  // "Chrome on Windows" from a user agent string; good enough to know what to test on.
+  function device(ua) {
+    if (!ua) return '';
+    const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'a browser';
+    const os = /Windows/.test(ua) ? 'Windows' : /CrOS/.test(ua) ? 'ChromeOS' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : '';
+    return os ? `${browser} on ${os}` : browser;
+  }
+
+  function item(f) {
+    const c = f.context || {};
+    const who = f.kind === 'member' && f.handle ? `@${esc(f.handle)}` : 'a guest';
+    const meta = [
+      `<b>${esc(whenFmt.format(new Date(f.created_at)))}</b>`,
+      `from ${who}${f.runs ? ` with ${f.runs} run${f.runs === 1 ? '' : 's'}` : ''}`,
+      c.route ? `on <code>${esc(c.route)}</code>${c.screen ? ` (${esc(c.screen)} screen)` : ''}` : '',
+      c.lastRunKey ? `last played ${esc(c.lastRunKey)}` : '',
+      [device(c.userAgent), c.viewport].filter(Boolean).map(esc).join(', '),
+    ].filter(Boolean).join(' · ');
+    return `<div class="fb"><p class="fb-text">${esc(f.text)}</p><p class="fb-meta">${meta}</p></div>`;
+  }
+
+  async function load(before) {
+    const r = await fetch('/api/admin/feedback' + (before ? `?before=${before}` : ''), { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) { $('out').innerHTML = `<p class="muted">The server said ${r.status}. Check the token.</p>`; return false; }
+    const d = await r.json();
+    shown += d.items.length;
+    if (!before) $('out').innerHTML = d.items.length ? '' : '<p class="muted">No feedback yet.</p>';
+    $('out').insertAdjacentHTML('beforeend', d.items.map(item).join(''));
+    $('when').innerHTML = `<a class="link" href="/admin.html">KPIs</a> · ${d.total} message${d.total === 1 ? '' : 's'}, showing ${shown}`;
+    next = d.next;
+    $('more').classList.toggle('hidden', !next);
+    return true;
+  }
+
+  async function start(t) {
+    token = t;
+    if (await load(null)) { localStorage.setItem('st.adminToken', t); $('auth').classList.add('hidden'); }
+  }
+  $('auth').addEventListener('submit', (e) => { e.preventDefault(); start($('token').value.trim()); });
+  $('more').addEventListener('click', () => load(next));
+  const saved = localStorage.getItem('st.adminToken');
+  if (saved) start(saved);
+})();
+</script>
+</body>
+</html>

@@ -320,6 +320,14 @@ test('events, feedback and the admin KPIs', { skip: !hasDb }, async () => {
   assert.equal(kt.body.tz, 'Pacific/Kiritimati');
   assert.equal((await call('GET', 'admin/kpis?tz=Not/AZone', { headers: { authorization: `Bearer ${process.env.ADMIN_TOKEN}` } })).body.tz, 'UTC');
   assert.ok(k.body.feedback.some(f => f.text === 'More sniper drills'));
+
+  assert.equal((await call('GET', 'admin/feedback')).status, 401);
+  const fb = await call('GET', 'admin/feedback?limit=500', { headers: { authorization: `Bearer ${process.env.ADMIN_TOKEN}` } });
+  assert.equal(fb.status, 200);
+  const mine = fb.body.items.find(f => f.text === 'More sniper drills');
+  assert.equal(mine.context.route, '/');
+  assert.ok(fb.body.total >= fb.body.items.length);
+  assert.equal((await call('GET', 'admin/feedback?before=x', { headers: { authorization: `Bearer ${process.env.ADMIN_TOKEN}` } })).status, 400);
 });
 
 test('the daily digest', { skip: !hasDb }, async () => {

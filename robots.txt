@@ -1,6 +1,7 @@
 User-agent: *
 Allow: /
 Disallow: /admin.html
+Disallow: /admin-feedback.html
 Disallow: /api/
 
 Sitemap: https://quickswitch.pro/sitemap.xml

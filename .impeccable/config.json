@@ -8,6 +8,15 @@
         "value": "roboto condensed",
         "createdAt": "2026-11-10T17:49:13.384Z",
         "reason": "Claude: Roboto Condensed is the existing title/HUD font declared in style.css (--font-title, --font-hud) and inherited by admin.html's h1; admin.html adds no font"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          "admin-feedback.html"
+        ],
+        "createdAt": "2026-11-14T07:36:02.313Z",
+        "reason": "Claude: page sets body background to --night (#1a1f16); measured text contrast is 6.0:1 (ink-muted) to 14.5:1 (ink). Scanner compared against style.css's default --grass body background."
       }
     ]
   }
