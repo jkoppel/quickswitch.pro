@@ -42,3 +42,19 @@ test('every guide page links home, names a canonical URL and is in the sitemap',
     assert.ok(sitemap.includes(`<loc>${url}</loc>`), rel);
   }
 });
+
+test('players can vote on exactly the guns that have pages', async () => {
+  const { PAGE_IDS } = await import('../../tools/build-pages.mjs');
+  const { ratableGuns } = await import('../../lib/votes.mjs');
+  assert.deepEqual([...ratableGuns()].sort(), [...PAGE_IDS].sort());
+});
+
+test('the bunker codes page shows every code in survev\'s puzzles.ts, in order', () => {
+  const html = buildPages()['guides/bunker-codes/index.html'];
+  const puzzles = JSON.parse(readFileSync(new URL('vendor/survev/defs/puzzles.json', root), 'utf8'));
+  for (const [id, code] of Object.entries(puzzles)) {
+    const shown = code.map((p) => `<b>${p}`);
+    let at = 0;
+    for (const piece of shown) { at = html.indexOf(piece, at); assert.ok(at >= 0, `${id}: ${piece}`); }
+  }
+});

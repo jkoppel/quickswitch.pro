@@ -7,12 +7,17 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EVAN, QUOTES, TIER_LISTS } from './community.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ORIGIN = 'https://quickswitch.pro';
 const defs = (f) => JSON.parse(readFileSync(path.join(ROOT, 'vendor/survev/defs', f), 'utf8'));
 const GUNS = defs('gunDefs.json');
 const BULLETS = defs('bulletDefs.json');
+const PERKS = defs('perkDefs.json');
+// explosionDefs.js assigns one object literal to window.SURVEV_EXPLOSION_DEFS.
+const EXPLOSIONS = JSON.parse(/=\s*(\{[\s\S]*\});?\s*$/.exec(readFileSync(path.join(ROOT, 'vendor/survev/defs/explosionDefs.js'), 'utf8'))[1]);
+const PUZZLES = defs('puzzles.json');
 // gameConfig.js assigns one object literal to window.SURVEV_GAME_CONFIG.
 const GC = JSON.parse(/=\s*(\{[\s\S]*\});?\s*$/.exec(readFileSync(path.join(ROOT, 'vendor/survev/defs/gameConfig.js'), 'utf8'))[1]);
 const SWITCH = GC.player.baseSwitchDelay;
@@ -28,7 +33,7 @@ const AMMO_ORDER = Object.keys(AMMO);
 
 // Guns a player can pick up in a normal match: event-only variants (potato, winter, flare) and the
 // dual-wield forms of pistols are left out; a pistol's page mentions its dual form.
-const PAGE_IDS = Object.keys(GUNS).filter((id) => {
+export const PAGE_IDS = Object.keys(GUNS).filter((id) => {
   const g = GUNS[id];
   return !g.noDrop && !g.isDual && AMMO[g.ammo] && !/_winter$/.test(id);
 });
@@ -40,24 +45,36 @@ const andList = (xs) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(',
 const perSecond = FREE_EVERY === 1 ? 'once a second' : `once every ${FREE_EVERY} s`;
 const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// survev gives two guns the name "Vector" (9mm and .45 ACP); pages name them apart by ammo.
+const NAME_COUNT = {};
+for (const id of PAGE_IDS) NAME_COUNT[GUNS[id].name] = (NAME_COUNT[GUNS[id].name] || 0) + 1;
+
 export function stats(id) {
   const g = GUNS[id];
   const b = BULLETS[g.bulletType];
   const pellets = g.bulletCount || 1;
+  // Explosive rounds (the USAS-12's) also blow up on hit; a point-blank target takes the explosion's
+  // full damage, which applies out to rad.min. Its shrapnel flies in random directions and isn't counted.
+  if (b.onHit && !EXPLOSIONS[b.onHit]) throw new Error(`${id}: explosion ${b.onHit} is missing from explosionDefs.js`);
+  const blast = b.onHit ? EXPLOSIONS[b.onHit].damage : 0;
   const burst = g.fireMode === 'burst' ? g.burstCount : 1;
   // survev's weaponManager: a burst queues burstCount shots burstDelay apart, and each shot resets
   // the cooldown to fireDelay, so the next burst comes fireDelay after the last shot of this one.
   const cycle = burst > 1 ? (burst - 1) * g.burstDelay + g.fireDelay : g.fireDelay;
-  const perShot = b.damage * pellets;
+  const perShot = (b.damage + blast) * pellets;
   const dps = (perShot * burst) / cycle;
+  // Averaged over a full magazine and its reload: shotguns that load shell by shell reload maxReload
+  // rounds per reloadTime.
+  const reloadAll = g.maxReload < g.maxClip ? g.reloadTime * Math.ceil(g.maxClip / g.maxReload) : g.reloadTime;
+  const sustained = (perShot * g.maxClip) / (Math.ceil(g.maxClip / burst) * cycle + reloadAll);
   // Shot times from the first trigger pull until 100 damage lands, every pellet hitting the body.
   const times = [];
   for (let t = 0, n = 0; n * perShot < HP; t += cycle) {
     for (let i = 0; i < burst && n * perShot < HP; i++, n++) times.push(t + i * (g.burstDelay || 0));
   }
   return {
-    id, name: g.name, ammo: AMMO[g.ammo], ammoKey: g.ammo, fireMode: g.fireMode,
-    damage: b.damage, pellets, perShot, burst, cycle, dps,
+    id, name: NAME_COUNT[g.name] > 1 ? `${g.name} (${AMMO[g.ammo]})` : g.name, ammo: AMMO[g.ammo], ammoKey: g.ammo, fireMode: g.fireMode,
+    damage: b.damage, blast, pellets, perShot, burst, cycle, dps, sustained, reloadAll,
     shotsToKill: times.length, ttk: times[times.length - 1], needsReload: times.length > g.maxClip,
     headshotMult: g.headshotMult, avgMult: 1 + HEADSHOT * (g.headshotMult - 1),
     range: b.distance, speed: b.speed, falloff: b.falloff === undefined ? 1 : b.falloff,
@@ -73,7 +90,9 @@ const ALL = PAGE_IDS.map(stats).sort((a, b) => AMMO_ORDER.indexOf(a.ammoKey) - A
 const SLOW = ALL.filter((x) => x.cycle > SWITCH * 2).sort((a, b) => b.cycle - a.cycle);
 const SHARED = ALL.filter((x) => x.deployGroup !== undefined);
 
-function page({ urlPath, title, description, crumbs, body, jsonLd }) {
+const SOURCE_NOTE = 'Every number on this page comes from survev\'s source (<code>gunDefs.ts</code>, <code>bulletDefs.ts</code>, <code>gameConfig.ts</code>).';
+
+function page({ urlPath, title, description, crumbs, body, jsonLd, scripts = [], note = SOURCE_NOTE }) {
   const nav = crumbs.map(([label, href]) => href ? `<a href="${href}">${esc(label)}</a>` : `<span>${esc(label)}</span>`).join(' <span class="sep">/</span> ');
   return `<!doctype html>
 <html lang="en">
@@ -103,10 +122,10 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script
 ${body}
 <footer class="doc-foot">
 <p><a class="cta" href="/">Train it in the browser</a></p>
-<p class="muted">Every number on this page comes from survev's source (<code>gunDefs.ts</code>, <code>bulletDefs.ts</code>, <code>gameConfig.ts</code>). Quickswitch is a fan project, not affiliated with survev.io, Kongregate or surviv.io.</p>
+<p class="muted">${note} Quickswitch is a fan project, not affiliated with survev.io, Kongregate or surviv.io.</p>
 </footer>
 </main>
-</body>
+${scripts.map((src) => `<script src="${src}" defer></script>\n`).join('')}</body>
 </html>
 `;
 }
@@ -116,6 +135,8 @@ const table = (head, rows, cls = '') => `<table${cls ? ` class="${cls}"` : ''}><
 ${rows.map((r) => `<tr>${r.map((c, i) => `<td${head[i].n ? ' class="n"' : ''}>${c}</td>`).join('')}</tr>`).join('\n')}
 </tbody></table>`;
 const gunLink = (x) => `<a href="/guns/${x.id}/">${esc(x.name)}</a>`;
+// Up and down buttons for one gun; /guides/votes.js fills in the counts and sends the votes.
+const voteButtons = (x) => `<span class="vote" data-gun="${x.id}"><button type="button" data-v="1" aria-label="Upvote the ${esc(x.name)}">▲ <span class="up">·</span></button><button type="button" data-v="-1" aria-label="Downvote the ${esc(x.name)}">▼ <span class="down">·</span></button></span>`;
 
 function quickswitchPage() {
   const m870 = stats('m870');
@@ -158,16 +179,17 @@ ${table([{ t: 'Gun' }, { t: 'Ammo' }, { t: 'Next shot, waiting', n: 1 }, { t: 'N
 function gunsIndexPage() {
   const groups = AMMO_ORDER.filter((a) => ALL.some((x) => x.ammoKey === a));
   const body = `<article>
-<h1>survev.io gun stats</h1>
-<p class="lead">Damage, fire rate and switch delay for all ${ALL.length} guns that drop in a normal survev match, straight from the game's source. Damage per second assumes every round hits the body at close range, with no armor and no headshots.</p>
+<h1>surviv.io and survev.io gun stats</h1>
+<p class="lead">Damage, fire rate and switch delay for all ${ALL.length} guns that drop in a normal survev match, straight from the game's source. Damage per second assumes every round hits the body at close range, with no armor and no headshots; "with reloads" averages it over a full magazine and its reload.</p>
+<p>Which is best? <a href="/guns/tier-list/">Vote in the tier list</a>, or see <a href="/guns/community-tier-lists/">what other players ranked</a>.</p>
 ${groups.map((a) => `<h2>${esc(AMMO[a])}</h2>
-${table([{ t: 'Gun' }, { t: 'Damage per shot', n: 1 }, { t: 'Shots per second', n: 1 }, { t: 'Damage per second', n: 1 }, { t: 'Range', n: 1 }, { t: 'Switch delay', n: 1 }],
-    ALL.filter((x) => x.ammoKey === a).map((x) => [gunLink(x), x.pellets > 1 ? `${r1(x.perShot)} <span class="muted">${x.pellets}×${r1(x.damage)}</span>` : r1(x.perShot), r1(x.burst / x.cycle), Math.round(x.dps), x.range, s(x.switchDelay)]))}`).join('\n')}
+${table([{ t: 'Gun' }, { t: 'Damage per shot', n: 1 }, { t: 'Shots per second', n: 1 }, { t: 'Damage per second', n: 1 }, { t: 'With reloads', n: 1 }, { t: 'Range', n: 1 }, { t: 'Switch delay', n: 1 }],
+    ALL.filter((x) => x.ammoKey === a).map((x) => [gunLink(x), x.pellets > 1 ? `${r1(x.perShot)} <span class="muted">${x.pellets}×${r1(x.damage + x.blast)}</span>` : r1(x.perShot), r1(x.burst / x.cycle), Math.round(x.dps), Math.round(x.sustained), x.range, s(x.switchDelay)]))}`).join('\n')}
 </article>`;
   return page({
     urlPath: '/guns/',
-    title: 'survev.io gun stats: damage, fire rate and switch delay for every gun · Quickswitch',
-    description: `Damage, fire rate, damage per second, range and switch delay for all ${ALL.length} survev.io guns, taken from the game's source code.`,
+    title: 'surviv.io and survev.io gun stats: damage, fire rate and switch delay for every gun · Quickswitch',
+    description: `Damage, fire rate, damage per second, range and switch delay for all ${ALL.length} surviv.io and survev.io guns, taken from the game's source code.`,
     crumbs: [['Guides', '/guides/'], ['Guns']],
     body,
   });
@@ -191,20 +213,22 @@ function gunPage(x) {
   const rows = [
     ['Ammo', esc(x.ammo)],
     ['Fire mode', x.burst > 1 ? `${x.burst}-round burst` : x.fireMode === 'auto' ? 'automatic' : 'single shot'],
-    ['Damage per shot', x.pellets > 1 ? `${r1(x.perShot)} (${x.pellets} pellets × ${r1(x.damage)})` : r1(x.perShot)],
+    ['Damage per shot', x.pellets > 1 ? `${r1(x.perShot)} (${x.pellets} pellets × ${r1(x.damage + x.blast)})` : x.blast ? `${r1(x.perShot)} (${r1(x.damage)} bullet + ${r1(x.blast)} explosion)` : r1(x.perShot)],
     ['Time between shots', x.burst > 1 ? `${s(g.burstDelay)} inside a burst, ${s(g.fireDelay)} between bursts` : s(x.cycle)],
     ['Damage per second', `${Math.round(x.dps)}`],
+    ['Damage per second with reloads', `${Math.round(x.sustained)}`],
     ['Headshot multiplier', `×${x.headshotMult}`],
     ['Range', `${x.range} units`],
     ['Bullet speed', `${x.speed} units/s`],
     ['Spread, standing / moving', `${x.shotSpread}° / ${x.shotSpread + x.moveSpread}°`],
     ['Magazine', x.extClip && x.extClip !== x.clip ? `${x.clip} (${x.extClip} extended)` : `${x.clip}`],
-    ['Reload', x.reloadEach ? `${s(x.reloadTime)} per ${g.maxReload === 1 ? 'round' : `${g.maxReload} rounds`}` : s(x.reloadTime)],
+    ['Reload', x.reloadEach ? `${s(x.reloadTime)} per ${g.maxReload === 1 ? 'round' : `${g.maxReload} rounds`} (${s(x.reloadAll)} from empty)` : s(x.reloadTime)],
     ['Switch delay', s(x.switchDelay)],
   ];
   const body = `<article>
-<h1>${esc(x.name)} stats in survev.io</h1>
-<p class="lead">The ${esc(x.name)} fires ${esc(x.ammo)} and deals about ${Math.round(x.dps)} damage per second at close range.</p>
+<h1>${esc(x.name)} stats in survev.io and surviv.io</h1>
+<p class="lead">The ${esc(x.name)} fires ${esc(x.ammo)}. At close range it deals ${Math.round(x.dps)} damage per second while its magazine lasts, or ${Math.round(x.sustained)} averaged over reloads.</p>
+<p class="vote-line">Is the ${esc(x.name)} good? ${voteButtons(x)} <a href="/guns/tier-list/">See the community tier list</a></p>
 <ul class="facts">
 ${facts.map((f) => `<li>${f}</li>`).join('\n')}
 </ul>
@@ -215,28 +239,265 @@ ${peers.length ? `<h2>Other ${esc(x.ammo)} guns</h2>
 </article>`;
   return page({
     urlPath: `/guns/${x.id}/`,
-    title: `${x.name} stats in survev.io: damage, fire rate, switch delay · Quickswitch`,
-    description: `${x.name} in survev.io: ${r1(x.perShot)} damage per shot, ${Math.round(x.dps)} damage per second, ${x.shotsToKill} shots to deal ${HP} damage, ${s(x.switchDelay)} switch delay. From the game's source.`,
+    title: `${x.name} stats in surviv.io and survev.io: damage, fire rate, switch delay · Quickswitch`,
+    description: `${x.name} in surviv.io and survev.io: ${r1(x.perShot)} damage per shot, ${Math.round(x.dps)} damage per second, ${x.shotsToKill} shots to deal ${HP} damage, ${s(x.switchDelay)} switch delay. From the game's source.`,
     crumbs: [['Guides', '/guides/'], ['Guns', '/guns/'], [x.name]],
     body,
+    scripts: ['/guides/votes.js'],
   });
 }
 
 function guidesIndexPage() {
   const body = `<article>
-<h1>survev.io guides</h1>
-<p class="lead">Mechanics guides built from survev's source code, so the numbers match the game.</p>
+<h1>survev.io and surviv.io guides</h1>
+<p class="lead">Guides built from survev's source code, so the numbers match the game.</p>
 <ul class="guide-list">
+<li><a href="/guides/how-to-get-better/"><b>How to get better</b></a>: evanthebouncy's five drills, with timestamps.</li>
 <li><a href="/guides/quickswitch/"><b>How to quickswitch</b></a>: the exact switch rule, and the ${SLOW.length} guns that gain most from it.</li>
+<li><a href="/guides/bunker-codes/"><b>All bunker codes</b></a>: every puzzle door's code, in one page.</li>
+<li><a href="/guns/tier-list/"><b>Gun tier list</b></a>: vote on the best guns, next to a ranking by damage per second.</li>
+<li><a href="/guns/community-tier-lists/"><b>Community tier lists</b></a>: ${TIER_LISTS.length} published rankings and what they put on top.</li>
 <li><a href="/guns/"><b>Gun stats</b></a>: damage, fire rate and switch delay for all ${ALL.length} guns.</li>
+<li><a href="/perks/"><b>Perks</b></a>: what all ${PERK_IDS.length} perks do and where to get them.</li>
 </ul>
 </article>`;
   return page({
     urlPath: '/guides/',
-    title: 'survev.io guides: quickswitching and gun stats · Quickswitch',
-    description: 'survev.io mechanics guides built from the game\'s source: how quickswitching works, and stats for every gun.',
+    title: 'survev.io and surviv.io guides: tips, bunker codes, guns and perks · Quickswitch',
+    description: 'survev.io and surviv.io guides built from the game\'s source: how to get better, quickswitching, every bunker code, a gun tier list, gun stats and perks.',
     crumbs: [['Guides']],
     body,
+  });
+}
+
+// ---------- gun tier list (votes) and the community's published lists ----------
+
+// "By the numbers" tiers: damage per second at close range averaged over reloads, so a two-shell
+// MP220 doesn't outrank everything on one volley. The cutoffs are printed on the page.
+const DPS_TIERS = [['S', 100], ['A', 85], ['B', 70], ['C', 50], ['D', 0]];
+// Full rankings that name a top gun (single-class lists, loadouts and discussions left out).
+const FULL_LISTS = TIER_LISTS.filter((l) => l.top && !l.note);
+const AWM_TOP = FULL_LISTS.filter((l) => l.top.includes('AWM-S')).length;
+
+function tierListPage() {
+  const byDps = [...ALL].sort((a, b) => b.sustained - a.sustained);
+  const tiers = DPS_TIERS.map(([t, min], i) => [t, min, byDps.filter((x) => x.sustained >= min && (i === 0 || x.sustained < DPS_TIERS[i - 1][1]))]);
+  const body = `<article>
+<h1>surviv.io and survev.io gun tier list</h1>
+<p class="lead">Vote on any gun below and the community tier list re-sorts as the votes come in. Under it, the same ${ALL.length} guns ranked by the numbers from survev's source.</p>
+
+<h2>Community tier list</h2>
+<div id="community-tiers" class="tiers"><p class="muted">Loading votes…</p></div>
+
+<h2>Vote</h2>
+<p>One vote per gun, and you can change it any time. No account needed.</p>
+${table([{ t: 'Gun' }, { t: 'Ammo' }, { t: 'Your vote' }],
+    ALL.map((x) => [gunLink(x), esc(x.ammo), voteButtons(x)]), 'vote-table')}
+
+<h2>By the numbers: damage per second, with reloads</h2>
+<p>Damage per second at close range, averaged over a full magazine and its reload, if every round hits the body, with no armor and no headshots. It rewards guns that keep firing and says nothing about range, so most snipers sit low here even though players rate them highest: the AWM-S is in the top picks of ${AWM_TOP} of the ${FULL_LISTS.length} <a href="/guns/community-tier-lists/">published rankings</a> that name them.</p>
+<div class="tiers">
+${tiers.map(([t, min, xs], i) => `<div class="trow"><span class="tlabel t-${t.toLowerCase()}">${t}</span><span class="tguns">${xs.map((x) => `${gunLink(x)} <span class="muted">${Math.round(x.sustained)}</span>`).join(' · ') || '<span class="muted">none</span>'}</span><span class="trange muted">${i === 0 ? `${min}+` : `${min}–${DPS_TIERS[i - 1][1]}`} damage/s</span></div>`).join('\n')}
+</div>
+</article>`;
+  return page({
+    urlPath: '/guns/tier-list/',
+    title: 'surviv.io and survev.io gun tier list: vote on the best guns · Quickswitch',
+    description: `A live surviv.io and survev.io gun tier list ranked by player votes, next to all ${ALL.length} guns ranked by damage per second from the game's source.`,
+    crumbs: [['Guides', '/guides/'], ['Guns', '/guns/'], ['Tier list']],
+    body,
+    scripts: ['/guides/votes.js'],
+  });
+}
+
+function communityPage() {
+  const rows = TIER_LISTS.map((l) => [
+    `<a href="${esc(l.url)}" rel="nofollow noopener">${esc(l.title)}</a>`, esc(l.author), esc(l.where), esc(l.date), esc(l.reach),
+    l.top ? esc(l.top.join(', ')) + (l.note ? ` <span class="muted">(${esc(l.note)})</span>` : '') : `<span class="muted">${l.note ? esc(l.note) : 'in the video or image'}</span>`,
+  ]);
+  const body = `<article>
+<h1>surviv.io gun tier lists: what players rank best</h1>
+<p class="lead">Players have published gun rankings since 2018. The AWM-S is in the top picks of ${AWM_TOP} of the ${FULL_LISTS.length} full rankings below that name them, more than any other gun; the M249, SV-98, Saiga-12, USAS-12 and PKP make up most of the rest.</p>
+<p>Each entry links to the original. Most of them rank the 2018–2021 surviv.io, whose guns survev.io kept.</p>
+${table([{ t: 'Ranking' }, { t: 'By' }, { t: 'Where' }, { t: 'Date' }, { t: 'Reach' }, { t: 'Top picks' }], rows, 'lists')}
+
+<h2>What players say</h2>
+${QUOTES.map((x) => `<blockquote><p>“${esc(x.text)}”</p><footer>— <a href="${esc(x.url)}" rel="nofollow noopener">${esc(x.author)}</a>, ${esc(x.date)}</footer></blockquote>`).join('\n')}
+
+<h2>Add your vote</h2>
+<p>The <a href="/guns/tier-list/">live tier list</a> ranks every gun by player votes, next to a ranking by damage per second.</p>
+</article>`;
+  return page({
+    urlPath: '/guns/community-tier-lists/',
+    title: 'surviv.io gun tier lists from the community, in one place · Quickswitch',
+    description: `${TIER_LISTS.length} surviv.io and survev.io gun tier lists and rankings from YouTube, Reddit and the wiki, with their top picks and links to each.`,
+    crumbs: [['Guides', '/guides/'], ['Guns', '/guns/'], ['Community tier lists']],
+    body,
+    note: 'Each tier list and quote belongs to its author; follow the link for the original.',
+  });
+}
+
+// ---------- how to get better: evanthebouncy's drills ----------
+
+function evanPage() {
+  const at = (mmss) => { const [m, sec] = mmss.split(':').map(Number); return `<a href="https://www.youtube.com/watch?v=${EVAN.id}&amp;t=${m * 60 + sec}s" rel="noopener">${mmss}</a>`; };
+  const q = (text, mmss) => `<blockquote><p>“${esc(text)}”</p><footer>— evanthebouncy, ${at(mmss)}</footer></blockquote>`;
+  const body = `<article>
+<h1>How to get better at surviv.io: evanthebouncy's five drills</h1>
+<p class="lead">In 2019 evanthebouncy (Evan Pu), who does AI and cognitive-science research, recorded an hour of surviv drills. His argument: a real match is too noisy to tell what won or lost it, so practice one skill at a time in a setting where every action has a result you can see.</p>
+<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/${EVAN.id}" title="${esc(EVAN.title)}" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+<p class="muted">“<a href="https://www.youtube.com/watch?v=${EVAN.id}" rel="noopener">${esc(EVAN.title)}</a>” by <a href="${EVAN.channelUrl}" rel="noopener">${esc(EVAN.channel)}</a>, ${EVAN.date}, ${EVAN.length}. He also <a href="${EVAN.reddit}" rel="noopener">posted it to r/survivio</a>. This page summarizes it; the timestamps link into the video.</p>
+${q('drills so that you can actively practice so you get better', '00:20')}
+
+<h2>Set up before you drill</h2>
+<ul>
+<li><b>Bind every weapon to your right hand</b> (${at('02:44')}). His left hand moves and loots; right click switches to the other gun, middle click to melee, and the mouse wheel steps through scopes.</li>
+<li><b>Use a big crosshair</b> (${at('05:23')}). He finds the default too small.</li>
+<li><b>Warm up for three minutes</b> (${at('06:14')}): clicking drills, one click straight onto each target.</li>
+</ul>
+${q('I used to never start [a game] with [surviv] without doing a click practice for at least three minutes', '07:50')}
+
+<h2>The five drills</h2>
+<ol>
+<li><b>SMGs only, aiming behind the target</b> (${at('09:37')}). Use only spray guns such as the MAC-10, MP5 or AK-47. Leading a moving target with an imprecise cursor spreads your shots; trailing it keeps them together.</li>
+<li><b>Double pump only</b> (${at('19:23')}). Fire a pump shotgun, switch to the other gun at once, fire again. He pairs an M870 or SPAS-12 with an MP220, M1100, Saiga-12, OT-38 or Mosin-Nagant, and puts the shortest gap between the two shots at about a quarter of a second. survev's source agrees: a <a href="/guides/quickswitch/">quick switch</a> costs ${s(SWITCH)}.</li>
+<li><b>M870 plus an SMG</b> (${at('34:49')}): shotgun, half a magazine, shotgun, the other half, shotgun. Strong in tight spaces, weaker late in a match.</li>
+<li><b>Melee only</b> (${at('46:58')}). Win fights with your fists to learn diagonal movement and how to stay on top of a target.</li>
+<li><b>Passive-aggressive</b> (${at('52:49')}). Never fire first: close in, let them shoot, then answer with your shotgun. It trains patience.</li>
+</ol>
+${q('double pump is probably the most important thing you can do in [surviv]', '19:31')}
+${q('the passive-aggressive drill which is you never fire on someone until he fire on you first', '52:54')}
+
+<h2>Practice the same skills in Quickswitch</h2>
+${table([{ t: 'His drill' }, { t: 'Quickswitch drill' }], [
+    ['Three-minute click warm-up', '<b>Daily 5</b> (opens with a 30-second warm-up), <b>Flick</b>, <b>Static clicking</b>'],
+    ['SMGs only, aim behind the target', '<b>Tracking</b>, <b>Reactive tracking</b>, the <b>Tracking focus</b> routine'],
+    ['Double pump', '<b>Quick Switch</b> and <b>Shotgun Rush</b>, with survev\'s exact switch rule'],
+    ['M870 plus an SMG', '<b>Quick Switch</b> (M870 and MP5)'],
+    ['Passive-aggressive', '<b>Dodge under fire</b> and <b>1v1 Duel</b>, where the bot shoots back'],
+    ['Melee only', 'No melee drill yet'],
+  ])}
+</article>`;
+  return page({
+    urlPath: '/guides/how-to-get-better/',
+    title: 'How to get better at surviv.io and survev.io: 5 drills from evanthebouncy · Quickswitch',
+    description: 'evanthebouncy\'s five surviv drills, with timestamps: SMG tracking, double pump, M870 plus SMG, melee only and passive-aggressive, plus his keybind and warm-up setup.',
+    crumbs: [['Guides', '/guides/'], ['How to get better']],
+    body,
+    jsonLd: { '@context': 'https://schema.org', '@type': 'Article', headline: 'How to get better at surviv.io: evanthebouncy\'s five drills', url: `${ORIGIN}/guides/how-to-get-better/` },
+    note: `The video belongs to ${esc(EVAN.channel)}; quotes are from its captions.`,
+  });
+}
+
+// ---------- perks ----------
+
+const LOOT_MAPS = { base: 'Normal', desert: 'Desert', savannah: 'Savannah' };
+// Roles that hand out perks, by the mode they belong to (roleDefs.ts; Cobalt's classes come from
+// cobaltDefs.ts perkModeRoles).
+const ROLE_MODE = { scout: 'Cobalt', sniper: 'Cobalt', healer: 'Cobalt', demo: 'Cobalt', assault: 'Cobalt', tank: 'Cobalt',
+  leader: '50v50', captain: '50v50', lieutenant: '50v50', medic: '50v50', marksman: '50v50', recon: '50v50',
+  grenadier: '50v50', bugler: '50v50', last_man: '50v50', woods_king: 'Woods' };
+// Lone Survivr always gets Steelskin and Takedown, plus one of each pair below at random (roleDefs.ts).
+const LONE_RANDOM = ['ap_rounds', 'splinter', 'windwalk', 'field_medic'];
+const PERK_IDS = Object.keys(PERKS.perks).sort((a, b) => PERKS.perks[a].name.localeCompare(PERKS.perks[b].name));
+
+function perkSources(id) {
+  const out = [];
+  for (const [rid, r] of Object.entries(PERKS.roles)) {
+    if (!r.perks.includes(id)) continue;
+    const mode = ROLE_MODE[rid];
+    out.push(`${/^the /i.test(r.name) ? '' : 'the '}${esc(r.name)} role${mode ? ` (${mode})` : ''}${rid === 'last_man' && LONE_RANDOM.includes(id) ? ' as one of two random picks' : ''}`);
+  }
+  const maps = Object.entries(PERKS.lootByMap).filter(([, ids]) => ids.includes(id)).map(([m]) => LOOT_MAPS[m] || m);
+  if (maps.length) out.push(`loot on the ${andList(maps)} map${maps.length > 1 ? 's' : ''}`);
+  if (/^(trick_|treat_|halloween_)/.test(id)) out.push('the Halloween event');
+  return out;
+}
+const perkLink = (id) => `<a href="/perks/${id}/">${esc(PERKS.perks[id].name)}</a>`;
+
+function perksIndexPage() {
+  const body = `<article>
+<h1>surviv.io and survev.io perks</h1>
+<p class="lead">What each of survev's ${PERK_IDS.length} perks does, in the game's own words, and where you can get it.</p>
+${table([{ t: 'Perk' }, { t: 'What it does' }, { t: 'Where you get it' }],
+    PERK_IDS.map((id) => [perkLink(id), esc(PERKS.perks[id].desc) || '<span class="muted">no description in the game</span>', andList(perkSources(id)) || '<span class="muted">not in normal loot</span>']))}
+</article>`;
+  return page({
+    urlPath: '/perks/',
+    title: 'surviv.io and survev.io perks: what every perk does · Quickswitch',
+    description: `All ${PERK_IDS.length} survev.io and surviv.io perks: what each one does and which role, map or event gives it, from the game's source.`,
+    crumbs: [['Guides', '/guides/'], ['Perks']],
+    body,
+    note: 'Every perk and number on this page comes from survev\'s source (<code>perkDefs.ts</code>, <code>roleDefs.ts</code>, the map definitions and the English text file).',
+  });
+}
+
+function perkPage(id) {
+  const p = PERKS.perks[id];
+  const from = perkSources(id);
+  const ammo = Object.entries(PERKS.ammoBonuses).filter(([, ids]) => ids.includes(id)).map(([a]) => AMMO[a] || a);
+  const props = p.properties ? Object.entries(p.properties).filter(([, v]) => typeof v !== 'object') : [];
+  const body = `<article>
+<h1>${esc(p.name)} perk in survev.io and surviv.io</h1>
+<p class="lead">${esc(p.desc) || 'The game gives this perk no description.'}</p>
+<ul class="facts">
+<li>${from.length ? `You get it from ${andList(from)}.` : 'It isn\'t in normal loot or any role\'s kit.'}</li>
+${ammo.length ? `<li>${andList(ammo)} rounds do ×${PERKS.ammoBonusDamageMult} damage with it.</li>\n` : ''}</ul>
+${props.length ? `<h2>Numbers in the game files</h2>
+${table([{ t: 'Setting' }, { t: 'Value', n: 1 }], props.map(([k, v]) => [`<code>${esc(k)}</code>`, esc(v)]), 'stats')}` : ''}
+<h2>Other perks</h2>
+<p class="peers">${PERK_IDS.filter((x) => x !== id).map(perkLink).join(' · ')}</p>
+</article>`;
+  return page({
+    urlPath: `/perks/${id}/`,
+    title: `${p.name} perk in surviv.io and survev.io: what it does · Quickswitch`,
+    description: `${p.name} in survev.io and surviv.io: ${p.desc || 'what it does'}${from.length ? ` Comes from ${from.join(', ').replace(/<[^>]+>/g, '')}.` : ''}`,
+    crumbs: [['Guides', '/guides/'], ['Perks', '/perks/'], [p.name]],
+    body,
+    note: 'Every perk and number on this page comes from survev\'s source (<code>perkDefs.ts</code>, <code>roleDefs.ts</code>, the map definitions and the English text file).',
+  });
+}
+
+// ---------- bunker and puzzle codes ----------
+
+// Where each puzzle in puzzles.ts sits, traced through survev's building, structure and map defs.
+// `wait` is the puzzle's pieceResetDelay: how long it waits between presses before it resets.
+const PUZZLE_SPOTS = [
+  { id: 'bunker_eye_02_woods', place: 'Eye bunker vault', maps: 'Woods (all seasons)', wait: 10 },
+  { id: 'bunker_eye_02', place: 'Eye bunker vault', maps: 'Halloween', wait: 10 },
+  { id: 'bunker_chrys_01', place: 'Greenhouse bunker (chrysanthemum), lab door', maps: 'every map with a greenhouse: Normal and its seasonal versions, Desert, Snow, 50v50, Potato', wait: 10, show: { ichi: 'ichi (一)', ni: 'ni (二)', san: 'san (三)', shi: 'shi (四)' } },
+  { id: 'bunker_chrys_02', place: 'Greenhouse bunker (chrysanthemum), vault', maps: 'the same greenhouse maps', wait: 10 },
+  { id: 'bunker_twins', place: 'Twins bunker', maps: 'Cobalt', wait: 6 },
+  { id: 'club_01', place: 'Club, secret door', maps: 'Normal, Beach, Cobalt, Potato', wait: 10 },
+  { id: 'club_02', place: 'Bathhouse under the club, vault', maps: 'Normal, Beach, Cobalt, Potato', wait: 10 },
+  { id: 'saloon', place: 'Saloon, secret door', maps: 'Desert', wait: 10 },
+  { id: 'reserve_vault', place: 'Reserve vault', maps: 'Desert', wait: 6 },
+];
+
+function bunkerCodesPage() {
+  const unplaced = Object.keys(PUZZLES).filter((id) => !PUZZLE_SPOTS.some((x) => x.id === id));
+  if (unplaced.length) throw new Error(`puzzles.ts has codes this page doesn't place: ${unplaced.join(', ')}`);
+  const code = (spot) => PUZZLES[spot.id].map((piece) => `<b>${esc((spot.show && spot.show[piece]) || piece)}</b>`).join(' → ');
+  const body = `<article>
+<h1>All survev.io and surviv.io bunker codes</h1>
+<p class="lead">Every puzzle door in survev takes the same code in every match. Here are all ${PUZZLE_SPOTS.length}, read from the game's source (<code>puzzles.ts</code>). Press the pieces in this order.</p>
+${table([{ t: 'Where' }, { t: 'Map' }, { t: 'Code' }, { t: 'Reset after', n: 1 }],
+    PUZZLE_SPOTS.map((x) => [esc(x.place), esc(x.maps), code(x), `${x.wait} s`]), 'codes')}
+<h2>How the puzzles work</h2>
+<ul>
+<li><b>A wrong piece resets the whole code.</b> Once you've pressed as many pieces as the code is long and the order is wrong, the door buzzes and you start over.</li>
+<li><b>Pause too long and it resets.</b> The last column is how long the puzzle waits between presses.</li>
+<li><b>The Woods eye bunker uses a longer code</b> than the Halloween one: the game swaps in a ten-symbol code whenever the map is in woods mode.</li>
+</ul>
+</article>`;
+  return page({
+    urlPath: '/guides/bunker-codes/',
+    title: 'All survev.io and surviv.io bunker codes, in one page · Quickswitch',
+    description: 'Every survev.io and surviv.io bunker and puzzle code in one page: Eye bunker (Woods and Halloween), greenhouse chrysanthemum bunker, Twins bunker, club, bathhouse, saloon and reserve vault.',
+    crumbs: [['Guides', '/guides/'], ['Bunker codes']],
+    body,
+    jsonLd: { '@context': 'https://schema.org', '@type': 'Article', headline: 'All survev.io and surviv.io bunker codes', url: `${ORIGIN}/guides/bunker-codes/` },
+    note: 'Every code on this page comes from survev\'s source (<code>shared/defs/puzzles.ts</code> and the building and map definitions).',
   });
 }
 
@@ -253,9 +514,15 @@ export function buildPages() {
   const files = {
     'guides/index.html': guidesIndexPage(),
     'guides/quickswitch/index.html': quickswitchPage(),
+    'guides/how-to-get-better/index.html': evanPage(),
+    'guides/bunker-codes/index.html': bunkerCodesPage(),
     'guns/index.html': gunsIndexPage(),
+    'guns/tier-list/index.html': tierListPage(),
+    'guns/community-tier-lists/index.html': communityPage(),
+    'perks/index.html': perksIndexPage(),
   };
   for (const x of ALL) files[`guns/${x.id}/index.html`] = gunPage(x);
+  for (const id of PERK_IDS) files[`perks/${id}/index.html`] = perkPage(id);
   files['sitemap.xml'] = sitemap(['/', ...Object.keys(files).map((f) => '/' + f.replace(/index\.html$/, ''))]);
   return files;
 }
