@@ -1479,6 +1479,9 @@ window.ST = window.ST || {};
               const ux = (ex - p.pos.x) / p.radius, uy = (ey - p.pos.y) / p.radius;
               hx = ex; hy = ey;
               const dot = b.dx * ux + b.dy * uy;
+              // client bullet.ts: a round off Ironskin clangs like a pan and throws metal chips.
+              ST.audio.play('pan_bullet_hit_01', { volume: 0.6 });
+              this.spawnPuff(hx, hy, 'rgba(255,225,150,0.9)', 3);
               if (dot < 0) {
                 b.reflected = true;
                 spawned.push(this.makeBullet(hx + ux * 0.1, hy + uy * 0.1, Math.atan2(b.dy - 2 * dot * uy, b.dx - 2 * dot * ux), b.def, b.owner, {
@@ -1918,7 +1921,7 @@ window.ST = window.ST || {};
         }
       }
 
-      this.drawCharacter(p.pos.x, p.pos.y, p.aim, p.gun, SV.skinTint, p.scale);
+      this.drawCharacter(p.pos.x, p.pos.y, p.aim, p.gun, SV.skinTint, p.scale, this.perks);
       if (p.gun && p.gun.throwable && p.gun.cooking) {
         // Cooking: the ring counts the fuse down on your own body.
         const left2 = clamp(1 - p.gun.cookT / p.gun.def.fuseTime, 0, 1);
@@ -2050,7 +2053,7 @@ window.ST = window.ST || {};
     // Player rendering per survev client/src/objects/player.ts and animData.ts:
     // body sprite at scale 0.25 (140px -> 35px = 2.19 units), hands at the idle-pose pivots (16 px per unit),
     // gun sprite anchored at its bottom center on the right hand offset (-4.25, -1.75), scaled by worldImg.scale * 0.5.
-    drawCharacter(x, y, aim, gun, skinTint, scale = 1) {
+    drawCharacter(x, y, aim, gun, skinTint, scale = 1, perks = null) {
       const ctx = this.ctx, A = ST.assets, SV = ST.SURVEV, U = SV.ppuBase;
       const def = gun.def;
       const throwing = !!gun.throwable;
@@ -2082,6 +2085,19 @@ window.ST = window.ST || {};
       // Body.
       if (body) ctx.drawImage(body, -bodySize / 2, -bodySize / 2, bodySize, bodySize);
       else { ctx.beginPath(); ctx.arc(0, 0, PLAYER_R, 0, TAU); ctx.fillStyle = A.hex(skinTint); ctx.fill(); }
+      // What player.ts puts on the body for two perks: Flak Jacket a dark red vest at 70%, Cast
+      // Ironskin a black frying pan, each sprite centred on its anchor.
+      const wear = (sprite, spriteScale, ax, ay, tint, alpha) => {
+        const raw = A.get(sprite);
+        const img = tint === undefined ? raw : A.tint(sprite, A.hex(tint));
+        if (!raw || !img) return;
+        const w = (raw.naturalWidth || raw.width) * spriteScale / U, h = (raw.naturalHeight || raw.height) * spriteScale / U;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(img, -ax * w, -ay * h, w, h);
+        ctx.globalAlpha = 1;
+      };
+      if (perks && perks.has('flak_jacket')) wear('player-armor-base-01.img', 0.215, 0.5, 0.5, 0x380606, 0.7);
+      if (perks && perks.has('steelskin')) wear('loot-melee-pan-black.img', 0.4, 0.575, 0.5, undefined, 1);
 
       // Gun, drawn from its stock at the right hand toward the muzzle.
       // Most guns share a generic silhouette (gun-short/med/long) and are told apart only by

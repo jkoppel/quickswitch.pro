@@ -10,6 +10,8 @@ ST.assets = (function () {
     'player-hands-01.img': 'player/player-hands-01.svg',
     'player-feet-01.img': 'player/player-feet-01.svg',
     'player-circle-base-01.img': 'player/player-circle-base-01.svg',
+    'player-armor-base-01.img': 'player/player-armor-base-01.svg',   // Flak Jacket's vest
+    'loot-melee-pan-black.img': 'player/loot-melee-pan-black.svg',   // Cast Ironskin's pan
     'player-bullet-trail-02.img': 'player/player-bullet-trail-02.svg',
     'gun-short-01.img': 'guns/gun-short-01.svg',
     'gun-med-01.img': 'guns/gun-med-01.svg',
