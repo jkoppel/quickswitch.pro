@@ -9,7 +9,10 @@ window.ST = window.ST || {};
 ST.analytics = (function () {
   const HOSTS = ['quickswitch.pro'];
   const POSTHOG_KEY = 'phc_ACmDdg2oaiAJcE5zMC4NVgLoJEzLSDMVuw8bkPmjGaBL';
-  const POSTHOG_HOST = 'https://eu.i.posthog.com';
+  // PostHog goes through our own domain (vercel.json rewrites /relay to PostHog's EU cloud): ad
+  // blockers drop requests to posthog.com, and they took most of the launch's visitors with them.
+  const POSTHOG_HOST = '/relay';
+  const POSTHOG_UI = 'https://eu.posthog.com';
   const GA_ID = 'G-NE05TEV8GY';
   // European Economic Area, the UK and Switzerland: Google Analytics starts with storage denied
   // there (Consent Mode sends cookieless pings). Everywhere else it may set its cookie.
@@ -41,6 +44,7 @@ ST.analytics = (function () {
     ph.__SV = 1;
     ph.init(POSTHOG_KEY, {
       api_host: POSTHOG_HOST,
+      ui_host: POSTHOG_UI,
       person_profiles: 'identified_only',
       capture_pageview: 'history_change',   // the app routes with pushState
       persistence: 'localStorage',          // no PostHog cookie
@@ -62,7 +66,7 @@ ST.analytics = (function () {
   // The two scripts weigh about 1 MB between them, ten times the game, so they wait until the page
   // has loaded and gone idle. The stubs above queue every call made before then; nothing is lost.
   function loadScripts() {
-    loadScript(POSTHOG_HOST.replace('.i.posthog.com', '-assets.i.posthog.com') + '/static/array.js');
+    loadScript(POSTHOG_HOST + '/static/array.js');
     loadScript(`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`);
   }
 
