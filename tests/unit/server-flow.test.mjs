@@ -40,6 +40,7 @@ function run(id, offsetDays, extra = {}) {
 
 after(async () => {
   if (!hasDb) return;
+  if (created.size) await q('DELETE FROM tier_lists WHERE user_id = ANY($1::uuid[])', [[...created]]);
   if (created.size) await q('DELETE FROM users WHERE id = ANY($1::uuid[])', [[...created]]);
   await q('DELETE FROM events WHERE anon_id LIKE $1', [`${ANON}%`]);
   await q('DELETE FROM feedback WHERE anon_id LIKE $1', [`${ANON}%`]);
@@ -383,33 +384,53 @@ test('unknown routes and wrong methods', { skip: !hasDb }, async () => {
   assert.equal(big.status, 413);
 });
 
-test('gun votes: one per user per gun, changeable, and capped per address', { skip: !hasDb }, async () => {
-  const { VOTERS_PER_ADDRESS_PER_DAY } = await import('../../lib/votes.mjs');
-  const ip = `203.0.113.${Date.now() % 250}`;
-  const as = (cookie) => ({ cookie, headers: { 'x-forwarded-for': `${ip}, 10.0.0.1` } });
+test('tier lists: save, read, list, vote, cap per address, hide', { skip: !hasDb }, async () => {
+  const { LISTS_PER_ADDRESS_PER_DAY } = await import('../../lib/tierlists.mjs');
+  const ip = `198.51.100.${Date.now() % 250}`;
+  const admin = { authorization: `Bearer ${process.env.ADMIN_TOKEN}` };
   const a = await newUser();
-  const before = (await call('GET', 'votes')).body.tallies.m870 || { up: 0, down: 0 };
+  const as = (cookie) => ({ cookie, headers: { 'x-forwarded-for': ip } });
+  const good = { kind: 'guns', title: '  My\u0000 list  ', by: 'tester', tiers: { S: ['awc', 'm249'], A: ['usas'], D: ['m9'] } };
 
-  let r = await call('POST', 'votes', { body: { gun: 'm870', vote: 1 }, ...as(a.cookie) });
-  assert.deepEqual(r.body, { gun: 'm870', up: before.up + 1, down: before.down, mine: 1 });
-  r = await call('POST', 'votes', { body: { gun: 'm870', vote: -1 }, ...as(a.cookie) });
-  assert.deepEqual([r.body.up, r.body.down], [before.up, before.down + 1], 'a second vote replaces the first');
-  assert.equal((await call('GET', 'votes', { cookie: a.cookie })).body.mine.m870, -1);
-  r = await call('POST', 'votes', { body: { gun: 'm870', vote: 0 }, ...as(a.cookie) });
-  assert.deepEqual([r.body.up, r.body.down], [before.up, before.down], 'a vote can be taken back');
-
-  assert.equal((await call('POST', 'votes', { body: { gun: 'm9_cursed', vote: 1 }, ...as(a.cookie) })).status, 400);
-  assert.equal((await call('POST', 'votes', { body: { gun: 'm870', vote: 5 }, ...as(a.cookie) })).status, 400);
-
-  // A voter with no session gets one; after the daily cap of voters, a new account from the same
-  // address is refused, while one that already voted from it can still change its votes.
-  let first = null;
-  for (let i = 0; i < VOTERS_PER_ADDRESS_PER_DAY; i++) {
-    const v = await call('POST', 'votes', { body: { gun: 'mp5', vote: 1 }, headers: { 'x-forwarded-for': ip } });
-    assert.equal(v.status, 200, `voter ${i}`);
-    created.add((await call('GET', 'me', { cookie: v.cookie })).body.user.id);
-    first = first || v.cookie;
+  for (const [bad, why] of [[{ ...good, kind: 'cars' }, 'kind'], [{ ...good, tiers: { S: ['m9_cursed', 'awc', 'm249'] } }, 'unknown gun'],
+    [{ ...good, tiers: { S: ['awc', 'm249'], A: ['awc'] } }, 'two tiers'], [{ ...good, tiers: { S: ['awc'] } }, 'at least three'],
+    [{ ...good, tiers: { Z: ['awc', 'm249', 'usas'] } }, 'S, A, B'], [{ ...good, kind: 'perks' }, 'unknown perk']]) {
+    const r = await call('POST', 'tierlists', { body: bad, ...as(a.cookie) });
+    assert.equal(r.status, 400, why);
+    assert.match(r.body.error, new RegExp(why));
   }
-  assert.equal((await call('POST', 'votes', { body: { gun: 'mp5', vote: 1 }, headers: { 'x-forwarded-for': ip } })).status, 429);
-  assert.equal((await call('POST', 'votes', { body: { gun: 'ak47', vote: 1 }, ...as(first) })).status, 200);
+  const made = await call('POST', 'tierlists', { body: good, ...as(a.cookie) });
+  assert.equal(made.status, 200);
+  assert.match(made.body.id, /^[a-z0-9]{8}$/);
+  const got = await call('GET', `tierlists/${made.body.id}`);
+  assert.equal(got.body.list.title, 'My list', 'control characters and extra spaces are cleaned');
+  assert.deepEqual(got.body.list.tiers, { S: ['awc', 'm249'], A: ['usas'], B: [], C: [], D: ['m9'] });
+  assert.equal((await call('GET', 'tierlists/nope')).status, 404);
+  const perks = await call('POST', 'tierlists', { body: { kind: 'perks', tiers: { S: ['splinter', 'ap_rounds', 'takedown'] } }, ...as(a.cookie) });
+  assert.equal(perks.status, 200);
+
+  let v = await call('POST', `tierlists/${made.body.id}/vote`, { body: { vote: 1 }, ...as(a.cookie) });
+  assert.deepEqual([v.body.up, v.body.down, v.body.mine], [1, 0, 1]);
+  v = await call('POST', `tierlists/${made.body.id}/vote`, { body: { vote: -1 }, ...as(a.cookie) });
+  assert.deepEqual([v.body.up, v.body.down], [0, 1], 'a second vote replaces the first');
+  assert.equal((await call('POST', 'tierlists/c-thesurvivr-2019/vote', { body: { vote: 1 }, ...as(a.cookie) })).status, 200, 'community lists take votes');
+  assert.equal((await call('POST', 'tierlists/c-made-up/vote', { body: { vote: 1 }, ...as(a.cookie) })).status, 404);
+
+  const g = await call('GET', 'tierlists?kind=guns&sort=new', { cookie: a.cookie });
+  const mine = g.body.lists.find((l) => l.id === made.body.id);
+  assert.equal(mine.mine, -1);
+  assert.equal(g.body.community['c-thesurvivr-2019'].mine, 1);
+  assert.ok(!g.body.lists.some((l) => l.id === perks.body.id), 'the gun gallery has no perk lists');
+
+  // Hidden lists vanish from the gallery and their link, and come back when shown again.
+  assert.equal((await call('POST', `admin/tierlists/${made.body.id}/hide`, { body: { hidden: true } })).status, 401);
+  assert.equal((await call('POST', `admin/tierlists/${made.body.id}/hide`, { body: { hidden: true }, headers: admin })).body.hidden, true);
+  assert.equal((await call('GET', `tierlists/${made.body.id}`)).status, 404);
+  assert.ok((await call('GET', 'admin/tierlists', { headers: admin })).body.lists.some((l) => l.id === made.body.id && l.hidden));
+  await call('POST', `admin/tierlists/${made.body.id}/hide`, { body: { hidden: false }, headers: admin });
+  assert.equal((await call('GET', `tierlists/${made.body.id}`)).status, 200);
+
+  // One address can save only so many lists a day.
+  for (let i = 2; i < LISTS_PER_ADDRESS_PER_DAY; i++) assert.equal((await call('POST', 'tierlists', { body: good, ...as(a.cookie) })).status, 200, `list ${i}`);
+  assert.equal((await call('POST', 'tierlists', { body: good, ...as(a.cookie) })).status, 429);
 });

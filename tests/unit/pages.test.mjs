@@ -43,10 +43,11 @@ test('every guide page links home, names a canonical URL and is in the sitemap',
   }
 });
 
-test('players can vote on exactly the guns that have pages', async () => {
-  const { PAGE_IDS } = await import('../../tools/build-pages.mjs');
-  const { ratableGuns } = await import('../../lib/votes.mjs');
-  assert.deepEqual([...ratableGuns()].sort(), [...PAGE_IDS].sort());
+test('tier lists accept exactly the guns and perks that have pages', async () => {
+  const { PAGE_IDS, PERK_IDS } = await import('../../tools/build-pages.mjs');
+  const { itemIds } = await import('../../lib/tierlists.mjs');
+  assert.deepEqual([...itemIds('guns')].sort(), [...PAGE_IDS].sort());
+  assert.deepEqual([...itemIds('perks')].sort(), [...PERK_IDS].sort());
 });
 
 test('the bunker codes page shows every code in survev\'s puzzles.ts, in order', () => {

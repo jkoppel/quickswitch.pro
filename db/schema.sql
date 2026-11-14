@@ -116,14 +116,31 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_send_count int NOT NULL DEFAULT
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan jsonb;
 CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email);
 
--- Gun ratings on /guns/tier-list/: one vote per user per gun, +1 or -1. ip_hash (a keyed hash, never
--- the address) caps how many accounts one address can vote from.
-CREATE TABLE IF NOT EXISTS gun_votes (
+-- Tier lists players make on /guns/tier-list/ and /perks/tier-list/. tiers is {"S": [ids], ..., "D": [ids]}.
+-- Anyone can read one by id; hidden ones (hidden from the admin page) are never served.
+-- (gun_votes, from the per-gun votes of 2026-11-14, is no longer used and is left in place.)
+CREATE TABLE IF NOT EXISTS tier_lists (
+  id text PRIMARY KEY,
+  kind text NOT NULL CHECK (kind IN ('guns', 'perks')),
+  title text NOT NULL DEFAULT '',
+  by_name text NOT NULL DEFAULT '',
+  tiers jsonb NOT NULL,
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  ip_hash text,
+  hidden boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS tier_lists_kind ON tier_lists(kind, created_at);
+CREATE INDEX IF NOT EXISTS tier_lists_ip ON tier_lists(ip_hash, created_at);
+
+-- Votes on tier lists: players' (tier_lists.id) and the community's published ones ("c-…" ids from
+-- guides/community-tierlists.json, which is why there is no foreign key). ip_hash is a keyed hash.
+CREATE TABLE IF NOT EXISTS tier_list_votes (
+  list_id text NOT NULL,
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  gun text NOT NULL,
   vote smallint NOT NULL CHECK (vote IN (-1, 1)),
   ip_hash text,
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, gun)
+  PRIMARY KEY (list_id, user_id)
 );
-CREATE INDEX IF NOT EXISTS gun_votes_ip ON gun_votes(ip_hash, updated_at);
+CREATE INDEX IF NOT EXISTS tier_list_votes_ip ON tier_list_votes(ip_hash, updated_at);

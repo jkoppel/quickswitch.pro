@@ -4,7 +4,7 @@
   "buildCommand": null,
   "functions": {
     "api/index.mjs": {
-      "includeFiles": "{platform/shared/**,vendor/survev/defs/gunDefs.json}",
+      "includeFiles": "{platform/shared/**,vendor/survev/defs/gunDefs.json,vendor/survev/defs/perkDefs.json,guides/community-tierlists.json}",
       "maxDuration": 30
     },
     "api/og.mjs": {

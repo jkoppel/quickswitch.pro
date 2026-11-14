@@ -135,9 +135,9 @@ const table = (head, rows, cls = '') => `<table${cls ? ` class="${cls}"` : ''}><
 ${rows.map((r) => `<tr>${r.map((c, i) => `<td${head[i].n ? ' class="n"' : ''}>${c}</td>`).join('')}</tr>`).join('\n')}
 </tbody></table>`;
 const gunLink = (x) => `<a href="/guns/${x.id}/">${esc(x.name)}</a>`;
-// Up and down buttons for one gun; /guides/votes.js fills in the counts and sends the votes.
+const TIERS_ORDER = ['S', 'A', 'B', 'C', 'D'];
+// The arrows on vote buttons, drawn rather than typed.
 const CHEVRON = (dir) => `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="${dir === 'up' ? 'M2.5 7.5 6 4l3.5 3.5' : 'M2.5 4.5 6 8l3.5-3.5'}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const voteButtons = (x) => `<span class="vote" data-gun="${x.id}"><button type="button" data-v="1" aria-label="Upvote the ${esc(x.name)}">${CHEVRON('up')}<span class="up">·</span></button><button type="button" data-v="-1" aria-label="Downvote the ${esc(x.name)}">${CHEVRON('down')}<span class="down">·</span></button></span>`;
 
 function quickswitchPage() {
   const m870 = stats('m870');
@@ -182,7 +182,7 @@ function gunsIndexPage() {
   const body = `<article>
 <h1>surviv.io and survev.io gun stats</h1>
 <p class="lead">Damage, fire rate and switch delay for all ${ALL.length} guns that drop in a normal survev match, straight from the game's source. Damage per second assumes every round hits the body at close range, with no armor and no headshots; "with reloads" averages it over a full magazine and its reload.</p>
-<p>Which is best? <a href="/guns/tier-list/">Vote in the tier list</a>, or see <a href="/guns/community-tier-lists/">what other players ranked</a>.</p>
+<p>Which is best? <a href="/guns/tier-list/">Make your own tier list</a>, or see <a href="/guns/community-tier-lists/">what other players ranked</a>.</p>
 ${groups.map((a) => `<h2>${esc(AMMO[a])}</h2>
 ${table([{ t: 'Gun' }, { t: 'Damage per shot', n: 1 }, { t: 'Shots per second', n: 1 }, { t: 'Damage per second', n: 1 }, { t: 'With reloads', n: 1 }, { t: 'Range', n: 1 }, { t: 'Switch delay', n: 1 }],
     ALL.filter((x) => x.ammoKey === a).map((x) => [gunLink(x), x.pellets > 1 ? `${r1(x.perShot)} <span class="muted">${x.pellets}×${r1(x.damage + x.blast)}</span>` : r1(x.perShot), r1(x.burst / x.cycle), Math.round(x.dps), Math.round(x.sustained), x.range, s(x.switchDelay)]))}`).join('\n')}
@@ -229,7 +229,7 @@ function gunPage(x) {
   const body = `<article>
 <h1>${esc(x.name)} stats in survev.io and surviv.io</h1>
 <p class="lead">The ${esc(x.name)} fires ${esc(x.ammo)}. At close range it deals ${Math.round(x.dps)} damage per second while its magazine lasts, or ${Math.round(x.sustained)} averaged over reloads.</p>
-<p class="vote-line">Is the ${esc(x.name)} good? ${voteButtons(x)} <a href="/guns/tier-list/">See the community tier list</a></p>
+<p class="tl-link"><a href="/guns/tier-list/">Rank the ${esc(x.name)} in your own tier list</a></p>
 <ul class="facts">
 ${facts.map((f) => `<li>${f}</li>`).join('\n')}
 </ul>
@@ -244,7 +244,6 @@ ${peers.length ? `<h2>Other ${esc(x.ammo)} guns</h2>
     description: `${x.name} in surviv.io and survev.io: ${r1(x.perShot)} damage per shot, ${Math.round(x.dps)} damage per second, ${x.shotsToKill} shots to deal ${HP} damage, ${s(x.switchDelay)} switch delay. From the game's source.`,
     crumbs: [['Guides', '/guides/'], ['Guns', '/guns/'], [x.name]],
     body,
-    scripts: ['/guides/votes.js'],
   });
 }
 
@@ -255,7 +254,8 @@ function guidesIndexPage() {
 <li><a href="/guides/how-to-get-better/"><b>The five drills to help you become a pro</b></a></li>
 <li><a href="/guides/quickswitch/"><b>How to quickswitch</b></a>: the exact switch rule, and the ${SLOW.length} guns that gain most from it.</li>
 <li><a href="/guides/bunker-codes/"><b>All bunker codes</b></a>: every puzzle door's code, in one page.</li>
-<li><a href="/guns/tier-list/"><b>Gun tier list</b></a>: vote on the best guns, next to a ranking by damage per second.</li>
+<li><a href="/guns/tier-list/"><b>Make a gun tier list</b></a>: rank every gun, share it, and vote on players' and the community's lists.</li>
+<li><a href="/perks/tier-list/"><b>Make a perk tier list</b></a>: the same for all ${PERK_IDS.length} perks.</li>
 <li><a href="/guns/community-tier-lists/"><b>Community tier lists</b></a>: ${TIER_LISTS.length} published rankings and what they put on top.</li>
 <li><a href="/guns/"><b>Gun stats</b></a>: damage, fire rate and switch delay for all ${ALL.length} guns.</li>
 <li><a href="/perks/"><b>Perks</b></a>: what all ${PERK_IDS.length} perks do and where to get them.</li>
@@ -279,39 +279,98 @@ const DPS_TIERS = [['S', 100], ['A', 85], ['B', 70], ['C', 50], ['D', 0]];
 const FULL_LISTS = TIER_LISTS.filter((l) => l.top && !l.note);
 const AWM_TOP = FULL_LISTS.filter((l) => l.top.includes('AWM-S')).length;
 
-function tierListPage() {
+// ---------- make your own tier list (guns and perks), and vote on others' ----------
+
+const COMMUNITY_LISTS = JSON.parse(readFileSync(path.join(ROOT, 'guides/community-tierlists.json'), 'utf8'));
+// The community lists keep each author's own gun names; these find the page a name belongs to.
+const norm = (n) => n.toLowerCase().replace(/^single\s+/, '').replace(/[^a-z0-9]/g, '');
+const GUN_BY_NAME = Object.fromEntries(ALL.map((x) => [norm(GUNS[x.id].name), x.id]));
+Object.assign(GUN_BY_NAME, { deserteagle: 'deagle', mk20ssr: 'scarssr', glock18c: 'glock', hk416: 'hk416', mosinnagant: 'mosin', m110: 'm1100', m39r: 'm93r', m9cursed: null, vector: 'vector', vector9mm: 'vector', vector45acp: 'vector45' });
+const nameLink = (name) => { const id = GUN_BY_NAME[norm(name)]; return id ? `<a href="/guns/${id}/">${esc(name)}</a>` : esc(name); };
+
+const voteControls = (id, label) => `<span class="vote" data-list="${esc(id)}"><button type="button" data-v="1" aria-label="Upvote ${esc(label)}">${CHEVRON('up')}<span class="up">·</span></button><button type="button" data-v="-1" aria-label="Downvote ${esc(label)}">${CHEVRON('down')}<span class="down">·</span></button></span>`;
+
+function communityListHtml(l) {
+  const body = l.shape === 'ranking'
+    ? `<ol class="tl-ranking">${l.items.map((x) => `<li>${nameLink(x.name)}${x.note ? ` <span class="muted">${esc(x.note)}</span>` : ''}</li>`).join('')}</ol>`
+    : `<div class="tl-rows">${l.tiers.map((t) => `<div class="tl-show"><span class="tl-label">${esc(t.label)}</span><span class="tl-names">${t.items.map((x) => nameLink(x.name) + (x.note && x.note !== t.label ? ` <span class="muted">${esc(x.note)}</span>` : '')).join(' · ')}</span></div>`).join('')}</div>`;
+  return `<section class="tl-entry" id="${esc(l.id)}">
+<div class="tl-meta"><h3><a href="${esc(l.url)}" rel="nofollow noopener">${esc(l.title)}</a></h3><span class="muted">${esc(l.by)}, ${esc(l.where)}, ${esc(l.date)}</span>${voteControls(l.id, `${l.by}'s list`)}</div>
+${body}
+</section>`;
+}
+
+// Built on call: PERK_IDS is defined further down the file.
+const maker = (kind) => ({
+  guns: {
+    urlPath: '/guns/tier-list/', noun: 'gun', plural: 'guns',
+    items: () => ALL.map((x) => ({ id: x.id, name: x.name })),
+    crumbs: [['Guides', '/guides/'], ['Guns', '/guns/'], ['Tier list']],
+    title: 'Make your own surviv.io and survev.io gun tier list · Quickswitch',
+    description: `Drag all ${ALL.length} surviv.io and survev.io guns into your own tier list, share it with a link, and vote on players' lists and the community's published ones.`,
+  },
+  perks: {
+    urlPath: '/perks/tier-list/', noun: 'perk', plural: 'perks',
+    items: () => PERK_IDS.map((id) => ({ id, name: PERKS.perks[id].name })),
+    crumbs: [['Guides', '/guides/'], ['Perks', '/perks/'], ['Tier list']],
+    title: 'Make your own surviv.io and survev.io perk tier list · Quickswitch',
+    description: `Drag all ${PERK_IDS.length} surviv.io and survev.io perks into your own tier list, share it with a link, and vote on other players' lists.`,
+  },
+})[kind];
+
+function makerPage(kind) {
+  const m = maker(kind);
+  const items = m.items();
+  const community = COMMUNITY_LISTS.filter((l) => l.kind === kind);
   const byDps = [...ALL].sort((a, b) => b.sustained - a.sustained);
-  const tiers = DPS_TIERS.map(([t, min], i) => [t, min, byDps.filter((x) => x.sustained >= min && (i === 0 || x.sustained < DPS_TIERS[i - 1][1]))]);
+  const dpsTiers = DPS_TIERS.map(([t, min], i) => [t, min, byDps.filter((x) => x.sustained >= min && (i === 0 || x.sustained < DPS_TIERS[i - 1][1]))]);
   const body = `<article>
-<h1>surviv.io and survev.io gun tier list</h1>
-<p class="lead">Vote on any gun below and the community tier list re-sorts as the votes come in. Under it, the same ${ALL.length} guns ranked by the numbers from survev's source.</p>
+<h1>Make your own surviv.io ${m.noun} tier list</h1>
+<p class="lead">Drag each ${m.noun} into a tier, or tap a ${m.noun} and then a tier. Save it to get a link you can share, then vote on other players' lists${community.length ? ' and the community\'s' : ''}.</p>
+<div id="tl-shared" class="tl-shared" hidden></div>
 
-<h2>Community tier list</h2>
-<div id="community-tiers" class="ranking"><p class="muted">Loading votes…</p></div>
+<section class="maker" id="maker" data-kind="${kind}">
+<script type="application/json" id="tl-items">${JSON.stringify(items).replace(/</g, '\\u003c')}</script>
+<div class="tl-board">
+${TIERS_ORDER.map((t) => `<div class="tl-row" data-tier="${t}"><span class="tl-label">${t}</span><div class="tl-drop" data-tier="${t}" aria-label="${t} tier"></div></div>`).join('\n')}
+</div>
+<h3 class="tl-pool-head">Not ranked yet</h3>
+<div class="tl-drop tl-pool" data-tier="">
+${items.map((x) => `<button type="button" class="chip" data-id="${x.id}">${esc(x.name)}</button>`).join('')}
+</div>
+<p class="muted tl-keys">With the keyboard: focus a ${m.noun}, then press S, A, B, C or D to place it, or U to unrank it.</p>
+<form class="tl-save" id="tl-save">
+<label>Title <input id="tl-title" maxlength="60" placeholder="My ${m.noun} tier list" autocomplete="off"></label>
+<label>Your name <input id="tl-by" maxlength="24" placeholder="optional" autocomplete="nickname"></label>
+<div class="tl-actions"><button type="button" class="ghost small" id="tl-clear">Start over</button><button type="submit" class="primary small">Save and share</button></div>
+<p class="tl-status" id="tl-status" role="status"></p>
+</form>
+</section>
 
-<h2>Vote</h2>
-<p>One vote per gun, and you can change it any time. No account needed.</p>
-${table([{ t: 'Gun' }, { t: 'Ammo' }, { t: 'Your vote' }],
-    ALL.map((x) => [gunLink(x), esc(x.ammo), voteButtons(x)]), 'vote-table')}
-
+<h2>Vote on tier lists</h2>
+${community.length ? `<p>${community.length} lists the community published, as their authors ranked them, then lists players saved here.</p>
+<div class="tl-gallery">
+${community.map(communityListHtml).join('\n')}
+</div>
+<h3 class="tl-sub">From players</h3>` : ''}
+<div class="tl-sort" role="group" aria-label="Sort players' lists"><button type="button" class="ghost small" data-sort="top" aria-pressed="true">Top</button><button type="button" class="ghost small" data-sort="new" aria-pressed="false">New</button></div>
+<div id="tl-gallery" class="tl-gallery"><p class="muted">Loading…</p></div>
+${kind === 'guns' ? `
 <h2>By the numbers: damage per second, with reloads</h2>
 <p>Damage per second at close range, averaged over a full magazine and its reload, if every round hits the body, with no armor and no headshots. It rewards guns that keep firing and says nothing about range, so most snipers sit low here even though players rate them highest: the AWM-S is in the top picks of ${AWM_TOP} of the ${FULL_LISTS.length} <a href="/guns/community-tier-lists/">published rankings</a> that name them.</p>
 <div class="ranking">
-${tiers.map(([t, min, xs], i) => `<section class="tier-group">
+${dpsTiers.map(([t, min, xs], i) => `<section class="tier-group">
 <h3 class="tier-head"><span class="tier-letter">${t}</span><span class="tier-note">${i === 0 ? `${min}+` : `${min}–${DPS_TIERS[i - 1][1]}`} damage per second</span></h3>
 ${xs.length ? `<ol class="bars">
 ${xs.map((x) => `<li><a href="/guns/${x.id}/">${esc(x.name)}</a><span class="ammo">${esc(x.ammo)}</span><span class="bar" aria-hidden="true"><i style="width:${Math.round(100 * x.sustained / byDps[0].sustained)}%"></i></span><b class="num">${Math.round(x.sustained)}</b></li>`).join('\n')}
 </ol>` : '<p class="muted">None.</p>'}
 </section>`).join('\n')}
-</div>
+</div>` : ''}
 </article>`;
   return page({
-    urlPath: '/guns/tier-list/',
-    title: 'surviv.io and survev.io gun tier list: vote on the best guns · Quickswitch',
-    description: `A live surviv.io and survev.io gun tier list ranked by player votes, next to all ${ALL.length} guns ranked by damage per second from the game's source.`,
-    crumbs: [['Guides', '/guides/'], ['Guns', '/guns/'], ['Tier list']],
-    body,
-    scripts: ['/guides/votes.js'],
+    urlPath: m.urlPath, title: m.title, description: m.description, crumbs: m.crumbs, body,
+    scripts: ['/guides/tierlists.js'],
+    note: kind === 'guns' ? 'The numbers come from survev\'s source (<code>gunDefs.ts</code>, <code>bulletDefs.ts</code>, <code>gameConfig.ts</code>); each community list belongs to its author, as published at the link.' : 'Perk names come from survev\'s source (<code>perkDefs.ts</code>).',
   });
 }
 
@@ -329,8 +388,8 @@ ${table([{ t: 'Ranking' }, { t: 'By' }, { t: 'Where' }, { t: 'Date' }, { t: 'Rea
 <h2>What players say</h2>
 ${QUOTES.map((x) => `<blockquote><p>“${esc(x.text)}”</p><footer>— <a href="${esc(x.url)}" rel="nofollow noopener">${esc(x.author)}</a>, ${esc(x.date)}</footer></blockquote>`).join('\n')}
 
-<h2>Add your vote</h2>
-<p>The <a href="/guns/tier-list/">live tier list</a> ranks every gun by player votes, next to a ranking by damage per second.</p>
+<h2>Make your own</h2>
+<p><a href="/guns/tier-list/">Make your own tier list</a> and vote on others', including ${COMMUNITY_LISTS.filter((l) => l.kind === 'guns').length} of these lists in full.</p>
 </article>`;
   return page({
     urlPath: '/guns/community-tier-lists/',
@@ -404,7 +463,7 @@ const ROLE_MODE = { scout: 'Cobalt', sniper: 'Cobalt', healer: 'Cobalt', demo: '
   grenadier: '50v50', bugler: '50v50', last_man: '50v50', woods_king: 'Woods' };
 // Lone Survivr always gets Steelskin and Takedown, plus one of each pair below at random (roleDefs.ts).
 const LONE_RANDOM = ['ap_rounds', 'splinter', 'windwalk', 'field_medic'];
-const PERK_IDS = Object.keys(PERKS.perks).sort((a, b) => PERKS.perks[a].name.localeCompare(PERKS.perks[b].name));
+export const PERK_IDS = Object.keys(PERKS.perks).sort((a, b) => PERKS.perks[a].name.localeCompare(PERKS.perks[b].name));
 
 function perkSources(id) {
   const out = [];
@@ -424,6 +483,7 @@ function perksIndexPage() {
   const body = `<article>
 <h1>surviv.io and survev.io perks</h1>
 <p class="lead">What each of survev's ${PERK_IDS.length} perks does, in the game's own words, and where you can get it.</p>
+<p><a href="/perks/tier-list/">Make your own perk tier list</a>.</p>
 ${table([{ t: 'Perk' }, { t: 'What it does' }, { t: 'Where you get it' }],
     PERK_IDS.map((id) => [perkLink(id), esc(PERKS.perks[id].desc) || '<span class="muted">no description in the game</span>', andList(perkSources(id)) || '<span class="muted">not in normal loot</span>']))}
 </article>`;
@@ -445,6 +505,7 @@ function perkPage(id) {
   const body = `<article>
 <h1>${esc(p.name)} perk in survev.io and surviv.io</h1>
 <p class="lead">${esc(p.desc) || 'The game gives this perk no description.'}</p>
+<p class="tl-link"><a href="/perks/tier-list/">Rank ${esc(p.name)} in your own perk tier list</a></p>
 <ul class="facts">
 <li>${from.length ? `You get it from ${andList(from)}.` : 'It isn\'t in normal loot or any role\'s kit.'}</li>
 ${ammo.length ? `<li>${andList(ammo)} rounds do ×${PERKS.ammoBonusDamageMult} damage with it.</li>\n` : ''}</ul>
@@ -522,7 +583,8 @@ export function buildPages() {
     'guides/how-to-get-better/index.html': evanPage(),
     'guides/bunker-codes/index.html': bunkerCodesPage(),
     'guns/index.html': gunsIndexPage(),
-    'guns/tier-list/index.html': tierListPage(),
+    'guns/tier-list/index.html': makerPage('guns'),
+    'perks/tier-list/index.html': makerPage('perks'),
     'guns/community-tier-lists/index.html': communityPage(),
     'perks/index.html': perksIndexPage(),
   };

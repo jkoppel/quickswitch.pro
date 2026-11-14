@@ -1,0 +1,570 @@
+[
+ {
+  "id": "c-grandshowerofbullets-2018",
+  "kind": "guns",
+  "title": "Updated worst to best gun list",
+  "by": "u/GrandShowerofBullets",
+  "where": "r/survivio",
+  "date": "2018-09-05",
+  "url": "https://www.reddit.com/r/survivio/comments/9d8iyg/",
+  "shape": "ranking",
+  "items": [
+   {
+    "name": "AWM-S"
+   },
+   {
+    "name": "M249"
+   },
+   {
+    "name": "Saiga-12"
+   },
+   {
+    "name": "QBB-97"
+   },
+   {
+    "name": "MK12 SPR"
+   },
+   {
+    "name": "M1 Garand"
+   },
+   {
+    "name": "M39 EMR"
+   },
+   {
+    "name": "SPAS-12"
+   },
+   {
+    "name": "SV-98"
+   },
+   {
+    "name": "MP220"
+   },
+   {
+    "name": "SCAR-H"
+   },
+   {
+    "name": "Vector"
+   },
+   {
+    "name": "Desert Eagle"
+   },
+   {
+    "name": "Mosin Nagant"
+   },
+   {
+    "name": "AK-47"
+   },
+   {
+    "name": "MP5"
+   },
+   {
+    "name": "M416"
+   },
+   {
+    "name": "FAMAS"
+   },
+   {
+    "name": "MAC-10"
+   },
+   {
+    "name": "DP-28"
+   },
+   {
+    "name": "UMP9"
+   },
+   {
+    "name": "M870"
+   },
+   {
+    "name": "Glock 18C"
+   },
+   {
+    "name": "OT-38"
+   },
+   {
+    "name": "M9"
+   }
+  ]
+ },
+ {
+  "id": "c-hiwassupyo-2019",
+  "kind": "guns",
+  "title": "Probably Top 10 Best Weapons, and Top 10 Worst Weapons",
+  "by": "u/hiwassupyo",
+  "where": "r/survivio",
+  "date": "2019-08-31",
+  "url": "https://www.reddit.com/r/survivio/comments/cxz94k/",
+  "shape": "tiers",
+  "tiers": [
+   {
+    "label": "Best 10",
+    "items": [
+     {
+      "name": "AWM-S"
+     },
+     {
+      "name": "PKP Pecheneg"
+     },
+     {
+      "name": "SV-98"
+     },
+     {
+      "name": "USAS-12"
+     },
+     {
+      "name": "M249"
+     },
+     {
+      "name": "Potato Cannon"
+     },
+     {
+      "name": "Super 90"
+     },
+     {
+      "name": "CZ-3A1"
+     },
+     {
+      "name": "Saiga-12"
+     },
+     {
+      "name": "Dual Deagles"
+     }
+    ]
+   },
+   {
+    "label": "Worst 10",
+    "items": [
+     {
+      "name": "M1911"
+     },
+     {
+      "name": "Single M9"
+     },
+     {
+      "name": "OT-38"
+     },
+     {
+      "name": "Single Glock"
+     },
+     {
+      "name": "Single M39R"
+     },
+     {
+      "name": "M39 EMR"
+     },
+     {
+      "name": "Model 94"
+     },
+     {
+      "name": "M110"
+     },
+     {
+      "name": "OTs-38"
+     },
+     {
+      "name": "MP5"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "c-kevinalcain-2018",
+  "kind": "guns",
+  "title": "All the guns worst to best",
+  "by": "KevinAlcain",
+  "where": "surviv.io Fandom wiki",
+  "date": "2018-09-09",
+  "url": "https://survivio.fandom.com/wiki/User_blog:KevinAlcain/All_the_guns_worst_to_best._(put_your_own_opinion_in_the_comments)",
+  "shape": "tiers",
+  "tiers": [
+   {
+    "label": "S",
+    "items": [
+     {
+      "name": "M249",
+      "note": "S"
+     }
+    ]
+   },
+   {
+    "label": "A",
+    "items": [
+     {
+      "name": "AWM-S",
+      "note": "A+"
+     },
+     {
+      "name": "Saiga-12",
+      "note": "A+"
+     },
+     {
+      "name": "QBB-97",
+      "note": "A"
+     },
+     {
+      "name": "Vector",
+      "note": "A"
+     },
+     {
+      "name": "Dual Desert Eagle",
+      "note": "A"
+     }
+    ]
+   },
+   {
+    "label": "B",
+    "items": [
+     {
+      "name": "DP-28",
+      "note": "B+"
+     },
+     {
+      "name": "SCAR-H",
+      "note": "B+"
+     },
+     {
+      "name": "SV-98",
+      "note": "B"
+     },
+     {
+      "name": "Desert Eagle",
+      "note": "B"
+     },
+     {
+      "name": "Dual M93R",
+      "note": "B"
+     },
+     {
+      "name": "MP220",
+      "note": "B"
+     },
+     {
+      "name": "FAMAS",
+      "note": "B"
+     }
+    ]
+   },
+   {
+    "label": "C",
+    "items": [
+     {
+      "name": "Mosin-Nagant",
+      "note": "C"
+     },
+     {
+      "name": "SPAS-12",
+      "note": "C+"
+     },
+     {
+      "name": "MK 12 SPR",
+      "note": "C"
+     },
+     {
+      "name": "M1 Garand",
+      "note": "C+"
+     },
+     {
+      "name": "M416",
+      "note": "C"
+     }
+    ]
+   },
+   {
+    "label": "D",
+    "items": [
+     {
+      "name": "UMP9",
+      "note": "D+"
+     },
+     {
+      "name": "M39 EMR",
+      "note": "D+"
+     },
+     {
+      "name": "Dual G18C",
+      "note": "D"
+     },
+     {
+      "name": "AK-47",
+      "note": "D"
+     }
+    ]
+   },
+   {
+    "label": "E",
+    "items": [
+     {
+      "name": "MAC-10",
+      "note": "E+"
+     },
+     {
+      "name": "M870",
+      "note": "E+"
+     },
+     {
+      "name": "MP5",
+      "note": "E+"
+     },
+     {
+      "name": "Dual OT-38",
+      "note": "E"
+     },
+     {
+      "name": "M93R",
+      "note": "E"
+     },
+     {
+      "name": "G18C",
+      "note": "E"
+     }
+    ]
+   },
+   {
+    "label": "F",
+    "items": [
+     {
+      "name": "OT-38",
+      "note": "F+"
+     },
+     {
+      "name": "Dual M9",
+      "note": "F"
+     },
+     {
+      "name": "M9",
+      "note": "F"
+     },
+     {
+      "name": "Flare Gun",
+      "note": "F-"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "c-thesurvivr-2019",
+  "kind": "guns",
+  "title": "Weapon Rankings",
+  "by": "TheSURVIVR",
+  "where": "surviv.io Fandom wiki",
+  "date": "2019-12-03",
+  "url": "https://survivio.fandom.com/wiki/User_blog:TheSURVIVR/Weapon_Rankings",
+  "shape": "ranking",
+  "items": [
+   {
+    "name": "AWM-S",
+    "note": "95"
+   },
+   {
+    "name": "M249",
+    "note": "94"
+   },
+   {
+    "name": "SV-98",
+    "note": "90"
+   },
+   {
+    "name": "USAS-12",
+    "note": "87"
+   },
+   {
+    "name": "Saiga-12",
+    "note": "86"
+   },
+   {
+    "name": "PKP Pecheneg",
+    "note": "85"
+   },
+   {
+    "name": "Mosin-Nagant",
+    "note": "84"
+   },
+   {
+    "name": "Potato Cannon",
+    "note": "83"
+   },
+   {
+    "name": "AN-94",
+    "note": "82"
+   },
+   {
+    "name": "Super 90",
+    "note": "82"
+   },
+   {
+    "name": "MAC-10",
+    "note": "81"
+   },
+   {
+    "name": "QBB-97",
+    "note": "81"
+   },
+   {
+    "name": "M4A1-S",
+    "note": "80"
+   },
+   {
+    "name": "MP220",
+    "note": "80"
+   },
+   {
+    "name": "SPAS-12",
+    "note": "80"
+   },
+   {
+    "name": "Peacemaker",
+    "note": "80"
+   },
+   {
+    "name": "BAR M1918",
+    "note": "79"
+   },
+   {
+    "name": "CZ-3A1",
+    "note": "78"
+   },
+   {
+    "name": "L86A2",
+    "note": "78"
+   },
+   {
+    "name": "DEagle 50",
+    "note": "78"
+   },
+   {
+    "name": "SCAR-H",
+    "note": "77"
+   },
+   {
+    "name": "Mk 20 SSR",
+    "note": "77"
+   },
+   {
+    "name": "AK-47",
+    "note": "76"
+   },
+   {
+    "name": "M39 EMR",
+    "note": "76"
+   },
+   {
+    "name": "SVD-63",
+    "note": "76"
+   },
+   {
+    "name": "M870",
+    "note": "76"
+   },
+   {
+    "name": "P30L",
+    "note": "75"
+   },
+   {
+    "name": "Groza-S",
+    "note": "75"
+   },
+   {
+    "name": "Scout Elite",
+    "note": "74"
+   },
+   {
+    "name": "DP-28",
+    "note": "72"
+   },
+   {
+    "name": "Mk45G",
+    "note": "72"
+   },
+   {
+    "name": "M1 Garand",
+    "note": "71"
+   },
+   {
+    "name": "Groza",
+    "note": "71"
+   },
+   {
+    "name": "M416",
+    "note": "71"
+   },
+   {
+    "name": "Model 94",
+    "note": "71"
+   },
+   {
+    "name": "M1A1",
+    "note": "71"
+   },
+   {
+    "name": "Vector (9mm)",
+    "note": "69"
+   },
+   {
+    "name": "OTs-38",
+    "note": "68"
+   },
+   {
+    "name": "FAMAS",
+    "note": "68"
+   },
+   {
+    "name": "Mk 12 SPR",
+    "note": "68"
+   },
+   {
+    "name": "Vector (.45 ACP)",
+    "note": "68"
+   },
+   {
+    "name": "MP5",
+    "note": "67"
+   },
+   {
+    "name": "VSS",
+    "note": "67"
+   },
+   {
+    "name": "BLR 81",
+    "note": "65"
+   },
+   {
+    "name": "M1100",
+    "note": "64"
+   },
+   {
+    "name": "M93R",
+    "note": "62"
+   },
+   {
+    "name": "UMP9",
+    "note": "61"
+   },
+   {
+    "name": "OT-38",
+    "note": "61"
+   },
+   {
+    "name": "M9 Cursed",
+    "note": "60"
+   },
+   {
+    "name": "M9",
+    "note": "58"
+   },
+   {
+    "name": "G18C",
+    "note": "57"
+   },
+   {
+    "name": "M1911",
+    "note": "54"
+   },
+   {
+    "name": "Flare Gun",
+    "note": "50"
+   }
+  ]
+ }
+]
