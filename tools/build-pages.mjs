@@ -18,6 +18,7 @@ const PERKS = defs('perkDefs.json');
 // explosionDefs.js assigns one object literal to window.SURVEV_EXPLOSION_DEFS.
 const EXPLOSIONS = JSON.parse(/=\s*(\{[\s\S]*\});?\s*$/.exec(readFileSync(path.join(ROOT, 'vendor/survev/defs/explosionDefs.js'), 'utf8'))[1]);
 const PUZZLES = defs('puzzles.json');
+const ROOMS = defs('puzzleRooms.json');   // tools/extract-puzzle-rooms.mjs
 // gameConfig.js assigns one object literal to window.SURVEV_GAME_CONFIG.
 const GC = JSON.parse(/=\s*(\{[\s\S]*\});?\s*$/.exec(readFileSync(path.join(ROOT, 'vendor/survev/defs/gameConfig.js'), 'utf8'))[1]);
 const SWITCH = GC.player.baseSwitchDelay;
@@ -529,26 +530,70 @@ ${table([{ t: 'Setting' }, { t: 'Value', n: 1 }], props.map(([k, v]) => [`<code>
 // Where each puzzle in puzzles.ts sits, traced through survev's building, structure and map defs.
 // `wait` is the puzzle's pieceResetDelay: how long it waits between presses before it resets.
 const PUZZLE_SPOTS = [
-  { id: 'bunker_eye_02_woods', place: 'Eye bunker vault', maps: 'Woods (all seasons)', wait: 10 },
-  { id: 'bunker_eye_02', place: 'Eye bunker vault', maps: 'Halloween', wait: 10 },
+  { id: 'bunker_eye_02_woods', room: 'bunker_eye_02', place: 'Eye bunker vault', maps: 'Woods (all seasons)', wait: 10 },
+  { id: 'bunker_eye_02', room: 'bunker_eye_02', place: 'Eye bunker vault', maps: 'Halloween', wait: 10 },
   { id: 'bunker_chrys_01', place: 'Greenhouse bunker (chrysanthemum), lab door', maps: 'every map with a greenhouse: Normal and its seasonal versions, Desert, Snow, 50v50, Potato', wait: 10, show: { ichi: 'ichi (一)', ni: 'ni (二)', san: 'san (三)', shi: 'shi (四)' } },
   { id: 'bunker_chrys_02', place: 'Greenhouse bunker (chrysanthemum), vault', maps: 'the same greenhouse maps', wait: 10 },
-  { id: 'bunker_twins', place: 'Twins bunker', maps: 'Cobalt', wait: 6 },
+  { id: 'bunker_twins', place: 'Twins bunker', maps: 'Cobalt', wait: 6, caption: 'Each class has its own control: scout is the green button, sniper the blue button, medic the switch with a pink band, demo the plain switch, assault the switch with a yellow band and tank the switch with an orange band.' },
   { id: 'club_01', place: 'Club, secret door', maps: 'Normal, Beach, Cobalt, Potato', wait: 10 },
   { id: 'club_02', place: 'Bathhouse under the club, vault', maps: 'Normal, Beach, Cobalt, Potato', wait: 10 },
-  { id: 'saloon', place: 'Saloon, secret door', maps: 'Desert', wait: 10 },
-  { id: 'reserve_vault', place: 'Reserve vault', maps: 'Desert', wait: 6 },
+  { id: 'saloon', place: 'Saloon, secret door', maps: 'Desert', wait: 10, caption: 'The buttons are seven coloured bottles spread around the saloon; press them in rainbow order.' },
+  { id: 'reserve_vault', place: 'Reserve vault', maps: 'Desert', wait: 6, caption: 'The switches are on the outside wall. Two of them are numbered 2, and either one works for steps 2 and 5.' },
 ];
+
+const PUZZLE_IMG = '/vendor/survev/img/puzzles/';
+
+// One room drawn from survev's own floor art and puzzle pieces, cropped to the pieces, with the
+// press order numbered on each piece (a piece pressed twice carries both numbers).
+function roomSvg(spot) {
+  const room = ROOMS.rooms[spot.room || spot.id];
+  if (!room) return '';
+  const code = PUZZLES[spot.id];
+  const steps = {};
+  code.forEach((piece, i) => { (steps[piece] = steps[piece] || []).push(i + 1); });
+  const xs = room.pieces.map((p) => p.x), ys = room.pieces.map((p) => p.y);
+  // Crop to the pieces with a margin, but never tighter than 24 × 14 units, so a one-piece room
+  // still shows where the piece sits.
+  const pad = 4.5;
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const w = Math.max(Math.max(...xs) - Math.min(...xs) + 2 * pad, 24), h = Math.max(Math.max(...ys) - Math.min(...ys) + 2 * pad, 14);
+  const box = { x: cx - w / 2, y: cy - h / 2, w, h };
+  const tints = [...new Set([...room.floor, ...room.pieces].map((x) => x.tint).filter(Boolean))];
+  const filter = (t) => t ? ` filter="url(#t${t.slice(1)})"` : '';
+  const img = (x) => x.src ? `<image href="${PUZZLE_IMG}${x.src}" x="${r2(-x.w / 2)}" y="${r2(-x.h / 2)}" width="${r2(x.w)}" height="${r2(x.h)}" transform="translate(${r2(x.x)} ${r2(x.y)}) rotate(${x.rot}) scale(${x.mirrorX ? -1 : 1} ${x.mirrorY ? -1 : 1})"${x.alpha !== undefined && x.alpha < 1 ? ` opacity="${x.alpha}"` : ''}${filter(x.tint)}/>` : '';
+  const marker = (p) => {
+    const n = steps[p.piece];
+    if (!n) return '';
+    const label = n.join(',');
+    const r = label.length > 2 ? 1.25 : 0.95;
+    // A number sits on a big piece, and beside a small one (a switch is about one unit across).
+    const off = p.w < 2 ? 1.5 : 0;
+    return `<g class="step" transform="translate(${r2(p.x + off)} ${r2(p.y - off)})"><circle r="${r}"/><text dy="0.36">${label}</text></g>`;
+  };
+  return `<svg class="room" viewBox="${r2(box.x)} ${r2(box.y)} ${r2(box.w)} ${r2(box.h)}" role="img" aria-label="${esc(spot.place)}: the pieces numbered in the order to press them">
+<defs>${tints.map((t) => { const [r, g, b] = [1, 3, 5].map((i) => (parseInt(t.slice(i, i + 2), 16) / 255).toFixed(3)); return `<filter id="t${t.slice(1)}"><feColorMatrix values="${r} 0 0 0 0 0 ${g} 0 0 0 0 0 ${b} 0 0 0 0 0 1 0"/></filter>`; }).join('')}</defs>
+${room.floor.map(img).join('\n')}
+${room.pieces.map(img).join('\n')}
+${room.pieces.map(marker).join('')}
+</svg>`;
+}
 
 function bunkerCodesPage() {
   const unplaced = Object.keys(PUZZLES).filter((id) => !PUZZLE_SPOTS.some((x) => x.id === id));
   if (unplaced.length) throw new Error(`puzzles.ts has codes this page doesn't place: ${unplaced.join(', ')}`);
-  const code = (spot) => PUZZLES[spot.id].map((piece) => `<b>${esc((spot.show && spot.show[piece]) || piece)}</b>`).join(' → ');
+  const emblem = (piece) => ROOMS.emblems[piece] ? `<img class="emblem" src="${PUZZLE_IMG}${ROOMS.emblems[piece]}" alt="" width="18" height="18">` : '';
+  const code = (spot) => PUZZLES[spot.id].map((piece) => `<b>${spot.room === 'bunker_eye_02' ? emblem(piece) : ''}${esc((spot.show && spot.show[piece]) || piece)}</b>`).join(' → ');
   const body = `<article>
 <h1>All survev.io and surviv.io bunker codes</h1>
-<p class="lead">Every puzzle door in survev takes the same code in every match. Here are all ${PUZZLE_SPOTS.length}, read from the game's source (<code>puzzles.ts</code>). Press the pieces in this order.</p>
+<p class="lead">Every puzzle door in survev takes the same code in every match. Here are all ${PUZZLE_SPOTS.length}, read from the game's source (<code>puzzles.ts</code>), with a picture of each room below: press the pieces in the numbered order.</p>
 ${table([{ t: 'Where' }, { t: 'Map' }, { t: 'Code' }, { t: 'Reset after', n: 1 }],
     PUZZLE_SPOTS.map((x) => [esc(x.place), esc(x.maps), code(x), `${x.wait} s`]), 'codes')}
+${PUZZLE_SPOTS.map((x) => `<section class="puzzle">
+<h2>${esc(x.place)}: ${esc(x.maps.split(':')[0])}</h2>
+<p class="puzzle-code">${code(x)}</p>
+${roomSvg(x)}${x.caption ? `\n<p class="muted">${x.caption}</p>` : ''}
+</section>`).join('\n')}
+
 <h2>How the puzzles work</h2>
 <ul>
 <li><b>A wrong piece resets the whole code.</b> Once you've pressed as many pieces as the code is long and the order is wrong, the door buzzes and you start over.</li>

@@ -1,0 +1,947 @@
+{
+ "rooms": {
+  "bunker_eye_02": {
+   "building": "bunker_eye_sublevel_01",
+   "floor": [
+    {
+     "src": "map-bunker-eye-chamber-floor-01a.svg",
+     "w": 22,
+     "h": 43,
+     "x": 0,
+     "y": 8.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-bunker-eye-chamber-floor-01b.svg",
+     "w": 6.00005625,
+     "h": 8.0000009375,
+     "x": 13,
+     "y": 23,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    }
+   ],
+   "pieces": [
+    {
+     "piece": "swine",
+     "type": "control_panel_02b",
+     "x": -7,
+     "y": -1,
+     "rot": -90,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "egg",
+     "type": "control_panel_02b",
+     "x": -7,
+     "y": 4,
+     "rot": -90,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "storm",
+     "type": "control_panel_02b",
+     "x": -7,
+     "y": 9,
+     "rot": -90,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "caduceus",
+     "type": "control_panel_02b",
+     "x": -7,
+     "y": 14,
+     "rot": -90,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "crossing",
+     "type": "control_panel_02b",
+     "x": -7,
+     "y": 19,
+     "rot": -90,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "conch",
+     "type": "control_panel_02b",
+     "x": -7,
+     "y": 24,
+     "rot": -90,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "cloud",
+     "type": "control_panel_02b",
+     "x": 7,
+     "y": 4,
+     "rot": -270,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "hydra",
+     "type": "control_panel_02b",
+     "x": 7,
+     "y": 9,
+     "rot": -270,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "hatchet",
+     "type": "control_panel_02b",
+     "x": 7,
+     "y": 14,
+     "rot": -270,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "harpsichord",
+     "type": "control_panel_02b",
+     "x": 7,
+     "y": 19,
+     "rot": -270,
+     "src": "map-control-panel-02.svg",
+     "w": 4.5,
+     "h": 3.4375,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    }
+   ]
+  },
+  "bunker_chrys_01": {
+   "building": "bunker_chrys_sublevel_01",
+   "floor": [
+    {
+     "src": "map-bunker-chrys-chamber-floor-01a.svg",
+     "w": 4.9997253125,
+     "h": 5.6249928125,
+     "x": 0,
+     "y": -1.85,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-bunker-chrys-chamber-floor-01b.svg",
+     "w": 29.125,
+     "h": 19.625,
+     "x": 11,
+     "y": 10.75,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    }
+   ],
+   "pieces": [
+    {
+     "piece": "ichi",
+     "type": "switch_01",
+     "x": 18.5,
+     "y": 4.25,
+     "rot": 0,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "shi",
+     "type": "switch_01",
+     "x": 21.5,
+     "y": 4.25,
+     "rot": 0,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "ni",
+     "type": "switch_01",
+     "x": 18.5,
+     "y": 18.75,
+     "rot": -180,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "san",
+     "type": "switch_01",
+     "x": 21.5,
+     "y": 18.75,
+     "rot": -180,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    }
+   ]
+  },
+  "bunker_chrys_02": {
+   "building": "bunker_chrys_compartment_01",
+   "floor": [
+    {
+     "src": "map-bunker-chrys-compartment-floor-01a.svg",
+     "w": 7.125,
+     "h": 20.125,
+     "x": -12.5,
+     "y": 4.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-bunker-chrys-compartment-floor-01d.svg",
+     "w": 25.125,
+     "h": 25.125,
+     "x": 3.5,
+     "y": -2,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    }
+   ],
+   "pieces": [
+    {
+     "piece": "leaves",
+     "type": "planter_04",
+     "x": 8.5,
+     "y": -7,
+     "rot": 0,
+     "src": "map-planter-04.svg",
+     "w": 3.125,
+     "h": 3.125,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "frost",
+     "type": "planter_04",
+     "x": -0.5,
+     "y": -1,
+     "rot": 0,
+     "src": "map-planter-04.svg",
+     "w": 3.125,
+     "h": 3.125,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "flower",
+     "type": "planter_04",
+     "x": 2.5,
+     "y": 2,
+     "rot": 0,
+     "src": "map-planter-04.svg",
+     "w": 3.125,
+     "h": 3.125,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "moon",
+     "type": "planter_04",
+     "x": 5.5,
+     "y": 2,
+     "rot": 0,
+     "src": "map-planter-04.svg",
+     "w": 3.125,
+     "h": 3.125,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    }
+   ]
+  },
+  "bunker_twins": {
+   "building": "bunker_twins_sublevel_01",
+   "floor": [
+    {
+     "src": "map-bunker-twins-chamber-floor-01.svg",
+     "w": 46,
+     "h": 36,
+     "x": 0,
+     "y": 0,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    }
+   ],
+   "pieces": [
+    {
+     "piece": "sniper",
+     "type": "button_01b",
+     "x": -12,
+     "y": -8.5,
+     "rot": 0,
+     "src": "map-button-01b.svg",
+     "w": 2.1875,
+     "h": 2.18750071875,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "scout",
+     "type": "button_01g",
+     "x": 8,
+     "y": 12.25,
+     "rot": -90,
+     "src": "map-button-01g.svg",
+     "w": 2.1875,
+     "h": 2.18750071875,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "demo",
+     "type": "switch_01",
+     "x": 18,
+     "y": -3,
+     "rot": -180,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "assault",
+     "type": "switch_01y",
+     "x": -15,
+     "y": 8.25,
+     "rot": -90,
+     "src": "map-switch-01y.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "tank",
+     "type": "switch_01o",
+     "x": 5.5,
+     "y": -10,
+     "rot": 0,
+     "src": "map-switch-01o.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "medic",
+     "type": "switch_01p",
+     "x": 15,
+     "y": -8.25,
+     "rot": -270,
+     "src": "map-switch-01p.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    }
+   ]
+  },
+  "club_01": {
+   "building": "club_01",
+   "floor": [
+    {
+     "src": "map-building-club-floor-01a.svg",
+     "w": 7.0625,
+     "h": 7.0625,
+     "x": -30,
+     "y": 8.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-club-floor-01b.svg",
+     "w": 6.0625,
+     "h": 6.0625,
+     "x": -21.5,
+     "y": -8,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-club-floor-01c.svg",
+     "w": 45.0625,
+     "h": 27.0625,
+     "x": -4,
+     "y": 8.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-club-floor-01d.svg",
+     "w": 10.0625,
+     "h": 6.0625,
+     "x": 1.5,
+     "y": 25,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-club-floor-01e.svg",
+     "w": 11.0625,
+     "h": 15.0625,
+     "x": 24,
+     "y": 7.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-club-floor-01f.svg",
+     "w": 6.0625,
+     "h": 4.0625,
+     "x": 6.5,
+     "y": -7,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-club-floor-01g.svg",
+     "w": 25.0625,
+     "h": 18.0625,
+     "x": 6,
+     "y": -18,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-club-floor-01h.svg",
+     "w": 10.0625,
+     "h": 9.0625,
+     "x": -1.5,
+     "y": -31.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    }
+   ],
+   "pieces": [
+    {
+     "piece": "1",
+     "type": "switch_01",
+     "x": -5.5,
+     "y": -11.5,
+     "rot": -90,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "4",
+     "type": "switch_01",
+     "x": -5.5,
+     "y": -14.5,
+     "rot": -90,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "2",
+     "type": "switch_01",
+     "x": -5.5,
+     "y": -17.5,
+     "rot": -90,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "3",
+     "type": "switch_01",
+     "x": -5.5,
+     "y": -20.5,
+     "rot": -90,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    }
+   ]
+  },
+  "club_02": {
+   "building": "bathhouse_01",
+   "floor": [
+    {
+     "src": "map-building-club-gradient-01.svg",
+     "w": 73.0000075,
+     "h": 70.0000075,
+     "x": -3.5,
+     "y": 13.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-bathhouse-basement-01a.svg",
+     "w": 7.0625,
+     "h": 9.0625,
+     "x": -33.5,
+     "y": 26,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-bathhouse-basement-01b.svg",
+     "w": 40.75,
+     "h": 28.750001875,
+     "x": -10,
+     "y": 26.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-bathhouse-basement-01c.svg",
+     "w": 17.749998125,
+     "h": 10.875,
+     "x": 18.5,
+     "y": 35.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-bathhouse-basement-01d.svg",
+     "w": 8.0625,
+     "h": 6.0625,
+     "x": 23.02,
+     "y": 27.5,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-bathhouse-basement-01e.svg",
+     "w": 44.75,
+     "h": 49.75,
+     "x": 2,
+     "y": -9,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    }
+   ],
+   "pieces": [
+    {
+     "piece": "1",
+     "type": "switch_03",
+     "x": 8,
+     "y": -30.75,
+     "rot": 0,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    }
+   ]
+  },
+  "saloon": {
+   "building": "saloon_01",
+   "floor": [
+    {
+     "src": "map-building-saloon-floor-01.svg",
+     "w": 41,
+     "h": 41,
+     "x": 0,
+     "y": 0,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    },
+    {
+     "src": "map-building-saloon-ceiling-02.svg",
+     "w": 6,
+     "h": 5,
+     "x": -23.5,
+     "y": -1,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    }
+   ],
+   "pieces": [
+    {
+     "piece": "violet",
+     "type": "bottle_02v",
+     "x": -18.75,
+     "y": 1.75,
+     "rot": 0,
+     "src": "map-bottle-02.svg",
+     "w": 1,
+     "h": 1,
+     "tint": "#ee82ee",
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "red",
+     "type": "bottle_02r",
+     "x": -11,
+     "y": -8,
+     "rot": 0,
+     "src": "map-bottle-02.svg",
+     "w": 1,
+     "h": 1,
+     "tint": "#c90000",
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "blue",
+     "type": "bottle_02b",
+     "x": -11,
+     "y": 2.5,
+     "rot": 0,
+     "src": "map-bottle-02.svg",
+     "w": 1,
+     "h": 1,
+     "tint": "#006cff",
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "barrel",
+     "type": "barrel_02",
+     "x": -17.5,
+     "y": -17.5,
+     "rot": 0,
+     "src": "map-barrel-02.svg",
+     "w": 3.6,
+     "h": 3.6,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "gun",
+     "type": {
+      "gun_mount_01": 100,
+      "gun_mount_02": 10
+     },
+     "x": -0.5,
+     "y": -18.75,
+     "rot": 0,
+     "src": null,
+     "w": 1,
+     "h": 1,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "green",
+     "type": "bottle_02g",
+     "x": 7.25,
+     "y": -10.5,
+     "rot": 0,
+     "src": "map-bottle-02.svg",
+     "w": 1,
+     "h": 1,
+     "tint": "#008000",
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "indigo",
+     "type": "bottle_02i",
+     "x": 12.5,
+     "y": -4.5,
+     "rot": 0,
+     "src": "map-bottle-02.svg",
+     "w": 1,
+     "h": 1,
+     "tint": "#4b0082",
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "yellow",
+     "type": "bottle_02y",
+     "x": 8,
+     "y": -18.5,
+     "rot": 0,
+     "src": "map-bottle-02.svg",
+     "w": 1,
+     "h": 1,
+     "tint": "#ffff00",
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "orange",
+     "type": "bottle_02o",
+     "x": 3.75,
+     "y": 17.5,
+     "rot": 0,
+     "src": "map-bottle-02.svg",
+     "w": 1,
+     "h": 1,
+     "tint": "#ff5a00",
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "column",
+     "type": "saloon_column_1",
+     "x": 5.5,
+     "y": 17.5,
+     "rot": 0,
+     "src": "map-column-01.svg",
+     "w": 2,
+     "h": 2,
+     "tint": "#1a1a1a",
+     "mirrorX": false,
+     "mirrorY": false
+    }
+   ]
+  },
+  "reserve_vault": {
+   "building": "reserve_vault_01",
+   "floor": [
+    {
+     "src": "map-building-reserve-vault-01.svg",
+     "w": 34,
+     "h": 34,
+     "x": -1,
+     "y": 0,
+     "rot": 0,
+     "mirrorX": false,
+     "mirrorY": false,
+     "alpha": 1,
+     "tint": null
+    }
+   ],
+   "pieces": [
+    {
+     "piece": "3",
+     "type": "switch_01",
+     "x": 17.5,
+     "y": -10,
+     "rot": 0,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "2",
+     "type": "switch_01",
+     "x": 20.5,
+     "y": -10,
+     "rot": 0,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "5",
+     "type": "switch_01",
+     "x": 23.5,
+     "y": -10,
+     "rot": 0,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "1",
+     "type": "switch_01",
+     "x": 17.5,
+     "y": 10,
+     "rot": -180,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "2",
+     "type": "switch_01",
+     "x": 20.5,
+     "y": 10,
+     "rot": -180,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    },
+    {
+     "piece": "4",
+     "type": "switch_01",
+     "x": 23.5,
+     "y": 10,
+     "rot": -180,
+     "src": "map-switch-01.svg",
+     "w": 0.9375,
+     "h": 1.0625,
+     "tint": null,
+     "mirrorX": false,
+     "mirrorY": false
+    }
+   ]
+  }
+ },
+ "emblems": {
+  "swine": "logo-swine.svg",
+  "hydra": "logo-hydra.svg",
+  "crossing": "logo-crossing.svg",
+  "hatchet": "logo-hatchet.svg",
+  "caduceus": "logo-caduceus.svg",
+  "egg": "logo-egg.svg",
+  "cloud": "logo-cloud.svg",
+  "storm": "logo-storm.svg",
+  "conch": "logo-conch.svg"
+ }
+}

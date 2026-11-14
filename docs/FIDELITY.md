@@ -11,7 +11,9 @@ obstacles from `shared/defs/mapObjects/obstacles/mapObstacleDefs.ts`, and the co
 the simulation needs from `shared/gameConfig.ts`. The guide pages also use perks (`perkDefs.json`:
 `perkDefs.ts`, each role's perks from `roleDefs.ts`, each map's `tier_perks` loot and the English
 names and descriptions from `client/src/en.json`) and the puzzle codes (`puzzles.json`, from
-`shared/defs/puzzles.ts`). Player, gun, obstacle, projectile,
+`shared/defs/puzzles.ts`). The pictures of each puzzle room come from `puzzleRooms.json` and the
+sprites in `vendor/survev/img/puzzles/`, both written by `tools/extract-puzzle-rooms.mjs` from the
+building definitions, placed the way survev's client places floor art and obstacles. Player, gun, obstacle, projectile,
 particle and crosshair sprites, gun and explosion sounds, and the Roboto Condensed font
 are copied from the survev client into `vendor/survev/`. Player radius is 1 unit and
 movement is 12 units/s.

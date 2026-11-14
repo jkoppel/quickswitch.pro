@@ -54,8 +54,14 @@ test('the bunker codes page shows every code in survev\'s puzzles.ts, in order',
   const html = buildPages()['guides/bunker-codes/index.html'];
   const puzzles = JSON.parse(readFileSync(new URL('vendor/survev/defs/puzzles.json', root), 'utf8'));
   for (const [id, code] of Object.entries(puzzles)) {
-    const shown = code.map((p) => `<b>${p}`);
+    // Each piece in order, as a bold name (an emblem may precede it, a gloss like "(一)" follow it).
     let at = 0;
-    for (const piece of shown) { at = html.indexOf(piece, at); assert.ok(at >= 0, `${id}: ${piece}`); }
+    for (const piece of code) {
+      const re = new RegExp(`>${piece}( \\([^)]*\\))?</b>`, 'g');
+      re.lastIndex = at;
+      const m = re.exec(html);
+      assert.ok(m, `${id}: ${piece}`);
+      at = m.index + m[0].length;
+    }
   }
 });
