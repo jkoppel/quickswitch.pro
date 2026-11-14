@@ -163,6 +163,21 @@ details.advanced summary::-webkit-details-marker { display: none; }
 details.advanced summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--sage); border-bottom: 1.5px solid var(--sage); transform: rotate(-45deg); transition: transform 120ms var(--ease); }
 details.advanced[open] summary::before { transform: rotate(45deg); }
 details.advanced .grid { margin-top: 12px; }
+/* Perks: a toggle chip each, any number on. */
+fieldset.perk-pick { grid-column: 1 / -1; margin: 0; padding: 0; border: 0; min-width: 0; }
+fieldset.perk-pick legend { padding: 0; margin-bottom: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sage); }
+fieldset.perk-pick legend .field-hint { margin-left: 6px; }
+.perk-group { display: grid; grid-template-columns: 56px 1fr; align-items: baseline; }
+.perk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.perk-group + .perk-group { margin-top: 6px; }
+.perk-group-name { font-size: 12px; color: var(--ink-muted); }
+label.perk-chip { flex-direction: row; gap: 0; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--ink-soft); cursor: pointer; }
+.perk-chip input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.perk-chip span { padding: 5px 10px; border: 1px solid var(--field-line); border-radius: 999px; background: var(--input); transition: background-color 120ms var(--ease), border-color 120ms var(--ease); }
+.perk-chip:hover span { background: var(--moss-hover); color: var(--ink); }
+.perk-chip input:checked + span { border-color: var(--orange); background: rgba(212, 85, 0, 0.22); color: var(--ink); }
+.perk-chip input:focus-visible + span { outline: 2px solid var(--yellow); outline-offset: 1px; }
+.perk-chip.idle span { opacity: 0.5; }
 .weapon-info { margin: 12px 0 0; font-size: 12px; color: var(--sage-tip); display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .weapon-info b { color: var(--ink); }
 .chart-block { margin-top: var(--space-6); }

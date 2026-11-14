@@ -2,7 +2,7 @@
 window.ST = window.ST || {};
 
 ST.DEFAULT_SETTINGS = {
-  weapon: 'mp5', secondary: '', throwable: '', throwableCount: 3, perk: '',
+  weapon: 'mp5', secondary: '', throwable: '', throwableCount: 3, perks: [],
   scope: '2x', duration: 60, enemies: 1, behavior: 'strafe',
   enemyHp: 100, enemyShoots: false, enemyAim: 'normal', minDist: 8, maxDist: 16,
   ttl: 0, obstacles: true, stones: 14, barrels: 0, hugCover: false, arena: '',

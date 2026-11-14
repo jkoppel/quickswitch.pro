@@ -52,13 +52,19 @@ async function start(path) {
   await page.waitForTimeout(600);
 }
 
+const checked = () => page.evaluate(() => [...document.querySelectorAll('#f-perks input:checked')].map((x) => x.value).sort().join(','));
+
 // 1. The link picks the perk and the gun, and says so; a gun link afterwards clears it.
 await open('/drill/duel?gun=mp5&perk=bonus_9mm');
-ok(await page.inputValue('#f-perk') === 'bonus_9mm', 'a perk link selects the perk');
+ok(await checked() === 'bonus_9mm', 'a perk link selects the perk');
 ok(await page.inputValue('#f-weapon') === 'mp5', 'and the gun it names');
 ok((await page.textContent('#preset-line')).includes('9mm Overpressure'), 'the drill line names the perk');
 await open('/drill/duel?gun=ak47');
-ok(await page.inputValue('#f-perk') === '', 'a gun link without a perk clears it');
+ok(await checked() === '', 'a gun link without a perk clears it');
+ok(await page.evaluate(() => document.querySelector('#f-perks input[value="bonus_9mm"]').parentNode.classList.contains('idle')), 'a 9mm perk greys out with the AK-47');
+await open('/drill/duel?gun=mp5&perk=bonus_9mm,treat_9mm&perk=splinter');
+ok(await checked() === 'bonus_9mm,splinter,treat_9mm', `a link can give several perks (${await checked()})`);
+ok(/9mm Overpressure.*Candy Corn|Candy Corn.*9mm Overpressure/.test(await page.textContent('#preset-line')), 'the drill line names them all');
 
 // 2. Gun perks change the gun the drill hands you.
 await start('/drill/duel?gun=mp5&perk=bonus_9mm');
@@ -99,6 +105,17 @@ r = await inPage(`const g = ST.currentGame, e = g.enemies[0], blasts = [];
   g.explode = ex;
   return { blasts };`);
 ok(r.blasts.includes('rounds'), `Explosive Rounds: a round that hits the bot bursts (${JSON.stringify(r)})`);
+
+await start('/drill/duel?gun=mp5&perk=bonus_9mm,treat_9mm,splinter,high_velocity');
+r = await inPage(`const g = ST.currentGame, made = [];
+  const mk = g.makeBullet.bind(g);
+  g.makeBullet = function (...a) { const b = mk(...a); if (a[4] === 'player') made.push(b.dmg); return b; };
+  g.fireGun(g.player, g.player.weapons[0].def, 0, false, 'player', { firstShot: true, toMouseLen: 10, gun: g.player.weapons[0] });
+  g.makeBullet = mk;
+  const d = g.player.weapons[0].def, w = ST.WEAPONS.mp5;
+  return { made, base: w.dmg, speed: d.speed / w.speed, range: d.range / w.range };`);
+ok(r.made.length === 3 && near(r.made[0], r.base * 1.12 * 1.12 * 0.6) && near(r.speed, 1.2 * 1.4) && near(r.range, 1.2 * 1.3),
+  `perks stack: two 9mm perks ×1.12 each, Splinter, and Overpressure with High-Velocity (${JSON.stringify(r)})`);
 
 // 3. Body perks: size, damage taken, reflections, haste and health.
 await start('/drill/dodge?perk=steelskin');
@@ -154,6 +171,14 @@ ok(near(r.scale, 1.2) && hp > 51, `Gift of the Woods: 1.2× size, and health cli
 await start('/drill/chase?perk=small_arms');
 r = await inPage(`return { scale: ST.currentGame.player.scale };`);
 ok(near(r.scale, 0.75), `Small Arms: 0.75× size (${r.scale})`);
+
+await start('/drill/dodge?perk=steelskin,flak_jacket,gotw');
+r = await inPage(`const g = ST.currentGame, p = g.player;
+  const rnd = Math.random; Math.random = () => 0.99;
+  const b = g.makeBullet(p.pos.x - 1, p.pos.y, 0, ST.WEAPONS.ak47, 'enemy', {});
+  p.hp = 100; g.damagePlayer(b, p.pos.x, p.pos.y); Math.random = rnd;
+  return { taken: 100 - p.hp, full: g.rollDamage(b).dmg, scale: p.scale };`);
+ok(near(r.taken, r.full * 0.9 * 0.55) && near(r.scale, 1.7), `body perks stack: Flak Jacket then Ironskin take ${r.taken} of ${r.full}; their sizes add up to ${r.scale}× the size`);
 await page.screenshot({ path: join(out, 'perks.png') });
 
 ok(!errors.length, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`);

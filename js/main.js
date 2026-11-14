@@ -32,12 +32,12 @@
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
   };
-  // A perk changes the gun enough that its scores are kept apart from the plain gun's.
-  const drillKey = (s) => `${s.mode}:${s.weapon}${s.perk ? ':' + s.perk : ''}`;
+  // Perks change the gun enough that their scores are kept apart from the plain gun's.
+  const drillKey = (s) => `${s.mode}:${s.weapon}${s.perks && s.perks.length ? ':' + s.perks.join('+') : ''}`;
 
   // ---------- form ----------
   const fields = {
-    weapon: $('f-weapon'), secondary: $('f-secondary'), throwable: $('f-throwable'), perk: $('f-perk'),
+    weapon: $('f-weapon'), secondary: $('f-secondary'), throwable: $('f-throwable'),
     scope: $('f-scope'), duration: $('f-duration'), enemies: $('f-enemies'),
     behavior: $('f-behavior'), enemyHp: $('f-hp'), minDist: $('f-mind'), maxDist: $('f-maxd'), ttl: $('f-ttl'),
     enemyAim: $('f-aim'), enemyShoots: $('f-shoots'), adaptive: $('f-adaptive'), leadHint: $('f-lead'),
@@ -79,8 +79,29 @@
     }
   })();
   fill(fields.throwable, [['', 'None']].concat(Object.entries(ST.THROWABLES).map(([k, t]) => [k, t.name])));
-  // The perks that do something in a drill (ST.PERKS), alphabetical after None.
-  fill(fields.perk, [['', 'None']].concat(Object.values(ST.PERKS).sort((a, b) => a.name.localeCompare(b.name)).map((k) => [k.id, k.name])));
+  // The perks that do something in a drill (ST.PERKS): a toggle for each, rounds perks then body
+  // perks, alphabetical in each group. The perks are not in `fields`; perkBoxes reads and writes them.
+  const perkBoxes = {};
+  (function fillPerks() {
+    const box = $('f-perks');
+    for (const [label, body] of [['Rounds', false], ['Body', true]]) {
+      const group = document.createElement('div');
+      group.className = 'perk-group';
+      group.innerHTML = `<span class="perk-group-name">${label}</span><div class="perk-chips"></div>`;
+      for (const p of Object.values(ST.PERKS).filter((x) => x.body === body).sort((a, b) => a.name.localeCompare(b.name))) {
+        const chip = document.createElement('label');
+        chip.className = 'perk-chip';
+        chip.title = p.desc;
+        chip.innerHTML = '<input type="checkbox"><span></span>';
+        chip.querySelector('span').textContent = p.name;
+        perkBoxes[p.id] = chip.querySelector('input');
+        perkBoxes[p.id].value = p.id;
+        group.lastChild.appendChild(chip);
+      }
+      box.appendChild(group);
+    }
+  })();
+  const checkedPerks = () => ST.perkList(Object.keys(perkBoxes).filter((id) => perkBoxes[id].checked));
   fill(fields.scope, Object.keys(ST.SCOPES).map(k => [k, `${k} (shows ${ST.scopeMaxDist(k)} units in any direction)`]));
   fill(fields.behavior, ST.MOVEMENT_ORDER.map(k => [k, ST.MOVEMENT[k].name]));
   fill(fields.enemyAim, Object.entries(ST.AIM).map(([k, a]) => [k, a.name]));
@@ -98,6 +119,8 @@
     if (!s.obstacles) { s.barrels = 0; s.stones = 0; }
     s.throwableCount = s.throwableCount === undefined ? 3 : Math.max(0, s.throwableCount | 0);
     if (s.secondary === s.weapon) s.secondary = '';
+    s.perks = ST.perkList(s.perks !== undefined ? s.perks : s.perk);   // older saves name one perk
+    delete s.perk;
     return s;
   }
   function readSettings() {
@@ -111,6 +134,7 @@
       else if (el.type === 'number') s[k] = Number(el.value);
       else s[k] = el.value;
     }
+    s.perks = checkedPerks();
     return normalize(s);
   }
   // Settings saved by an older version can name things that no longer exist. Assigning one of those
@@ -129,6 +153,10 @@
       }
       el.value = v;
     }
+    if ('perks' in s || 'perk' in s) {
+      const on = ST.perkList(s.perks !== undefined ? s.perks : s.perk);
+      for (const [id, box] of Object.entries(perkBoxes)) box.checked = on.includes(id);
+    }
     updateWeaponInfo();
     updateBehaviorHint();
     updateBestAndTrend();
@@ -141,11 +169,15 @@
   }
 
   function updateWeaponInfo() {
-    const perk = ST.PERKS[fields.perk.value];
-    $('perk-hint').textContent = perk ? perk.desc : '';
     const base = ST.WEAPONS[fields.weapon.value];
     if (!base) return;
-    const w = ST.perkedGun(base, fields.perk.value);   // the numbers you will actually shoot with
+    // A rounds perk that does nothing for this gun stays pickable but greys out and says why.
+    for (const [id, box] of Object.entries(perkBoxes)) {
+      const idle = ST.perkIdle(base, id);
+      box.parentNode.classList.toggle('idle', idle);
+      box.parentNode.title = ST.PERKS[id].desc + (idle ? ` No effect on the ${base.name}.` : '');
+    }
+    const w = ST.perkedGun(base, checkedPerks());   // the numbers you will actually shoot with
     const rpm = Math.round(60 / w.fireDelay);
     const pellets = w.pellets ? ` × ${w.pellets} pellets` : '';
     const n = ST.fmt.dec;
@@ -221,7 +253,7 @@
     return t;
   }
 
-  for (const el of Object.values(fields)) el.addEventListener('change', () => { updateWeaponInfo(); updateBehaviorHint(); updateBestAndTrend(); validateForm(); });
+  for (const el of [...Object.values(fields), $('f-perks')]) el.addEventListener('change', () => { updateWeaponInfo(); updateBehaviorHint(); updateBestAndTrend(); validateForm(); });
   for (const el of [fields.minDist, fields.maxDist, fields.duration]) el.addEventListener('input', validateForm);
 
   // ---------- lists ----------
@@ -326,12 +358,12 @@
       const saved = locked ? null : LS.get('st.lastSettings.' + item.id, null);
       writeSettings(modeDefaults(item));         // the drill's own preset is the floor
       if (saved) writeSettings(saved);           // then whatever of the saved run still makes sense
-      if (overrides) writeSettings(overrides);   // and a guide's link picks the gun or perk, locked or not
+      if (overrides) writeSettings(overrides);   // and a guide's link picks the gun or perks, locked or not
       // Custom is the one drill whose point is the full parameter set.
       $('advanced').open = item.id === 'custom';
       const s = readSettings();
       const w = ST.WEAPONS[s.weapon];
-      const extra = [s.secondary && ST.WEAPONS[s.secondary] ? ' + ' + ST.WEAPONS[s.secondary].name : '', s.throwable && ST.THROWABLES[s.throwable] ? ' + ' + ST.THROWABLES[s.throwable].name : '', s.perk && ST.PERKS[s.perk] ? ' + ' + ST.PERKS[s.perk].name : ''].join('');
+      const extra = [s.secondary && ST.WEAPONS[s.secondary] ? ' + ' + ST.WEAPONS[s.secondary].name : '', s.throwable && ST.THROWABLES[s.throwable] ? ' + ' + ST.THROWABLES[s.throwable].name : '', ...s.perks.map((id) => ' + ' + ST.PERKS[id].name)].join('');
       $('preset-line').textContent = item.id === 'custom' ? 'Custom sets every weapon and scenario setting yourself.' : `${w ? w.name : s.weapon}${extra} · ${s.scope} · ${s.duration} s`;
     }
     LS.set('st.lastSelection', { kind, id: item.id });

@@ -6,6 +6,7 @@ window.ST = window.ST || {};
   const DEG = Math.PI / 180;
   const GC = ST.GC;                          // survev's GameConfig, verbatim
   const PLAYER_R = GC.player.radius;
+  const perkProps = (id) => ST.PERKS[id].props;   // survev's PerkProperties for one perk
   const EXPLOSION_FX = {
     frag: { sound: 'explosion_01', volume: 0.9, scale: 1 },
     usas: { sound: 'explosion_03', volume: 0.9, scale: 0.75 },
@@ -224,19 +225,18 @@ window.ST = window.ST || {};
       // Weapon slots, as in survev: two guns, plus a throwable. Slot 0 is always the drill's weapon.
       const secondary = settings.secondary && ST.WEAPONS[settings.secondary] ? ST.WEAPONS[settings.secondary] : null;
       const throwable = settings.throwable && ST.THROWABLES[settings.throwable] ? ST.THROWABLES[settings.throwable] : null;
-      // A perk changes the player's guns (ST.perkedGun) and body: size, damage taken, speed, health.
-      // Bots never carry one.
-      const perk = settings.perk && ST.PERKS[settings.perk] ? settings.perk : '';
-      this.perk = perk;
-      this.perkProps = perk ? ST.PERKS[perk].props : {};
-      const scale = ST.perkScale(perk);
+      // Perks change the player's guns (ST.perkedGun) and body: size, damage taken, speed, health.
+      // Bots never carry any.
+      const perks = ST.perkList(settings.perks);
+      this.perks = new Set(perks);
+      const scale = ST.perkScale(perks);
       this.player = {
         pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 }, hp: PLAYER_MAX_HP, aim: 0, aimVel: 0, moving: false,
-        scale, radius: PLAYER_R * scale,   // player.ts: the collider grows with the perk's scale
+        scale, radius: PLAYER_R * scale,   // player.ts: the collider grows with the perks' scale
         hasteT: 0, hasteType: '',          // player.ts giveHaste: +hasteSpeedBonus while it lasts
         weapons: [
-          makeGun(ST.perkedGun(ST.WEAPONS[settings.weapon], perk)),
-          secondary ? makeGun(ST.perkedGun(secondary, perk)) : null,
+          makeGun(ST.perkedGun(ST.WEAPONS[settings.weapon], perks)),
+          secondary ? makeGun(ST.perkedGun(secondary, perks)) : null,
           throwable ? makeThrowable(throwable, settings.throwableCount) : null,
         ],
         curIdx: 0, lastIdx: secondary ? 1 : 0,
@@ -908,7 +908,7 @@ window.ST = window.ST || {};
       // Haste (Windwalk, Takedown) adds hasteSpeedBonus; Small Arms gives guns an equip speed of +1
       // (player.ts), where every gun's own is 0 in the trainer.
       const hasted = p.hasteT > 0 ? GC.player.hasteSpeedBonus : 0;
-      const smallArms = this.perk === 'small_arms' && p.gun && !p.gun.throwable ? this.perkProps.gunEquipSpeed : 0;
+      const smallArms = this.perks.has('small_arms') && p.gun && !p.gun.throwable ? perkProps('small_arms').gunEquipSpeed : 0;
       const speed = MOVE_SPEED + hasted + smallArms - (cooking ? GC.player.cookSpeedPenalty : 0);
       p.vel.x = mx * speed; p.vel.y = my * speed;
       if (p.moving) this.stats.movingTime += dt;
@@ -918,7 +918,7 @@ window.ST = window.ST || {};
       this.pushOutOfObstacles(p.pos, p.radius);
       if (p.hasteT > 0) { p.hasteT -= dt; if (p.hasteT <= 0) { p.hasteT = 0; p.hasteType = ''; } }
       // Gift of the Woods: player.ts regenerates healthRegen a second.
-      if (this.perk === 'gotw') p.hp = Math.min(PLAYER_MAX_HP, p.hp + this.perkProps.healthRegen * dt);
+      if (this.perks.has('gotw')) p.hp = Math.min(PLAYER_MAX_HP, p.hp + perkProps('gotw').healthRegen * dt);
 
       const m = this.mouseWorld();
       const prevAim = p.aim;
@@ -1451,9 +1451,9 @@ window.ST = window.ST || {};
         }
         // Windwalk (bullet.ts): an enemy round within maxTriggerDistance of you gives you haste,
         // unless Windwalk's haste is already running.
-        if (b.owner === 'enemy' && this.perk === 'windwalk' && p.hasteType !== 'windwalk'
-          && Math.hypot(nx - p.pos.x, ny - p.pos.y) <= this.perkProps.maxTriggerDistance) {
-          p.hasteType = 'windwalk'; p.hasteT = this.perkProps.hasteDuration;
+        if (b.owner === 'enemy' && this.perks.has('windwalk') && p.hasteType !== 'windwalk'
+          && Math.hypot(nx - p.pos.x, ny - p.pos.y) <= perkProps('windwalk').maxTriggerDistance) {
+          p.hasteType = 'windwalk'; p.hasteT = perkProps('windwalk').hasteDuration;
         }
 
         if (b.owner === 'enemy' && !b.whizzed) {
@@ -1468,7 +1468,7 @@ window.ST = window.ST || {};
             b.dead = true;
             this.damagePlayer(b, hx, hy);
             // Steelskin (bullet.ts): the round hurts you and also glances off, like a pan.
-            if (this.perk === 'steelskin' && !b.def.roundsBlast && !b.reflected && b.reflectCount < GC.bullet.maxReflect) {
+            if (this.perks.has('steelskin') && !b.def.roundsBlast && !b.reflected && b.reflectCount < GC.bullet.maxReflect) {
               // The normal is at the point the round enters your circle, not the closest point
               // of its path, which is your center when the round flies straight at you.
               const ox = p.pos.x - b.x, oy = p.pos.y - b.y;
@@ -1607,9 +1607,9 @@ window.ST = window.ST || {};
       if (e.hp <= 0) {
         // Takedown (player.ts): a kill gives you health and a burst of haste. A bot's own round
         // reflected off you is the bot's kill, not yours.
-        if (this.perk === 'takedown' && b.owner !== 'enemy') {
-          this.player.hp = Math.min(PLAYER_MAX_HP, this.player.hp + this.perkProps.hpReward);
-          this.player.hasteType = 'takedown'; this.player.hasteT = this.perkProps.hasteDuration;
+        if (this.perks.has('takedown') && b.owner !== 'enemy') {
+          this.player.hp = Math.min(PLAYER_MAX_HP, this.player.hp + perkProps('takedown').hpReward);
+          this.player.hasteType = 'takedown'; this.player.hasteT = perkProps('takedown').hasteDuration;
         }
         st.kills++;
         if (b.source === 'explosion') st.nadeKills++;
@@ -1636,8 +1636,8 @@ window.ST = window.ST || {};
       // Blasts and shrapnel count as explosions.
       const isExplosion = b.source === 'explosion' || b.source === 'round' || !!b.shrapnel;
       let taken = roll.dmg;
-      if (this.perk === 'flak_jacket') taken -= taken * (isExplosion ? this.perkProps.explosionDamageReduction : this.perkProps.damageReduction);
-      if (this.perk === 'steelskin') taken -= taken * this.perkProps.damageReduction;
+      if (this.perks.has('flak_jacket')) taken -= taken * (isExplosion ? perkProps('flak_jacket').explosionDamageReduction : perkProps('flak_jacket').damageReduction);
+      if (this.perks.has('steelskin')) taken -= taken * perkProps('steelskin').damageReduction;
       roll.dmg = taken;
       const dmg = Math.min(roll.dmg, p.hp);
       p.hp -= roll.dmg;
@@ -2059,7 +2059,7 @@ window.ST = window.ST || {};
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(aim);
-      if (scale !== 1) ctx.scale(scale, scale);   // a perk's size: survev draws the bigger collider bigger
+      if (scale !== 1) ctx.scale(scale, scale);   // perks' size: survev draws the bigger collider bigger
       const pose = throwing ? SV.throwablePose : def.pistol ? SV.poses.pistol : def.bullpup ? SV.poses.bullpup : SV.poses.rifle;
       // player.ts applies gun recoil to the right hand only; the gun rides along because it hangs off it.
       const recoil = (gun.recoil || 0) * 1.125;

@@ -73,13 +73,15 @@ ST.platform = {
     R.on('/drill/:id', ({ id }, q) => {
       if (app.running()) return;
       if (!ST.MODES.some(m => m.id === id)) { R.go('/', { replace: true }); return; }
-      // ?gun= and ?perk= come from the gun and perk guides. A link that names either sets both,
-      // so a gun page's link doesn't inherit the perk from your last run.
-      const gun = q.get('gun'), perk = q.get('perk');
+      // ?gun= and ?perk= come from the gun and perk guides; ?perk=a,b (or perk= twice) gives
+      // several. A link that names either sets both, so a gun page's link doesn't inherit the
+      // perks from your last run.
+      const gun = q.get('gun');
+      const perks = ST.perkList(q.getAll('perk').flatMap((v) => v.split(',')));
       const overrides = {};
       if (gun && ST.WEAPONS[gun]) overrides.weapon = gun;
-      if (perk && ST.PERKS[perk]) overrides.perk = perk;
-      if (Object.keys(overrides).length && !overrides.perk) overrides.perk = '';
+      if (perks.length) overrides.perks = perks;
+      if (Object.keys(overrides).length && !overrides.perks) overrides.perks = [];
       app.openPicker('mode', id, Object.keys(overrides).length ? overrides : undefined);
       land(q);
     });

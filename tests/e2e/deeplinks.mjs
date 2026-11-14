@@ -75,7 +75,7 @@ for (const link of [...links].sort()) {
     ok(weapon === guns.get(link), `${link}: the drill loads the ${guns.get(link)} (has ${weapon})`);
   }
   if (perks.has(link)) {
-    const perk = await page.evaluate(() => document.getElementById('f-perk').value);
+    const perk = await page.evaluate(() => [...document.querySelectorAll('#f-perks input:checked')].map((x) => x.value).join(','));
     ok(perk === perks.get(link), `${link}: the drill gives you ${perks.get(link)} (has ${perk || 'none'})`);
   }
   await page.click('#btn-start');

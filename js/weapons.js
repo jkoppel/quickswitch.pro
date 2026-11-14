@@ -106,43 +106,64 @@ window.ST = window.ST || {};
   const PERK_IDS = ['high_velocity', 'splinter', 'chambered', 'explosive', 'firepower', 'ap_rounds',
     'bonus_9mm', 'bonus_45', 'bonus_assault', 'treat_9mm', 'treat_762', 'treat_556', 'treat_12g', 'treat_super',
     'steelskin', 'flak_jacket', 'windwalk', 'takedown', 'gotw', 'small_arms'];
+  // Body perks change you; the rest change the rounds your guns fire.
+  const BODY_PERKS = ['steelskin', 'flak_jacket', 'windwalk', 'takedown', 'gotw', 'small_arms'];
   ST.PERKS = {};
   for (const id of PERK_IDS) {
     const p = PD.perks[id];
-    if (p) ST.PERKS[id] = { id, name: p.name, desc: p.desc, props: p.properties || {} };
+    if (p) ST.PERKS[id] = { id, name: p.name, desc: p.desc, props: p.properties || {}, body: BODY_PERKS.includes(id) };
   }
-  const props = (perk) => (ST.PERKS[perk] ? ST.PERKS[perk].props : {});
+  // A drill's perks, as a list of known ids with no repeats, in a fixed order. Accepts a list, or
+  // one id (settings saved before you could pick several).
+  ST.perkList = (v) => {
+    const ids = new Set(Array.isArray(v) ? v : v ? [v] : []);
+    return PERK_IDS.filter((id) => ids.has(id) && ST.PERKS[id]);
+  };
   // player.ts recalculateScale: 1 plus every perk's scale, clamped to net.ts's 0.75..2.
-  ST.perkScale = (perk) => Math.min(2, Math.max(0.75, 1 + (props(perk).scale || 0)));
+  ST.perkScale = (perks) => Math.min(2, Math.max(0.75,
+    ST.perkList(perks).reduce((s, id) => s + (ST.PERKS[id].props.scale || 0), 1)));
 
-  // The player's gun as a perk changes it. Fixed changes are folded into a copy of the definition;
-  // per-shot ones (splinter, One in the Chamber, .45 empowered rounds) are flags fireGun reads.
-  ST.perkedGun = (def, perk) => {
-    if (!perk || !ST.PERKS[perk] || def.slot !== 'gun') return def;
-    const P = props(perk);
-    const d = { ...def, perk };
-    // weaponManager.isBulletSaturated: Hollow-Points and the full-size bar add 8% to every round;
-    // an ammo perk (ammoBonuses) adds ammoBonusDamageMult to its own ammo.
-    if (perk === 'bonus_assault' || perk === 'treat_super') d.dmg *= 1.08;
-    if ((PD.ammoBonuses[def.ammoType] || []).includes(perk)) d.dmg *= PD.ammoBonusDamageMult;
-    if (perk === 'bonus_9mm' && def.ammoType === '9mm') {
-      d.spread *= P.spreadMul; d.moveSpread *= P.spreadMul;   // fireWeapon scales the whole spread
-      d.speed *= P.speedMult; d.range *= P.distanceMult;
+  // The player's gun as their perks change it. Fixed changes are folded into a copy of the
+  // definition; per-shot ones (splinter, One in the Chamber, .45 empowered rounds) are flags
+  // fireGun reads. Perks stack the way weaponManager.fireWeapon multiplies them.
+  ST.perkedGun = (def, perks) => {
+    const list = ST.perkList(perks);
+    if (!list.length || def.slot !== 'gun') return def;
+    const has = (id) => list.includes(id);
+    const P = (id) => ST.PERKS[id].props;
+    const d = { ...def, perks: list };
+    // weaponManager.isBulletSaturated: Hollow-Points or the full-size bar add 8% to every round,
+    // once; each ammo perk for this gun's ammo (ammoBonuses) multiplies by ammoBonusDamageMult.
+    if (has('bonus_assault') || has('treat_super')) d.dmg *= 1.08;
+    for (const id of PD.ammoBonuses[def.ammoType] || []) if (has(id)) d.dmg *= PD.ammoBonusDamageMult;
+    if (has('bonus_9mm') && def.ammoType === '9mm') {
+      d.spread *= P('bonus_9mm').spreadMul; d.moveSpread *= P('bonus_9mm').spreadMul;   // the whole spread
+      d.speed *= P('bonus_9mm').speedMult; d.range *= P('bonus_9mm').distanceMult;
     }
-    if (perk === 'high_velocity') { d.speed *= P.speedMult; d.range *= P.distanceMult; }
-    if (perk === 'bonus_assault') d.speed *= P.speedMult;
-    if (perk === 'bonus_45' && def.ammoType === '45acp') d.empowered45 = P;
-    if (perk === 'splinter' && !def.noSplinter) { d.dmg *= P.mainDamageMult; d.splinter = P.splitsDamageMult; }
-    if (perk === 'chambered' && def.ammoType !== '12gauge') d.chambered = P.damageMult;
-    if (perk === 'firepower') { d.mag = def.extendedClip; d.reloadCount = def.extendedReload; }
-    if (perk === 'ap_rounds') d.obstacleDamage *= P.obstacleMult;
+    if (has('high_velocity')) { d.speed *= P('high_velocity').speedMult; d.range *= P('high_velocity').distanceMult; }
+    if (has('bonus_assault')) d.speed *= P('bonus_assault').speedMult;
+    if (has('bonus_45') && def.ammoType === '45acp') d.empowered45 = P('bonus_45');
+    // survev cuts the main round to mainDamageMult even on a noSplinter gun, which then fires no splits.
+    if (has('splinter')) { d.dmg *= P('splinter').mainDamageMult; if (!def.noSplinter) d.splinter = P('splinter').splitsDamageMult; }
+    if (has('chambered') && def.ammoType !== '12gauge') d.chambered = P('chambered').damageMult;
+    if (has('firepower')) { d.mag = def.extendedClip; d.reloadCount = def.extendedReload; }
+    if (has('ap_rounds')) d.obstacleDamage *= P('ap_rounds').obstacleMult;
     // bullet.ts: a gun's own onHit (the USAS-12's) wins over explosive rounds, which neither
     // bounce nor burst when they peter out at full range.
-    if (perk === 'explosive' && !def.onHit) {
+    if (has('explosive') && !def.onHit) {
       d.onHit = def.explosiveRoundsAlt ? 'explosion_rounds_sg' : 'explosion_rounds';
       d.roundsBlast = true;
     }
     return d;
+  };
+
+  // Whether a rounds perk does nothing for this gun: an ammo perk for other ammo, One in the
+  // Chamber on a shotgun, Explosive Rounds on the USAS-12, Splinter on a gun that can't split.
+  const PERKED_FIELDS = ['dmg', 'speed', 'range', 'spread', 'mag', 'obstacleDamage', 'empowered45', 'splinter', 'chambered', 'onHit'];
+  ST.perkIdle = (def, id) => {
+    if (!ST.PERKS[id] || ST.PERKS[id].body) return false;
+    const d = ST.perkedGun(def, [id]);
+    return PERKED_FIELDS.every((k) => d[k] === def[k]);
   };
 
   // A gun's class, worked out from its survev numbers rather than listed by hand: 12-gauge guns are

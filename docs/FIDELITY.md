@@ -66,13 +66,15 @@ the shooter too: `player.damage` spares teammates but not the source. Frags and 
 `explosion_01`, survev's sound for an explosion on grass. Silenced guns draw survev's black tracer,
 the USAS-12 its red one.
 
-You can give yourself one perk per drill, and the 20 perks that touch a fight work as in survev's
-`player.ts`, `weaponManager.ts` and `bullet.ts`:
+You can give yourself any number of perks in a drill, and the 20 perks that touch a fight work and
+stack as in survev's `player.ts`, `weaponManager.ts` and `bullet.ts`: damage, speed and range
+multiply, sizes add up, and Flak Jacket and Cast Ironskin each take their share off what is left.
 
 - **Gun perks** change your gun, never the bots'. Ammo perks multiply damage by 1.12 for their
   ammo; Hollow-Points and the OKAMI bar by 1.08 for every round. 9mm Overpressure, High-Velocity
   Rounds, Hollow-Points and .45 in the Chamber also change speed, range or spread. Splinter
-  Rounds split each round in three. One in the Chamber boosts the first and last round of a
+  Rounds split each round in three (a gun that can't split still loses 40% off its one round, as
+  in survev). One in the Chamber boosts the first and last round of a
   magazine. Firepower loads `extendedClip`. AP Rounds hit obstacles 1.5× as hard. Explosive
   Rounds burst on impact for 3 damage (`explosion_rounds`, or the smaller `explosion_rounds_sg`
   for shotgun pellets) and fizzle at full range without bouncing.
