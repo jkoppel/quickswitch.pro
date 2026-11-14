@@ -49,17 +49,29 @@ ST.platform = {
     app.on('screen', (name) => { if (name === 'aimtest' || name === 'plan') ST.router.set('/', { replace: true }); });
 
     let landed = false;
+    // One landing per page load, wherever it lands: the home page, or a guide's link to a drill.
+    // `ref` tags a link we post (quickswitch.pro/?ref=discord): Discord's app sends no referrer.
+    const land = (q) => {
+      if (landed) return;
+      landed = true;
+      ST.events.track('landing', { referrer: document.referrer ? new URL(document.referrer).host : null, ref: (q.get('ref') || '').slice(0, 40) || null, path: location.pathname });
+    };
     const R = ST.router;
     R.on('/', (_, q) => {
       if (q.has('drills')) { app.openPicker(); return; }
       ST.home.render();
       app.show('home');
-      // `ref` tags a link we post (quickswitch.pro/?ref=discord): Discord's app sends no referrer.
-      if (!landed) { landed = true; ST.events.track('landing', { referrer: document.referrer ? new URL(document.referrer).host : null, ref: (q.get('ref') || '').slice(0, 40) || null }); }
+      land(q);
     });
-    R.on('/play/:id', ({ id }) => {
+    R.on('/play/:id', ({ id }, q) => {
       if (app.running()) return;
-      if (ST.ROUTINES.some(r => r.id === id)) app.openPicker('routine', id);
+      if (ST.ROUTINES.some(r => r.id === id)) { app.openPicker('routine', id); land(q); }
+      else R.go('/', { replace: true });
+    });
+    // /drill/<id>: the picker open on one drill, one press from playing it. The guides link here.
+    R.on('/drill/:id', ({ id }, q) => {
+      if (app.running()) return;
+      if (ST.MODES.some(m => m.id === id)) { app.openPicker('mode', id); land(q); }
       else R.go('/', { replace: true });
     });
     R.on('/results', () => { if (app.lastSequence()) app.show('results'); else R.go('/', { replace: true }); });

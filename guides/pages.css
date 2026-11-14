@@ -122,3 +122,5 @@ body { overflow: auto; background: var(--night); }
 .room { display: block; width: 100%; max-height: 420px; background: #11150e; border: 1px solid var(--line); border-radius: 6px; }
 .room .step circle { fill: var(--orange-fill); stroke: #fff; stroke-width: 0.12; }
 .room .step text { fill: #fff; font: 700 1.05px var(--font-title); text-anchor: middle; }
+.doc a.drill-link { text-decoration-color: rgba(255, 211, 92, 0.5); text-underline-offset: 3px; }
+.doc a.drill-link b { color: var(--yellow); }

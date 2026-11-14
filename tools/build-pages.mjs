@@ -136,6 +136,8 @@ const table = (head, rows, cls = '') => `<table${cls ? ` class="${cls}"` : ''}><
 ${rows.map((r) => `<tr>${r.map((c, i) => `<td${head[i].n ? ' class="n"' : ''}>${c}</td>`).join('')}</tr>`).join('\n')}
 </tbody></table>`;
 const gunLink = (x) => `<a href="/guns/${x.id}/">${esc(x.name)}</a>`;
+// A link straight into the trainer: /drill/<id> opens one drill, /play/<id> one routine, ready to start.
+const drill = (href, name) => `<a class="drill-link" href="${href}"><b>${esc(name)}</b></a>`;
 const TIERS_ORDER = ['S', 'A', 'B', 'C', 'D'];
 // The arrows on vote buttons, drawn rather than typed.
 const CHEVRON = (dir) => `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="${dir === 'up' ? 'M2.5 7.5 6 4l3.5 3.5' : 'M2.5 4.5 6 8l3.5-3.5'}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -166,7 +168,7 @@ ${table([{ t: 'Gun' }, { t: 'Ammo' }, { t: 'Next shot, waiting', n: 1 }, { t: 'N
 <li>Press the other slot's key (or Q, or right click) straight after the shot, not after you've started waiting.</li>
 <li>Fire the second gun as soon as it's up. The next quick switch is ready ${FREE_EVERY === 1 ? 'a second' : `${FREE_EVERY} s`} after the last one.</li>
 </ol>
-<p>Quickswitch's <b>Quick Switch</b> and <b>Shotgun Rush</b> drills give you two guns with survev's exact switch rule, and the results screen counts how many of your shots beat the first gun's own cycle.</p>
+<p>Quickswitch's ${drill('/drill/quickswitch', 'Quick Switch')} and ${drill('/drill/shotgun', 'Shotgun Rush')} drills give you two guns with survev's exact switch rule, and the results screen counts how many of your shots beat the first gun's own cycle.</p>
 </article>`;
   return page({
     urlPath: '/guides/quickswitch/',
@@ -434,12 +436,12 @@ ${q('double pump is probably the most important thing you can do in [surviv]', '
 ${q('the passive-aggressive drill which is you never fire on someone until he fire on you first', '52:54')}
 
 <h2>Practice the same skills in Quickswitch</h2>
-${table([{ t: 'His drill' }, { t: 'Quickswitch drill' }], [
-    ['Three-minute click warm-up', '<b>Daily 5</b> (opens with a 30-second warm-up), <b>Flick</b>, <b>Static clicking</b>'],
-    ['SMGs only, aim behind the target', '<b>Tracking</b>, <b>Reactive tracking</b>, the <b>Tracking focus</b> routine'],
-    ['Double pump', '<b>Quick Switch</b> and <b>Shotgun Rush</b>, with survev\'s exact switch rule'],
-    ['M870 plus an SMG', '<b>Quick Switch</b> (M870 and MP5)'],
-    ['Passive-aggressive', '<b>Dodge under fire</b> and <b>1v1 Duel</b>, where the bot shoots back'],
+${table([{ t: 'His drill' }, { t: 'Practice it here' }], [
+    ['Three-minute click warm-up', `${drill('/play/daily', 'Daily 5')} (opens with a 30-second warm-up) or ${drill('/drill/flick', 'Flick')}`],
+    ['SMGs only, aim behind the target', `${drill('/drill/tracking', 'Tracking')}, or the ${drill('/play/tracking', 'Tracking focus')} routine`],
+    ['Double pump', `${drill('/drill/quickswitch', 'Quick Switch')} or ${drill('/drill/shotgun', 'Shotgun Rush')}, with survev's exact switch rule`],
+    ['M870 plus an SMG', `${drill('/drill/quickswitch', 'Quick Switch')} (M870 and MP5)`],
+    ['Passive-aggressive', `${drill('/drill/dodge', 'Dodge')} or ${drill('/drill/duel', '1v1 Duel')}, where the bot shoots back`],
     ['Melee only', 'No melee drill yet'],
   ])}
 </article>`;
