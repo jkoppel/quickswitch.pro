@@ -41,11 +41,11 @@
     },
     {
       "source": "/play/:rest(.*)",
-      "destination": "/index.html"
+      "destination": "/api/page"
     },
     {
       "source": "/drill/:rest(.*)",
-      "destination": "/index.html"
+      "destination": "/api/page"
     },
     {
       "source": "/results",
