@@ -5,6 +5,7 @@ Two licenses live in this repository. Which one covers your change depends on wh
 | Path | License | What it is |
 | --- | --- | --- |
 | `js/`, `vendor/`, `index.html`, `style.css`, `demo/` | GPL-3.0 (`LICENSE`) | The trainer: drills, mechanics, rendering, survev definitions |
+| `tools/`, `guides/`, `guns/`, `sitemap.xml` | GPL-3.0 (`LICENSE`) | Guide pages generated from survev's definitions by `tools/build-pages.mjs`; edit the script, not the pages |
 | `platform/`, `api/`, `lib/`, `db/`, `sw.js`, `admin.html`, `tests/` | MIT (`platform/LICENSE`) | Accounts, sync, streaks, challenges, boards, progress, reminders, feedback, the server |
 
 By opening a pull request you agree that your contribution is licensed under the license of the
