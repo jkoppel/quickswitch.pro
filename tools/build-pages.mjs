@@ -138,6 +138,31 @@ ${rows.map((r) => `<tr>${r.map((c, i) => `<td${head[i].n ? ' class="n"' : ''}>${
 const gunLink = (x) => `<a href="/guns/${x.id}/">${esc(x.name)}</a>`;
 // A link straight into the trainer: /drill/<id> opens one drill, /play/<id> one routine, ready to start.
 const drill = (href, name) => `<a class="drill-link" href="${href}"><b>${esc(name)}</b></a>`;
+
+// The trainer's class for a gun, by the same rules as ST.weaponClass in js/weapons.js (a unit test
+// holds the two together), and the drill each class practises in.
+export function gunClass(id) {
+  const g = GUNS[id];
+  if (g.ammo === '12gauge') return 'Shotguns';
+  if (g.pistol) return 'Pistols';
+  if (g.fireMode === 'auto' || g.fireMode === 'burst') return g.ammo === '9mm' || g.ammo === '45acp' ? 'SMGs' : g.maxClip > 45 ? 'LMGs' : 'Assault rifles';
+  return g.fireDelay >= 0.5 ? 'Snipers' : 'DMRs';
+}
+const DRILLS = {
+  quickswitch: { name: 'Quick Switch', how: 'a juking bot that shoots back, with an MP5 to switch to after every shell' },
+  duel: { name: '1v1 Duel', how: 'a juking bot that shoots back with the same gun' },
+  pistol: { name: 'Pistol Tap', how: 'a bot circling you at close range' },
+  flick: { name: 'Flick', how: 'targets that pop up anywhere on a 4x scope, one hit each' },
+  sniper: { name: 'Sniper Leads', how: 'long-range strafing targets on a 15x scope, where the bullet takes time to arrive' },
+};
+export function practiceDrill(id) {
+  const cls = gunClass(id);
+  if (cls === 'Shotguns') return GUNS[id].fireDelay >= 0.5 ? 'quickswitch' : 'duel';
+  return { Pistols: 'pistol', DMRs: 'flick', Snipers: 'sniper' }[cls] || 'duel';
+}
+// The trainer keys the AWM-S as "awm"; every other gun keeps survev's id.
+export const trainerKey = (id) => (id === 'awc' ? 'awm' : id);
+export const practiceHref = (id) => `/drill/${practiceDrill(id)}?gun=${trainerKey(id)}`;
 const TIERS_ORDER = ['S', 'A', 'B', 'C', 'D'];
 // The arrows on vote buttons, drawn rather than typed.
 const CHEVRON = (dir) => `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="${dir === 'up' ? 'M2.5 7.5 6 4l3.5 3.5' : 'M2.5 4.5 6 8l3.5-3.5'}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -207,6 +232,10 @@ function gunPage(x) {
     ? `One shot deals <b>${Math.round(x.perShot)} damage</b>${x.pellets > 1 ? ' if every pellet hits' : ''}, enough for ${HP} at point blank.`
     : `It takes <b>${x.shotsToKill} ${x.burst > 1 ? 'rounds' : 'shots'}</b> to deal ${HP} damage${x.pellets > 1 ? ' if every pellet hits' : ''}, which takes <b>${s(x.ttk)}</b> from the first trigger pull${x.needsReload ? `, longer than one ${x.clip}-round magazine lasts` : ''}.`);
   facts.push(`A headshot does ×${x.headshotMult} damage, and ${Math.round(HEADSHOT * 100)}% of hits are headshots, so the average hit does ${r2(x.avgMult)}× its listed damage.`);
+  if (x.blast) {
+    const e = EXPLOSIONS[BULLETS[g.bulletType].onHit];
+    facts.push(`Each slug explodes where it stops, hit or miss: ${e.damage} damage within ${e.rad.min} units, fading to nothing at ${e.rad.max}. The blast hurts you too, so keep your distance.`);
+  }
   if (x.falloff < 1) facts.push(`Damage falls off with distance: a round that travels its full ${x.range} units does ${Math.round(x.falloff * 100)}% of its damage.`);
   if (x.cycle > SWITCH * 2) facts.push(`Its next shot comes ${s(x.cycle)} after the last, so <a href="/guides/quickswitch/">quickswitching</a> to your other gun (${s(SWITCH)}) saves ${s(x.cycle - SWITCH)} per shot.`);
   if (x.deployGroup !== undefined) {
@@ -232,6 +261,7 @@ function gunPage(x) {
   const body = `<article>
 <h1>${esc(x.name)} stats in survev.io and surviv.io</h1>
 <p class="lead">The ${esc(x.name)} fires ${esc(x.ammo)}. At close range it deals ${Math.round(x.dps)} damage per second while its magazine lasts, or ${Math.round(x.sustained)} averaged over reloads.</p>
+<p class="practice"><a class="cta" href="${practiceHref(x.id)}">Practice with the ${esc(x.name)}</a> <span class="muted">${DRILLS[practiceDrill(x.id)].name}: ${DRILLS[practiceDrill(x.id)].how}.</span></p>
 <p class="tl-link"><a href="/guns/tier-list/">Rank the ${esc(x.name)} in your own tier list</a></p>
 <ul class="facts">
 ${facts.map((f) => `<li>${f}</li>`).join('\n')}

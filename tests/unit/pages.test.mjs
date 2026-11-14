@@ -65,3 +65,28 @@ test('the bunker codes page shows every code in survev\'s puzzles.ts, in order',
     }
   }
 });
+
+test('every gun page sends you to a drill the trainer can load with that gun, classed the same way', async () => {
+  const { PAGE_IDS, gunClass, practiceHref, trainerKey } = await import('../../tools/build-pages.mjs');
+  // The trainer is browser code: run its defs and weapons.js against a stub window to read ST.WEAPONS.
+  const vm = await import('node:vm');
+  const ctx = { window: {}, console };
+  ctx.ST = ctx.window.ST = {};
+  vm.createContext(ctx);
+  for (const f of ['gameConfig', 'gunDefs', 'bulletDefs', 'throwableDefs', 'explosionDefs', 'obstacleDefs']) {
+    vm.runInContext(readFileSync(new URL(`vendor/survev/defs/${f}.js`, root), 'utf8'), ctx);
+  }
+  vm.runInContext(readFileSync(new URL('js/weapons.js', root), 'utf8'), ctx);
+  const W = ctx.ST.WEAPONS;
+  assert.deepEqual(Object.keys(W).map((k) => (k === 'awm' ? 'awc' : k)).sort(), [...PAGE_IDS].sort(), 'the trainer has every gun that has a page');
+  const pages = buildPages();
+  const modes = readFileSync(new URL('js/modes.js', root), 'utf8');
+  for (const id of PAGE_IDS) {
+    assert.equal(ctx.ST.weaponClass(W[trainerKey(id)]), gunClass(id), id);
+    const href = practiceHref(id);
+    const [, drill, gun] = /^\/drill\/([a-z]+)\?gun=([a-z0-9_]+)$/.exec(href);
+    assert.ok(W[gun], `${id}: ?gun=${gun} is a trainer weapon`);
+    assert.ok(modes.includes(`id: '${drill}'`), `${id}: ${drill} is a drill`);
+    assert.ok(pages[`guns/${id}/index.html`].includes(`href="${href.replace(/&/g, '&amp;')}"`), `${id}: the page links it`);
+  }
+});

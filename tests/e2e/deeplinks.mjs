@@ -1,6 +1,7 @@
 // The guide pages link straight into the trainer: /drill/<id> opens one drill and /play/<id> one
-// routine, selected in the picker and one press from playing. Every such link on the guides must
-// land on the drill it names, on a first visit as much as a return one, and Start must then play it.
+// routine, selected in the picker and one press from playing; a gun page's /drill/<id>?gun=<id>
+// also hands you that gun. Every such link must land on the drill it names with the right gun, on
+// a first visit, and Start must then play it with every sprite and sound loading.
 //
 //   node tests/e2e/deeplinks.mjs http://localhost:3210 [outDir]      (vercel dev or any static host)
 //
@@ -29,6 +30,14 @@ const names = new Map();
 for (const f of ['guides/how-to-get-better/index.html', 'guides/quickswitch/index.html']) {
   for (const m of readFileSync(join(root, f), 'utf8').matchAll(/href="(\/(?:drill|play)\/[a-z0-9]+)"><b>([^<]+)<\/b>/g)) names.set(m[1], m[2]);
 }
+// Each gun page's practice link names its drill in the text beside it and its gun in ?gun=.
+const guns = new Map();
+for (const dir of readdirSync(join(root, 'guns'), { withFileTypes: true })) {
+  if (!dir.isDirectory()) continue;
+  const html = readFileSync(join(root, 'guns', dir.name, 'index.html'), 'utf8');
+  const m = /<a class="cta" href="(\/drill\/[a-z]+\?gun=([a-z0-9_]+))">[^<]*<\/a> <span class="muted">([^:]+):/.exec(html);
+  if (m) { names.set(m[1], m[3]); guns.set(m[1], m[2]); }
+}
 const links = new Set(names.keys());
 
 let failures = 0;
@@ -42,11 +51,17 @@ for (const link of [...links].sort()) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (/failed to load/i.test(m.text())) errors.push(m.text()); });
+  page.on('response', (r) => { if (r.status() >= 400 && /\/vendor\//.test(r.url())) errors.push(`${r.status()} ${r.url()}`); });
   await page.goto(base + link);
   await page.waitForTimeout(1500);
   const want = names.get(link).replace(/&#39;/g, "'");
   const shown = await page.evaluate(() => ({ menu: !document.getElementById('menu').classList.contains('hidden'), title: document.getElementById('mode-title').textContent }));
   ok(shown.menu && shown.title === want, `${link} opens the picker on ${want} (shows ${shown.menu ? `"${shown.title}"` : 'no picker'})`);
+  if (guns.has(link)) {
+    const weapon = await page.evaluate(() => document.getElementById('f-weapon').value);
+    ok(weapon === guns.get(link), `${link}: the drill loads the ${guns.get(link)} (has ${weapon})`);
+  }
   await page.click('#btn-start');
   await page.waitForTimeout(800);
   // A first visit gets a one-time briefing on the controls before the drill; start from there.

@@ -68,11 +68,14 @@ ST.platform = {
       if (ST.ROUTINES.some(r => r.id === id)) { app.openPicker('routine', id); land(q); }
       else R.go('/', { replace: true });
     });
-    // /drill/<id>: the picker open on one drill, one press from playing it. The guides link here.
+    // /drill/<id>: the picker open on one drill, one press from playing it. The guides link here,
+    // and a gun page adds ?gun=<id> to hand you that gun.
     R.on('/drill/:id', ({ id }, q) => {
       if (app.running()) return;
-      if (ST.MODES.some(m => m.id === id)) { app.openPicker('mode', id); land(q); }
-      else R.go('/', { replace: true });
+      if (!ST.MODES.some(m => m.id === id)) { R.go('/', { replace: true }); return; }
+      const gun = q.get('gun');
+      app.openPicker('mode', id, gun && ST.WEAPONS[gun] ? { weapon: gun } : undefined);
+      land(q);
     });
     R.on('/results', () => { if (app.lastSequence()) app.show('results'); else R.go('/', { replace: true }); });
     R.on('/profile', () => ST.profile.show(app));

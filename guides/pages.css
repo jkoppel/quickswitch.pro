@@ -124,3 +124,5 @@ body { overflow: auto; background: var(--night); }
 .room .step text { fill: #fff; font: 700 1.05px var(--font-title); text-anchor: middle; }
 .doc a.drill-link { text-decoration-color: rgba(255, 211, 92, 0.5); text-underline-offset: 3px; }
 .doc a.drill-link b { color: var(--yellow); }
+.practice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 16px 0 6px; }
+.practice .muted { max-width: 46ch; }
