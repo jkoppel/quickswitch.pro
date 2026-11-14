@@ -54,7 +54,8 @@ ST.platform = {
       if (q.has('drills')) { app.openPicker(); return; }
       ST.home.render();
       app.show('home');
-      if (!landed) { landed = true; ST.events.track('landing', { referrer: document.referrer ? new URL(document.referrer).host : null }); }
+      // `ref` tags a link we post (quickswitch.pro/?ref=discord): Discord's app sends no referrer.
+      if (!landed) { landed = true; ST.events.track('landing', { referrer: document.referrer ? new URL(document.referrer).host : null, ref: (q.get('ref') || '').slice(0, 40) || null }); }
     });
     R.on('/play/:id', ({ id }) => {
       if (app.running()) return;
