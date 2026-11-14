@@ -92,6 +92,28 @@
     localStorage.setItem('st.adminToken', token);
     $('auth').classList.add('hidden');
     render(await r.json());
+    loadLists(token);
+  }
+
+  // Players' tier lists are public text, so they can be hidden from here. A hidden list's link
+  // and gallery entry disappear; showing it again brings them back.
+  async function loadLists(token) {
+    const r = await fetch('/api/admin/tierlists', { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) return;
+    const { lists } = await r.json();
+    const box = document.createElement('section');
+    box.innerHTML = `<h2>Players' tier lists</h2>` + (lists.length ? table([{ t: 'Saved' }, { t: 'Kind' }, { t: 'Title and name' }, { t: '' }],
+      lists.map(l => [esc(when(l.created_at)), esc(l.kind),
+        `<a class="link" href="/${l.kind === 'guns' ? 'guns' : 'perks'}/tier-list/?l=${esc(l.id)}">${esc(l.title || '(untitled)')}</a>${l.by ? ` <span class="muted">by ${esc(l.by)}</span>` : ''}`,
+        `<button class="ghost small" type="button" data-hide="${esc(l.id)}" data-hidden="${l.hidden}">${l.hidden ? 'Show' : 'Hide'}</button>`])) : '<p class="muted">None yet.</p>');
+    $('out').appendChild(box);
+    box.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-hide]');
+      if (!b) return;
+      const hide = b.dataset.hidden !== 'true';
+      const res = await fetch(`/api/admin/tierlists/${b.dataset.hide}/hide`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify({ hidden: hide }) });
+      if (res.ok) { b.dataset.hidden = String(hide); b.textContent = hide ? 'Show' : 'Hide'; }
+    });
   }
   $('auth').addEventListener('submit', (e) => { e.preventDefault(); load($('token').value.trim()); });
   const saved = localStorage.getItem('st.adminToken');
