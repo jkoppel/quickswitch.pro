@@ -84,6 +84,13 @@ multiply, sizes add up, and Flak Jacket and Cast Ironskin each take their share 
   of the Woods regenerates 1 health a second. Small Arms adds 1 to your speed. Each perk's
   `scale` changes your size, so a bigger player is easier to hit.
 
+Perks look and sound as survev's client shows them: Cast Ironskin's pan and Flak Jacket's vest on
+your body; tracers in `GameConfig.tracerColors`' perk tints (AP Rounds darker, any perk that adds
+damage in the `chambered` tint), twice as wide for One in the Chamber and empowered .45 rounds and
+half as wide for Splinter's side rounds; shots pitched up 300 cents when a perk adds damage, with
+Splinter's, AP Rounds' and High-Velocity Rounds' echo shots; and the stim sound with a trail of
+green blossoms (Windwalk) or red skulls (Takedown) while their haste lasts.
+
 Endless Ammo and High-Value Targets are left out because they change nothing here: reserves are
 infinite and bots carry no perks. So are the loot, healing, adrenaline, role and trick perks.
 

@@ -14,19 +14,22 @@ window.ST = window.ST || {};
   // survev's GameConfig, verbatim (vendor/survev/defs/gameConfig.js).
   ST.GC = window.SURVEV_GAME_CONFIG;
 
-  // GameConfig.tracerColors (regular tint per ammo type) from survev shared/gameConfig.ts.
+  // GameConfig.tracerColors from survev shared/gameConfig.ts: the regular tint per ammo type, and
+  // the tints perks switch to. client bullet.ts draws an AP Rounds bullet in `ap`, and a "saturated"
+  // one (One in the Chamber's round, or any perk that adds damage) in `chambered`, else `saturated`.
   ST.TRACER = {
-    '9mm': { color: '#fee2c6', label: '9mm' },
-    '762mm': { color: '#c5d6fe', label: '7.62mm' },
-    '556mm': { color: '#a9ff92', label: '5.56mm' },
-    '12gauge': { color: '#fedcdc', label: '12 gauge' },
-    '50AE': { color: '#fff088', label: '.50 AE' },
-    '308sub': { color: '#252b00', label: '.308 Subsonic' },
-    '45acp': { color: '#ecbeff', label: '.45 ACP' },
+    '9mm': { color: '#fee2c6', saturated: '#ffd9b3', chambered: '#ff7f00', ap: '#a54b0b', label: '9mm' },
+    '762mm': { color: '#c5d6fe', saturated: '#abc4ff', chambered: '#004cff', ap: '#0000c8', label: '7.62mm' },
+    '556mm': { color: '#a9ff92', saturated: '#a9ff92', chambered: '#36ff00', ap: '#308000', label: '5.56mm' },
+    '12gauge': { color: '#fedcdc', saturated: '#fedcdc', chambered: '#ff0000', ap: '#9f0000', label: '12 gauge' },
+    '50AE': { color: '#fff088', saturated: '#fff088', chambered: '#ffdf00', ap: '#ff8000', label: '.50 AE' },
+    '308sub': { color: '#252b00', saturated: '#465000', chambered: '#131600', ap: '#000a02', label: '.308 Subsonic' },
+    '45acp': { color: '#ecbeff', saturated: '#e7acff', chambered: '#b500ff', ap: '#470349', label: '.45 ACP' },
     // Not ammo types but tracer styles: the USAS-12's explosive slugs and silenced guns' rounds,
     // which survev draws black (tint 0) so they barely show against the grass.
-    frag: { color: '#cb0000', label: '12 gauge' },
-    invis: { color: '#000000', label: 'silenced' },
+    frag: { color: '#cb0000', saturated: '#cb0000', ap: '#cb0000', label: '12 gauge' },
+    invis: { color: '#000000', saturated: '#000000', chambered: '#000000', ap: '#000000', label: 'silenced' },
+    shrapnel: { color: '#333333', saturated: '#333333', chambered: '#660900', label: 'shrapnel' },
   };
   ST.AMMO = ST.TRACER;
 
@@ -135,8 +138,17 @@ window.ST = window.ST || {};
     const d = { ...def, perks: list };
     // weaponManager.isBulletSaturated: Hollow-Points or the full-size bar add 8% to every round,
     // once; each ammo perk for this gun's ammo (ammoBonuses) multiplies by ammoBonusDamageMult.
-    if (has('bonus_assault') || has('treat_super')) d.dmg *= 1.08;
-    for (const id of PD.ammoBonuses[def.ammoType] || []) if (has(id)) d.dmg *= PD.ammoBonusDamageMult;
+    let saturation = 1;
+    if (has('bonus_assault') || has('treat_super')) saturation *= 1.08;
+    for (const id of PD.ammoBonuses[def.ammoType] || []) if (has(id)) saturation *= PD.ammoBonusDamageMult;
+    d.dmg *= saturation;
+    // What the client draws and plays differently (bullet.ts, shot.ts): a saturated tracer and a
+    // higher-pitched shot when a perk adds damage, AP Rounds' darker tracer, and the echo shots of
+    // Splinter, AP and High-Velocity Rounds.
+    d.saturated = saturation > 1;   // weaponManager: trailSaturated = isBulletSaturated(ammo) > 1
+    d.apRounds = has('ap_rounds');
+    d.highVelocity = has('high_velocity');
+    d.splinterShot = has('splinter');
     if (has('bonus_9mm') && def.ammoType === '9mm') {
       d.spread *= P('bonus_9mm').spreadMul; d.moveSpread *= P('bonus_9mm').spreadMul;   // the whole spread
       d.speed *= P('bonus_9mm').speedMult; d.range *= P('bonus_9mm').distanceMult;

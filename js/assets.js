@@ -37,6 +37,12 @@ ST.assets = (function () {
     'part-shell-03.img': 'particles/part-shell-03.svg',
     'part-shell-04.img': 'particles/part-shell-04.svg',
     'part-frag-burst-01.img': 'particles/part-frag-burst-01.svg',
+    // The trails of Windwalk's and Takedown's haste (particles.ts leafStim, takedownStim).
+    'part-blossom-01.img': 'particles/part-blossom-01.svg',
+    'part-blossom-02.img': 'particles/part-blossom-02.svg',
+    'part-blossom-03.img': 'particles/part-blossom-03.svg',
+    'part-blossom-04.img': 'particles/part-blossom-04.svg',
+    'part-takedown-01.img': 'particles/part-takedown-01.svg',
     'part-frag-burst-02.img': 'particles/part-frag-burst-02.svg',
     'part-frag-burst-03.img': 'particles/part-frag-burst-03.svg',
     'part-smoke-01.img': 'particles/part-smoke-01.svg',

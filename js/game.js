@@ -7,6 +7,15 @@ window.ST = window.ST || {};
   const GC = ST.GC;                          // survev's GameConfig, verbatim
   const PLAYER_R = GC.player.radius;
   const perkProps = (id) => ST.PERKS[id].props;   // survev's PerkProperties for one perk
+  // client bullet.ts: a bullet's tracer tint. AP Rounds wins, then a saturated round (a perk added
+  // damage) in the ammo's chambered tint, else the regular one.
+  const tracerTint = (def, saturated) => {
+    const t = ST.TRACER[def.ammo];
+    if (!t) return '#ffffff';
+    if (def.apRounds && t.ap) return t.ap;
+    if (saturated) return t.chambered || t.saturated;
+    return t.color;
+  };
   const EXPLOSION_FX = {
     frag: { sound: 'explosion_01', volume: 0.9, scale: 1 },
     usas: { sound: 'explosion_03', volume: 0.9, scale: 0.75 },
@@ -917,7 +926,11 @@ window.ST = window.ST || {};
       p.pos.y += p.vel.y * dt;
       this.clampToBounds(p.pos, p.radius);
       this.pushOutOfObstacles(p.pos, p.radius);
-      if (p.hasteT > 0) { p.hasteT -= dt; if (p.hasteT <= 0) { p.hasteT = 0; p.hasteType = ''; } }
+      if (p.hasteT > 0) {
+        p.hasteT -= dt;
+        if (p.hasteT <= 0) { p.hasteT = 0; p.hasteType = ''; }
+        else this.emitHaste(p, dt);
+      }
       // Gift of the Woods: player.ts regenerates healthRegen a second.
       if (this.perks.has('gotw')) p.hp = Math.min(PLAYER_MAX_HP, p.hp + perkProps('gotw').healthRegen * dt);
 
@@ -1337,7 +1350,11 @@ window.ST = window.ST || {};
         moving: !!opts.moving, spin: !!opts.spin,
         falloff: def.falloff, headshotMult: def.headshotMult || 1,
         obstacleDamage: def.obstacleDamage === undefined ? 1 : def.obstacleDamage,
-        tracerWidth: def.tracerWidth, tracerLength: def.tracerLength, whizzed: false,
+        // client bullet.ts: Splinter's side rounds draw at half width, One in the Chamber's and
+        // empowered .45 rounds at double; perks pick the tracer's tint.
+        tracerWidth: def.tracerWidth * (opts.trailSmall ? 0.5 : 1) * (opts.trailThick ? 2 : 1), tracerLength: def.tracerLength, whizzed: false,
+        tint: tracerTint(def, opts.trailSaturated),
+        trail: { trailSmall: opts.trailSmall, trailThick: opts.trailThick, trailSaturated: opts.trailSaturated },   // a bounce keeps it
         reflectCount, reflectObjId: opts.reflectObjId || 0, reflected: false,
         shrapnel: !!opts.shrapnel,
         // bullet.ts: a bullet that has bounced, or shrapnel, can hurt the person who fired it.
@@ -1371,7 +1388,8 @@ window.ST = window.ST || {};
         let sx = gx + dx * def.barrel, sy = gy + dy * def.barrel;
         if (i > 0) { sx += rand(-jitter, jitter) * 1.11; sy += rand(-jitter, jitter) * 1.11; }
         const shot = { moving, spin: spinning, range: clip, clip: clip !== undefined,
-          dmgMult: chambered * (emp ? emp.empoweredDamageMult : 1), speedMult: emp ? emp.empoweredSpeedMult : 1 };
+          dmgMult: chambered * (emp ? emp.empoweredDamageMult : 1), speedMult: emp ? emp.empoweredSpeedMult : 1,
+          trailSaturated: chambered > 1 || !!def.saturated, trailThick: chambered > 1 || !!emp };
         this.bullets.push(this.makeBullet(sx, sy, a, def, owner, shot));
         // Splinter: two more rounds either side of this one, deviated by 0.2-0.25 of the shot's spread
         // (at least 1 degree), each at splitsDamageMult of its damage.
@@ -1379,7 +1397,7 @@ window.ST = window.ST || {};
           const splinterSpread = Math.max(spread, 1);
           for (let j = 0; j < 2; j++) {
             const dev = rand(0.2, 0.25) * splinterSpread * (j % 2 === 0 ? -1 : 1);
-            this.bullets.push(this.makeBullet(sx, sy, a + dev * DEG, def, owner, { ...shot, dmgMult: shot.dmgMult * def.splinter, splinter: true }));
+            this.bullets.push(this.makeBullet(sx, sy, a + dev * DEG, def, owner, { ...shot, dmgMult: shot.dmgMult * def.splinter, splinter: true, trailSmall: true }));
           }
         }
         if (owner === 'player') {
@@ -1390,7 +1408,8 @@ window.ST = window.ST || {};
       }
       if (owner === 'player' && moving) this.stats.movingShots++;
       if (def.caseTiming === 'shoot') this.spawnCasing(shooter, def, dx, dy);
-      ST.audio.shot(def, { dist, fallOff: def.sound.fallOff });
+      ST.audio.shot(def, { dist, fallOff: def.sound.fallOff }, { saturated: chambered > 1 || !!def.saturated,
+        splinter: !!def.splinterShot, ap: !!def.apRounds, highVelocity: !!def.highVelocity });
     }
 
     // survev bullet.ts, in order: halve per bounce, then the linear range falloff.
@@ -1454,7 +1473,7 @@ window.ST = window.ST || {};
         // unless Windwalk's haste is already running.
         if (b.owner === 'enemy' && this.perks.has('windwalk') && p.hasteType !== 'windwalk'
           && Math.hypot(nx - p.pos.x, ny - p.pos.y) <= perkProps('windwalk').maxTriggerDistance) {
-          p.hasteType = 'windwalk'; p.hasteT = perkProps('windwalk').hasteDuration;
+          this.giveHaste('windwalk', perkProps('windwalk').hasteDuration);
         }
 
         if (b.owner === 'enemy' && !b.whizzed) {
@@ -1485,7 +1504,7 @@ window.ST = window.ST || {};
               if (dot < 0) {
                 b.reflected = true;
                 spawned.push(this.makeBullet(hx + ux * 0.1, hy + uy * 0.1, Math.atan2(b.dy - 2 * dot * uy, b.dx - 2 * dot * ux), b.def, b.owner, {
-                  reflectCount: b.reflectCount + 1, range: b.range, shrapnel: b.shrapnel,
+                  reflectCount: b.reflectCount + 1, range: b.range, shrapnel: b.shrapnel, ...b.trail,
                 }));
               }
             }
@@ -1542,7 +1561,7 @@ window.ST = window.ST || {};
       const rx = b.dx - 2 * dot * ux, ry = b.dy - 2 * dot * uy;
       const ang = Math.atan2(ry, rx);
       const nb = this.makeBullet(hx + ux * 0.05, hy + uy * 0.05, ang, b.def, b.owner, {
-        reflectCount: b.reflectCount + 1, reflectObjId: o.id, range: b.range,
+        reflectCount: b.reflectCount + 1, reflectObjId: o.id, range: b.range, ...b.trail,
         shrapnel: b.shrapnel, moving: b.moving, spin: b.spin,
       });
       if (b.owner === 'player') this.stats.ricochetPellets++;
@@ -1613,7 +1632,7 @@ window.ST = window.ST || {};
         // reflected off you is the bot's kill, not yours.
         if (this.perks.has('takedown') && b.owner !== 'enemy') {
           this.player.hp = Math.min(PLAYER_MAX_HP, this.player.hp + perkProps('takedown').hpReward);
-          this.player.hasteType = 'takedown'; this.player.hasteT = perkProps('takedown').hasteDuration;
+          this.giveHaste('takedown', perkProps('takedown').hasteDuration);
         }
         st.kills++;
         if (b.source === 'explosion') st.nadeKills++;
@@ -1707,6 +1726,32 @@ window.ST = window.ST || {};
     }
 
     // ---------- effects ----------
+    // player.ts giveHaste, and the client's haste effect: the stim sound, then a trail of particles
+    // for as long as it lasts (green blossoms for Windwalk, red skulls for Takedown).
+    giveHaste(type, duration) {
+      const p = this.player;
+      p.hasteType = type; p.hasteT = duration; p.hasteNext = 0;
+      ST.audio.play('ability_stim_01', { volume: 0.8 });
+    }
+    // particles.ts windwalk/takedown emitters: one particle every 0.1-0.12 s inside 1.5 units of you,
+    // drifting up the screen at 1-1.5 u/s, spinning, shrinking from 0.12-0.14 to 0.06-0.08 scale over
+    // 4-5 s, fading in over the first 5% of that and out over the last 30%.
+    emitHaste(p, dt) {
+      p.hasteNext -= dt;
+      while (p.hasteNext <= 0) {
+        const a = rand(0, TAU), r = 1.5 * Math.sqrt(Math.random()), life = rand(4, 5);
+        const leaf = p.hasteType === 'windwalk';
+        this.particles.push({
+          kind: 'stim', x: p.pos.x + Math.cos(a) * r, y: p.pos.y - 0.1 + Math.sin(a) * r, vx: 0, vy: -rand(1, 1.5), drag: 0,
+          life, maxLife: life, rot: 0, rotVel: rand(Math.PI * 0.25, Math.PI * 0.5),
+          scaleStart: rand(0.12, 0.14), scaleEnd: rand(0.06, 0.08),
+          sprite: leaf ? `part-blossom-0${randInt(1, 4)}.img` : 'part-takedown-01.img',
+          // leafStim: hsv(0.37, 1, 0.95-1), a green; takedownStim: 0xc80000.
+          color: leaf ? ['#00f235', '#00f936', '#00ff37'][randInt(0, 2)] : '#c80000', r: 0.3,
+        });
+        p.hasteNext += rand(0.1, 0.12);
+      }
+    }
     spawnBlood(x, y, dx, dy, n, attach) {
       // particles.ts bloodSplat: scale 0.04 -> 0.15..0.2 of a 144px sprite (16 px/unit), life 0.5, alpha fades over the last quarter.
       n = n || 1;
@@ -1751,7 +1796,7 @@ window.ST = window.ST || {};
       for (const q of this.particles) {
         if (q.attach) { q.x = q.attach.pos.x + q.ox; q.y = q.attach.pos.y + q.oy; }
         else { q.x += q.vx * dt; q.y += q.vy * dt; }
-        if (q.drag) { const k = Math.max(0, 1 - q.drag * dt); q.vx *= k; q.vy *= k; } else { q.vx *= 0.9; q.vy *= 0.9; }
+        if (q.drag !== undefined) { const k = Math.max(0, 1 - q.drag * dt); q.vx *= k; q.vy *= k; } else { q.vx *= 0.9; q.vy *= 0.9; }
         if (q.rotVel) q.rot += q.rotVel * dt;
         q.life -= dt;
       }
@@ -1838,12 +1883,12 @@ window.ST = window.ST || {};
       }
 
       // Ground particles (blood splats under bodies, casings on the grass).
-      for (const q of this.particles) this.drawParticle(ctx, q);
+      for (const q of this.particles) if (q.kind !== 'stim') this.drawParticle(ctx, q);
 
       // Bullets: player-bullet-trail-02 stretched behind the bullet, tinted with the ammo's tracer color.
       const trail = A.get('player-bullet-trail-02.img');
       for (const b of this.bullets) {
-        const color = ST.TRACER[b.ammo] ? ST.TRACER[b.ammo].color : '#ffffff';
+        const color = b.tint;
         // bullet.ts: trailLength = min(tracerLength * 15, dist / 2), sprite scale (0.8, tracerWidth) on a 36px sprite.
         const L = Math.min(b.tracerLength * 15, b.traveled / 2) * 36 * 0.8 / SV.ppuBase;
         const Wd = 36 * b.tracerWidth / SV.ppuBase;
@@ -1851,6 +1896,7 @@ window.ST = window.ST || {};
         if (trail && L > 0.05) {
           const img = A.tint('player-bullet-trail-02.img', color) || trail;
           ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(ang);
+          if (b.reflectCount > 0) ctx.globalAlpha = 0.5;   // bullet.ts: a bounced round's trail at half alpha
           ctx.drawImage(img, -L, -Wd / 2, L, Wd);
           ctx.restore();
         } else {
@@ -1922,6 +1968,7 @@ window.ST = window.ST || {};
       }
 
       this.drawCharacter(p.pos.x, p.pos.y, p.aim, p.gun, SV.skinTint, p.scale, this.perks);
+      for (const q of this.particles) if (q.kind === 'stim') this.drawParticle(ctx, q);   // haste trails float over you
       if (p.gun && p.gun.throwable && p.gun.cooking) {
         // Cooking: the ring counts the fuse down on your own body.
         const left2 = clamp(1 - p.gun.cookT / p.gun.def.fuseTime, 0, 1);
@@ -2019,6 +2066,16 @@ window.ST = window.ST || {};
         ctx.globalAlpha = alpha;
         if (img) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.drawImage(img, -size / 2, -size / 2, size, size); ctx.restore(); }
         else { ctx.fillStyle = q.color; ctx.beginPath(); ctx.arc(q.x, q.y, size / 2, 0, TAU); ctx.fill(); }
+        ctx.globalAlpha = 1;
+        return;
+      }
+      if (q.kind === 'stim') {
+        const t = u;
+        const scale = lerp(q.scaleStart, q.scaleEnd, t);
+        const img = A.tint(q.sprite, q.color);
+        const size = this.spriteSize(A.get(q.sprite), scale);
+        ctx.globalAlpha = t < 0.05 ? t / 0.05 : t < 0.7 ? 1 : Math.max(0, 1 - (t - 0.7) / 0.3);
+        if (img) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.drawImage(img, -size / 2, -size / 2, size, size); ctx.restore(); }
         ctx.globalAlpha = 1;
         return;
       }

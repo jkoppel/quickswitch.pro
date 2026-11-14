@@ -13,6 +13,7 @@ ST.audio = (function () {
     metal_bullet_hit_01: 'hits/metal_bullet_hit_01.mp3', metal_bullet_hit_02: 'hits/metal_bullet_hit_02.mp3',
     // Throwables and explosions (frag grenades, barrels).
     explosion_01: 'sfx/explosion_01.mp3', explosion_02: 'sfx/explosion_02.mp3', explosion_03: 'sfx/explosion_03.mp3', explosion_04: 'sfx/explosion_04.mp3',
+    ability_stim_01: 'sfx/ability_stim_01.mp3',
     barrel_break_01: 'sfx/barrel_break_01.mp3',
     frag_pin_01: 'sfx/frag_pin_01.mp3', frag_throw_01: 'sfx/frag_throw_01.mp3', frag_ground_01: 'sfx/frag_ground_01.mp3',
     bullet_whiz_01: 'sfx/bullet_whiz_01.mp3', bullet_whiz_02: 'sfx/bullet_whiz_02.mp3', bullet_whiz_03: 'sfx/bullet_whiz_03.mp3',
@@ -65,7 +66,10 @@ ST.audio = (function () {
       if (voices.length >= MAX_VOICES) a = voices[0];
       else { a = src.cloneNode(); voices.push(a); }
     }
-    a.volume = vol;
+    a.volume = Math.min(1, vol);
+    // survev's detune in cents shifts pitch and speed together, as a playback rate does.
+    a.preservesPitch = false;
+    a.playbackRate = Math.pow(2, ((opts && opts.detune) || 0) / 1200);
     a.currentTime = 0;
     a.play().catch(() => { /* autoplay policy: wait for a gesture */ });
   }
@@ -76,7 +80,20 @@ ST.audio = (function () {
   }
 
   // Gun helpers driven straight from the survev gun def's sound block.
-  function shot(def, opts) { play(def.sound.shoot, opts); }
+  // client shot.ts: perks change the sound of a shot. A round a perk made deadlier plays 300 cents
+  // higher; Splinter plays 300 lower and quieter, with a high echo 30 ms later; AP Rounds and
+  // High-Velocity Rounds add their own echoes.
+  function shot(def, opts, perk) {
+    const s = def.sound.shoot;
+    if (!perk) { play(s, opts); return; }
+    const detune = perk.saturated ? 300 : perk.splinter ? -300 : 0;
+    const vol = (opts && opts.volume !== undefined ? opts.volume : 1) * (perk.splinter ? 0.75 : 1);
+    play(s, { ...opts, detune, volume: vol });
+    const echo = (cents, delay, scale) => setTimeout(() => play(s, { ...opts, detune: cents, volume: scale }), delay);
+    if (perk.splinter) echo(1200, 30, 0.75);
+    if (perk.ap) echo(1000, 45, 0.75);
+    if (perk.highVelocity) echo(800, 10, 2);
+  }
   function empty(def) { play(def.sound.empty); }
   function reload(def, opts) { play(def.sound.reload, opts); }
   function cycle(def, opts) { if (def.sound.cycle) play(def.sound.cycle, opts); }

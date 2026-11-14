@@ -154,6 +154,9 @@ r = await inPage(`const g = ST.currentGame, p = g.player;
   g.bullets.push(b); g.updateBullets(0.001);
   return { type: p.hasteType, t: p.hasteT };`);
 ok(r.type === 'windwalk' && r.t > 2.9, `Windwalk: a round passing within 5 units gives 3 s of haste (${JSON.stringify(r)})`);
+await page.waitForTimeout(700);
+r = await inPage(`return ST.currentGame.particles.filter((q) => q.kind === 'stim' && /blossom/.test(q.sprite)).length;`);
+ok(r >= 4, `Windwalk's haste trails green blossoms, as in survev (${r} so far)`);
 
 await start('/drill/duel?perk=takedown');
 r = await inPage(`const g = ST.currentGame, p = g.player, e = g.enemies[0];
@@ -190,6 +193,21 @@ const tip = await page.evaluate(() => { const t = document.querySelector('#hud-p
 ok(tip.vis === 'visible' && tip.left >= 0 && tip.text === 'Cast Ironskin\nTake reduced damage and reflect enemy bullets.\nIncreased size.',
   `hovering a perk shows survev's tooltip, on screen (${JSON.stringify(tip)})`);
 await page.screenshot({ path: join(out, 'perks.png') });
+
+// 4. What the client draws: tracer tints and widths (GameConfig.tracerColors, client bullet.ts).
+await start('/drill/chase?gun=ak47&perk=treat_762,splinter,chambered');
+r = await inPage(`const g = ST.currentGame, gun = g.player.weapons[0], out = [];
+  const mk = g.makeBullet.bind(g);
+  g.makeBullet = function (...a) { const b = mk(...a); if (a[4] === 'player') out.push([b.tint, +(b.tracerWidth / ST.WEAPONS.ak47.tracerWidth).toFixed(2)]); return b; };
+  gun.ammo = gun.def.mag - 1; g.fireGun(g.player, gun.def, 0, false, 'player', { firstShot: true, toMouseLen: 10, gun });
+  gun.ammo = 5; g.fireGun(g.player, gun.def, 0, false, 'player', { firstShot: true, toMouseLen: 10, gun });
+  g.makeBullet = mk;
+  return out;`);
+ok(JSON.stringify(r) === JSON.stringify([['#004cff', 2], ['#004cff', 1], ['#004cff', 1], ['#004cff', 1], ['#004cff', 0.5], ['#004cff', 0.5]]),
+  `tracers: a treat tints 7.62 blue, One in the Chamber doubles the width, Splinter's side rounds halve it (${JSON.stringify(r)})`);
+await start('/drill/chase?gun=ak47&perk=ap_rounds');
+r = await inPage(`const g = ST.currentGame; return g.makeBullet(0, 0, 0, g.player.weapons[0].def, 'player', {}).tint;`);
+ok(r === '#0000c8', `AP Rounds draw 7.62 in survev's dark blue (${r})`);
 
 ok(!errors.length, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
 await browser.close();
