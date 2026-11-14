@@ -374,3 +374,34 @@ test('unknown routes and wrong methods', { skip: !hasDb }, async () => {
   const big = await handle(new Request('http://localhost:3000/api/feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'x'.repeat(20000) }) }));
   assert.equal(big.status, 413);
 });
+
+test('gun votes: one per user per gun, changeable, and capped per address', { skip: !hasDb }, async () => {
+  const { VOTERS_PER_ADDRESS_PER_DAY } = await import('../../lib/votes.mjs');
+  const ip = `203.0.113.${Date.now() % 250}`;
+  const as = (cookie) => ({ cookie, headers: { 'x-forwarded-for': `${ip}, 10.0.0.1` } });
+  const a = await newUser();
+  const before = (await call('GET', 'votes')).body.tallies.m870 || { up: 0, down: 0 };
+
+  let r = await call('POST', 'votes', { body: { gun: 'm870', vote: 1 }, ...as(a.cookie) });
+  assert.deepEqual(r.body, { gun: 'm870', up: before.up + 1, down: before.down, mine: 1 });
+  r = await call('POST', 'votes', { body: { gun: 'm870', vote: -1 }, ...as(a.cookie) });
+  assert.deepEqual([r.body.up, r.body.down], [before.up, before.down + 1], 'a second vote replaces the first');
+  assert.equal((await call('GET', 'votes', { cookie: a.cookie })).body.mine.m870, -1);
+  r = await call('POST', 'votes', { body: { gun: 'm870', vote: 0 }, ...as(a.cookie) });
+  assert.deepEqual([r.body.up, r.body.down], [before.up, before.down], 'a vote can be taken back');
+
+  assert.equal((await call('POST', 'votes', { body: { gun: 'm9_cursed', vote: 1 }, ...as(a.cookie) })).status, 400);
+  assert.equal((await call('POST', 'votes', { body: { gun: 'm870', vote: 5 }, ...as(a.cookie) })).status, 400);
+
+  // A voter with no session gets one; after the daily cap of voters, a new account from the same
+  // address is refused, while one that already voted from it can still change its votes.
+  let first = null;
+  for (let i = 0; i < VOTERS_PER_ADDRESS_PER_DAY; i++) {
+    const v = await call('POST', 'votes', { body: { gun: 'mp5', vote: 1 }, headers: { 'x-forwarded-for': ip } });
+    assert.equal(v.status, 200, `voter ${i}`);
+    created.add((await call('GET', 'me', { cookie: v.cookie })).body.user.id);
+    first = first || v.cookie;
+  }
+  assert.equal((await call('POST', 'votes', { body: { gun: 'mp5', vote: 1 }, headers: { 'x-forwarded-for': ip } })).status, 429);
+  assert.equal((await call('POST', 'votes', { body: { gun: 'ak47', vote: 1 }, ...as(first) })).status, 200);
+});

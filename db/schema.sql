@@ -115,3 +115,15 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_sent_at timestamptz;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_send_count int NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan jsonb;
 CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email);
+
+-- Gun ratings on /guns/tier-list/: one vote per user per gun, +1 or -1. ip_hash (a keyed hash, never
+-- the address) caps how many accounts one address can vote from.
+CREATE TABLE IF NOT EXISTS gun_votes (
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  gun text NOT NULL,
+  vote smallint NOT NULL CHECK (vote IN (-1, 1)),
+  ip_hash text,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, gun)
+);
+CREATE INDEX IF NOT EXISTS gun_votes_ip ON gun_votes(ip_hash, updated_at);

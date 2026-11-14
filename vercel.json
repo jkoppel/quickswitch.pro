@@ -4,7 +4,7 @@
   "buildCommand": null,
   "functions": {
     "api/index.mjs": {
-      "includeFiles": "platform/shared/**",
+      "includeFiles": "{platform/shared/**,vendor/survev/defs/gunDefs.json}",
       "maxDuration": 30
     },
     "api/og.mjs": {
