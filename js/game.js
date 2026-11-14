@@ -6,6 +6,12 @@ window.ST = window.ST || {};
   const DEG = Math.PI / 180;
   const GC = ST.GC;                          // survev's GameConfig, verbatim
   const PLAYER_R = GC.player.radius;
+  const EXPLOSION_FX = {
+    frag: { sound: 'explosion_01', volume: 0.9, scale: 1 },
+    usas: { sound: 'explosion_03', volume: 0.9, scale: 0.75 },
+    rounds: { sound: 'explosion_04', volume: 0.45, scale: 0.32 },
+    rounds_sg: { sound: 'explosion_04', volume: 0.18, scale: 0.32 },
+  };
   const MOVE_SPEED = GC.player.moveSpeed;
   const ARENA = 100;               // default arena half-size; scopes past 4x widen it (see arenaFor)
   const PLAYER_MAX_HP = GC.player.health;
@@ -218,11 +224,19 @@ window.ST = window.ST || {};
       // Weapon slots, as in survev: two guns, plus a throwable. Slot 0 is always the drill's weapon.
       const secondary = settings.secondary && ST.WEAPONS[settings.secondary] ? ST.WEAPONS[settings.secondary] : null;
       const throwable = settings.throwable && ST.THROWABLES[settings.throwable] ? ST.THROWABLES[settings.throwable] : null;
+      // A perk changes the player's guns (ST.perkedGun) and body: size, damage taken, speed, health.
+      // Bots never carry one.
+      const perk = settings.perk && ST.PERKS[settings.perk] ? settings.perk : '';
+      this.perk = perk;
+      this.perkProps = perk ? ST.PERKS[perk].props : {};
+      const scale = ST.perkScale(perk);
       this.player = {
         pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 }, hp: PLAYER_MAX_HP, aim: 0, aimVel: 0, moving: false,
+        scale, radius: PLAYER_R * scale,   // player.ts: the collider grows with the perk's scale
+        hasteT: 0, hasteType: '',          // player.ts giveHaste: +hasteSpeedBonus while it lasts
         weapons: [
-          makeGun(ST.WEAPONS[settings.weapon]),
-          secondary ? makeGun(secondary) : null,
+          makeGun(ST.perkedGun(ST.WEAPONS[settings.weapon], perk)),
+          secondary ? makeGun(ST.perkedGun(secondary, perk)) : null,
           throwable ? makeThrowable(throwable, settings.throwableCount) : null,
         ],
         curIdx: 0, lastIdx: secondary ? 1 : 0,
@@ -891,13 +905,20 @@ window.ST = window.ST || {};
       if (l > 0) { mx /= l; my /= l; }
       // Cooking a grenade slows you the way it does in survev (GameConfig.player.cookSpeedPenalty).
       const cooking = p.gun && p.gun.throwable && p.gun.cooking;
-      const speed = MOVE_SPEED - (cooking ? GC.player.cookSpeedPenalty : 0);
+      // Haste (Windwalk, Takedown) adds hasteSpeedBonus; Small Arms gives guns an equip speed of +1
+      // (player.ts), where every gun's own is 0 in the trainer.
+      const hasted = p.hasteT > 0 ? GC.player.hasteSpeedBonus : 0;
+      const smallArms = this.perk === 'small_arms' && p.gun && !p.gun.throwable ? this.perkProps.gunEquipSpeed : 0;
+      const speed = MOVE_SPEED + hasted + smallArms - (cooking ? GC.player.cookSpeedPenalty : 0);
       p.vel.x = mx * speed; p.vel.y = my * speed;
       if (p.moving) this.stats.movingTime += dt;
       p.pos.x += p.vel.x * dt;
       p.pos.y += p.vel.y * dt;
-      this.clampToBounds(p.pos);
-      this.pushOutOfObstacles(p.pos);
+      this.clampToBounds(p.pos, p.radius);
+      this.pushOutOfObstacles(p.pos, p.radius);
+      if (p.hasteT > 0) { p.hasteT -= dt; if (p.hasteT <= 0) { p.hasteT = 0; p.hasteType = ''; } }
+      // Gift of the Woods: player.ts regenerates healthRegen a second.
+      if (this.perk === 'gotw') p.hp = Math.min(PLAYER_MAX_HP, p.hp + this.perkProps.healthRegen * dt);
 
       const m = this.mouseWorld();
       const prevAim = p.aim;
@@ -922,7 +943,7 @@ window.ST = window.ST || {};
         }
         this.lastFireT = this.time;
         const m = this.mouseWorld();
-        this.fireGun(p, g.def, p.aim, p.moving, 'player', { firstShot, toMouseLen: Math.hypot(m.x - p.pos.x, m.y - p.pos.y) });
+        this.fireGun(p, g.def, p.aim, p.moving, 'player', { firstShot, toMouseLen: Math.hypot(m.x - p.pos.x, m.y - p.pos.y), gun: g });
       });
     }
 
@@ -1082,17 +1103,19 @@ window.ST = window.ST || {};
       const def = q.def;
       const x = q.x, y = q.y;
       this.explosions.push({ x, y, life: 0.5, maxLife: 0.5, radMax: def.radMax });
-      // explosion.ts effect defs: a frag or barrel bursts with explosion_01 on grass (02 is the water
-      // sound), the USAS-12's slug with explosion_03 and a burst three-quarters the size.
-      ST.audio.play(q.round ? 'explosion_03' : 'explosion_01', { dist: this.distToPlayer(q), volume: 0.9 });
-      this.spawnFragBurst(x, y, q.round ? 0.75 : 1);
+      // explosion.ts effect defs, on grass: frags and barrels burst with explosion_01 (02 is the water
+      // sound), the USAS-12's slug with explosion_03 at 0.75 scale, explosive rounds with a quiet
+      // explosion_04 at 0.32 scale (quieter still from shotgun pellets).
+      const fx = EXPLOSION_FX[q.effect] || EXPLOSION_FX.frag;
+      ST.audio.play(fx.sound, { dist: this.distToPlayer(q), volume: fx.volume });
+      this.spawnFragBurst(x, y, fx.scale);
       if (def.dmg > 0) {
         // As with bullets, bots' blasts only hurt the player; the player's hurt everyone, the player included.
         const targets = [{ o: this.player, kind: 'player' }].concat(q.owner === 'enemy' ? [] : this.enemies.map(e => ({ o: e, kind: 'enemy' })));
         for (const t of targets) {
           const o = t.o;
           const dx = o.pos.x - x, dy = o.pos.y - y;
-          const dist = Math.max(0, Math.hypot(dx, dy) - PLAYER_R);
+          const dist = Math.max(0, Math.hypot(dx, dy) - (t.kind === 'player' ? this.player.radius : PLAYER_R));
           if (dist > def.radMax) continue;
           if (this.blocked(x, y, o.pos.x, o.pos.y)) continue;
           const dmg = dist <= def.radMin ? def.dmg : remap(dist, 0, def.radMax, def.dmg, 0);
@@ -1309,7 +1332,7 @@ window.ST = window.ST || {};
       const range = Math.max(opts.clip ? 0 : 1, (opts.range !== undefined ? opts.range : def.range) + distAdj);
       return {
         x, y, sx: x, sy: y, dx: Math.cos(angle), dy: Math.sin(angle),
-        speed: def.speed, dmg: def.dmg, range, traveled: 0, owner, ammo: def.ammo,
+        speed: def.speed * (opts.speedMult || 1), dmg: def.dmg * (opts.dmgMult || 1), range, traveled: 0, owner, ammo: def.ammo,
         moving: !!opts.moving, spin: !!opts.spin,
         falloff: def.falloff, headshotMult: def.headshotMult || 1,
         obstacleDamage: def.obstacleDamage === undefined ? 1 : def.obstacleDamage,
@@ -1336,11 +1359,28 @@ window.ST = window.ST || {};
       // weaponManager.ts: a toMouseHit gun (the USAS-12) fires each round only as far as the cursor,
       // less the barrel, so an explosive slug bursts where you aim rather than at full range.
       const clip = def.toMouseHit && opts.toMouseLen !== undefined ? Math.min(def.range, Math.max(opts.toMouseLen - def.barrel, 0)) : undefined;
+      // One in the Chamber (weaponManager.ts): the first round of a full magazine and the last one hit
+      // harder; the ammo count has already gone down by this shot.
+      const g = opts.gun;
+      const chambered = def.chambered && g && (g.ammo === 0 || g.ammo === def.mag - 1) ? def.chambered : 1;
       for (let i = 0; i < n; i++) {
-        const a = aim + rand(-0.5, 0.5) * spread * DEG;
+        // .45 in the Chamber: each round has empoweredChance to fly straight, faster and harder.
+        const emp = def.empowered45 && Math.random() < def.empowered45.empoweredChance ? def.empowered45 : null;
+        const a = aim + (emp ? 0 : rand(-0.5, 0.5) * spread * DEG);
         let sx = gx + dx * def.barrel, sy = gy + dy * def.barrel;
         if (i > 0) { sx += rand(-jitter, jitter) * 1.11; sy += rand(-jitter, jitter) * 1.11; }
-        this.bullets.push(this.makeBullet(sx, sy, a, def, owner, { moving, spin: spinning, range: clip, clip: clip !== undefined }));
+        const shot = { moving, spin: spinning, range: clip, clip: clip !== undefined,
+          dmgMult: chambered * (emp ? emp.empoweredDamageMult : 1), speedMult: emp ? emp.empoweredSpeedMult : 1 };
+        this.bullets.push(this.makeBullet(sx, sy, a, def, owner, shot));
+        // Splinter: two more rounds either side of this one, deviated by 0.2-0.25 of the shot's spread
+        // (at least 1 degree), each at splitsDamageMult of its damage.
+        if (def.splinter) {
+          const splinterSpread = Math.max(spread, 1);
+          for (let j = 0; j < 2; j++) {
+            const dev = rand(0.2, 0.25) * splinterSpread * (j % 2 === 0 ? -1 : 1);
+            this.bullets.push(this.makeBullet(sx, sy, a + dev * DEG, def, owner, { ...shot, dmgMult: shot.dmgMult * def.splinter, splinter: true }));
+          }
+        }
         if (owner === 'player') {
           this.stats.pellets++; this.adaptWindow.pellets++;
           if (moving) this.stats.movingPellets++;
@@ -1407,18 +1447,45 @@ window.ST = window.ST || {};
         }
         if (b.owner === 'enemy' || b.damageSelf) {
           const s = segPointDist2(b.x, b.y, nx, ny, p.pos.x, p.pos.y);
-          if (s.d2 < PLAYER_R * PLAYER_R && s.t < hitT) { hitT = s.t; hitKind = 'player'; hitObj = null; hx = s.cx; hy = s.cy; }
+          if (s.d2 < p.radius * p.radius && s.t < hitT) { hitT = s.t; hitKind = 'player'; hitObj = null; hx = s.cx; hy = s.cy; }
+        }
+        // Windwalk (bullet.ts): an enemy round within maxTriggerDistance of you gives you haste,
+        // unless Windwalk's haste is already running.
+        if (b.owner === 'enemy' && this.perk === 'windwalk' && p.hasteType !== 'windwalk'
+          && Math.hypot(nx - p.pos.x, ny - p.pos.y) <= this.perkProps.maxTriggerDistance) {
+          p.hasteType = 'windwalk'; p.hasteT = this.perkProps.hasteDuration;
         }
 
         if (b.owner === 'enemy' && !b.whizzed) {
           const s = segPointDist2(b.x, b.y, nx, ny, p.pos.x, p.pos.y);
-          if (s.d2 < 9 && s.d2 > PLAYER_R * PLAYER_R) { b.whizzed = true; ST.audio.whiz({ volume: 0.7 }); }
+          if (s.d2 < 9 && s.d2 > p.radius * p.radius) { b.whizzed = true; ST.audio.whiz({ volume: 0.7 }); }
         }
         if (hitKind) {
           b.traveled += step * hitT;
           b.x = hx; b.y = hy;
           if (hitKind === 'enemy') { b.dead = true; this.damageEnemy(hitObj, b, hx, hy); }
-          else if (hitKind === 'player') { b.dead = true; this.damagePlayer(b, hx, hy); }
+          else if (hitKind === 'player') {
+            b.dead = true;
+            this.damagePlayer(b, hx, hy);
+            // Steelskin (bullet.ts): the round hurts you and also glances off, like a pan.
+            if (this.perk === 'steelskin' && !b.def.roundsBlast && !b.reflected && b.reflectCount < GC.bullet.maxReflect) {
+              // The normal is at the point the round enters your circle, not the closest point
+              // of its path, which is your center when the round flies straight at you.
+              const ox = p.pos.x - b.x, oy = p.pos.y - b.y;
+              const along = ox * b.dx + oy * b.dy, perp2 = ox * ox + oy * oy - along * along;
+              const enter = along - Math.sqrt(Math.max(0, p.radius * p.radius - perp2));
+              const ex = b.x + b.dx * enter, ey = b.y + b.dy * enter;
+              const ux = (ex - p.pos.x) / p.radius, uy = (ey - p.pos.y) / p.radius;
+              hx = ex; hy = ey;
+              const dot = b.dx * ux + b.dy * uy;
+              if (dot < 0) {
+                b.reflected = true;
+                spawned.push(this.makeBullet(hx + ux * 0.1, hy + uy * 0.1, Math.atan2(b.dy - 2 * dot * uy, b.dx - 2 * dot * ux), b.def, b.owner, {
+                  reflectCount: b.reflectCount + 1, range: b.range, shrapnel: b.shrapnel,
+                }));
+              }
+            }
+          }
           else {
             b.dead = true;
             const ric = this.hitObstacle(hitObj, b, hx, hy, hitNormal);
@@ -1434,9 +1501,10 @@ window.ST = window.ST || {};
       // unless it bounced off metal; 0.1 units back along its path, so never inside an obstacle.
       for (const b of this.bullets.slice()) {
         if (!b.dead || b.reflected || !b.def.onHit) continue;
+        if (b.def.roundsBlast && b.traveled >= b.range) continue;   // explosive rounds peter out
         const x = ST.EXPLOSIONS[b.def.onHit];
         if (!x) continue;
-        this.explode({ x: b.x - b.dx * 0.1, y: b.y - b.dy * 0.1, owner: b.owner, round: true,
+        this.explode({ x: b.x - b.dx * 0.1, y: b.y - b.dy * 0.1, owner: b.owner, round: true, effect: x.explosionEffectType,
           def: { dmg: x.damage, radMin: x.rad.min, radMax: x.rad.max, shrapnelCount: x.shrapnelCount, shrapnelType: x.shrapnelType } });
       }
       this.bullets = this.bullets.filter(b => !b.dead);
@@ -1457,6 +1525,7 @@ window.ST = window.ST || {};
       ST.audio.play(snd, { dist: Math.hypot(hx - p.x, hy - p.y), volume: 0.6 });
       this.spawnPuff(hx, hy, o.reflect ? 'rgba(255,225,150,0.9)' : 'rgba(200,200,200,0.8)', 3);
       if (!o.reflect || o.dead) return null;
+      if (b.def.roundsBlast) return null;   // bullet.ts: explosive rounds never bounce
       if (b.reflected || b.reflectCount >= GC.bullet.maxReflect) return null;
       b.reflected = true;
       // Mirror the direction about the surface normal. On a barrel that is the radius through the
@@ -1510,8 +1579,9 @@ window.ST = window.ST || {};
       const st = this.stats;
       const roll = this.rollDamage(b);
       const amount = roll.dmg;
-      if (b.source === 'round') {
-        // An explosive round's blast: damage dealt, but neither a bullet hit nor a grenade's.
+      if (b.source === 'round' || b.owner === 'enemy') {
+        // An explosive round's blast, or a bot's round glancing off a wall or your Steelskin:
+        // damage dealt, but not one of your hits.
       } else if (b.source !== 'explosion') {
         st.hits++;
         this.adaptWindow.hits++;
@@ -1535,6 +1605,12 @@ window.ST = window.ST || {};
         this.recordAcquisition(e);
       }
       if (e.hp <= 0) {
+        // Takedown (player.ts): a kill gives you health and a burst of haste. A bot's own round
+        // reflected off you is the bot's kill, not yours.
+        if (this.perk === 'takedown' && b.owner !== 'enemy') {
+          this.player.hp = Math.min(PLAYER_MAX_HP, this.player.hp + this.perkProps.hpReward);
+          this.player.hasteType = 'takedown'; this.player.hasteT = this.perkProps.hasteDuration;
+        }
         st.kills++;
         if (b.source === 'explosion') st.nadeKills++;
         if (e.rec) e.rec.killed = true;
@@ -1556,6 +1632,13 @@ window.ST = window.ST || {};
     damagePlayer(b, hx, hy) {
       const p = this.player;
       const roll = this.rollDamage(b);
+      // player.ts damage: Flak Jacket, then Steelskin, each take their share off what is left.
+      // Blasts and shrapnel count as explosions.
+      const isExplosion = b.source === 'explosion' || b.source === 'round' || !!b.shrapnel;
+      let taken = roll.dmg;
+      if (this.perk === 'flak_jacket') taken -= taken * (isExplosion ? this.perkProps.explosionDamageReduction : this.perkProps.damageReduction);
+      if (this.perk === 'steelskin') taken -= taken * this.perkProps.damageReduction;
+      roll.dmg = taken;
       const dmg = Math.min(roll.dmg, p.hp);
       p.hp -= roll.dmg;
       this.stats.dmgTaken += dmg;
@@ -1595,22 +1678,22 @@ window.ST = window.ST || {};
     }
 
     // Inside a bunker the walkable world is the building's own footprint, not the grass field.
-    clampToBounds(pos) {
+    clampToBounds(pos, r = PLAYER_R) {
       const b = this.bunker && this.bunker.bounds;
       if (b) {
-        pos.x = clamp(pos.x, b.x - b.hw + PLAYER_R, b.x + b.hw - PLAYER_R);
-        pos.y = clamp(pos.y, b.y - b.hh + PLAYER_R, b.y + b.hh - PLAYER_R);
+        pos.x = clamp(pos.x, b.x - b.hw + r, b.x + b.hw - r);
+        pos.y = clamp(pos.y, b.y - b.hh + r, b.y + b.hh - r);
         return;
       }
-      pos.x = clamp(pos.x, -this.arena + PLAYER_R, this.arena - PLAYER_R);
-      pos.y = clamp(pos.y, -this.arena + PLAYER_R, this.arena - PLAYER_R);
+      pos.x = clamp(pos.x, -this.arena + r, this.arena - r);
+      pos.y = clamp(pos.y, -this.arena + r, this.arena - r);
     }
 
     liveObstacles() { return this.obstacles.filter(o => !o.dead); }
-    pushOutOfObstacles(pos) {
+    pushOutOfObstacles(pos, radius = PLAYER_R) {
       for (const r of this.obstacles) {
         if (r.dead || !r.def.collidable) continue;
-        pushOut(pos, r, PLAYER_R);
+        pushOut(pos, r, radius);
       }
     }
 
@@ -1834,19 +1917,19 @@ window.ST = window.ST || {};
         }
       }
 
-      this.drawCharacter(p.pos.x, p.pos.y, p.aim, p.gun, SV.skinTint);
+      this.drawCharacter(p.pos.x, p.pos.y, p.aim, p.gun, SV.skinTint, p.scale);
       if (p.gun && p.gun.throwable && p.gun.cooking) {
         // Cooking: the ring counts the fuse down on your own body.
         const left2 = clamp(1 - p.gun.cookT / p.gun.def.fuseTime, 0, 1);
         ctx.beginPath();
-        ctx.arc(p.pos.x, p.pos.y, PLAYER_R + 0.5, -Math.PI / 2, -Math.PI / 2 + TAU * left2);
+        ctx.arc(p.pos.x, p.pos.y, p.radius + 0.5, -Math.PI / 2, -Math.PI / 2 + TAU * left2);
         ctx.strokeStyle = left2 < 0.35 ? 'rgba(255,90,60,0.95)' : 'rgba(255,211,92,0.9)';
         ctx.lineWidth = 0.18; ctx.stroke();
       }
       if (p.gun && !p.gun.throwable && p.gun.reloading) {
         const frac = 1 - p.gun.reloadT / p.gun.def.reload;
         ctx.beginPath();
-        ctx.arc(p.pos.x, p.pos.y, PLAYER_R + 0.5, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(frac, 0, 1));
+        ctx.arc(p.pos.x, p.pos.y, p.radius + 0.5, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(frac, 0, 1));
         ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 0.18; ctx.stroke();
       }
 
@@ -1966,7 +2049,7 @@ window.ST = window.ST || {};
     // Player rendering per survev client/src/objects/player.ts and animData.ts:
     // body sprite at scale 0.25 (140px -> 35px = 2.19 units), hands at the idle-pose pivots (16 px per unit),
     // gun sprite anchored at its bottom center on the right hand offset (-4.25, -1.75), scaled by worldImg.scale * 0.5.
-    drawCharacter(x, y, aim, gun, skinTint) {
+    drawCharacter(x, y, aim, gun, skinTint, scale = 1) {
       const ctx = this.ctx, A = ST.assets, SV = ST.SURVEV, U = SV.ppuBase;
       const def = gun.def;
       const throwing = !!gun.throwable;
@@ -1976,6 +2059,7 @@ window.ST = window.ST || {};
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(aim);
+      if (scale !== 1) ctx.scale(scale, scale);   // a perk's size: survev draws the bigger collider bigger
       const pose = throwing ? SV.throwablePose : def.pistol ? SV.poses.pistol : def.bullpup ? SV.poses.bullpup : SV.poses.rifle;
       // player.ts applies gun recoil to the right hand only; the gun rides along because it hangs off it.
       const recoil = (gun.recoil || 0) * 1.125;

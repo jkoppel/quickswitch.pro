@@ -32,11 +32,12 @@
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
   };
-  const drillKey = (s) => `${s.mode}:${s.weapon}`;
+  // A perk changes the gun enough that its scores are kept apart from the plain gun's.
+  const drillKey = (s) => `${s.mode}:${s.weapon}${s.perk ? ':' + s.perk : ''}`;
 
   // ---------- form ----------
   const fields = {
-    weapon: $('f-weapon'), secondary: $('f-secondary'), throwable: $('f-throwable'),
+    weapon: $('f-weapon'), secondary: $('f-secondary'), throwable: $('f-throwable'), perk: $('f-perk'),
     scope: $('f-scope'), duration: $('f-duration'), enemies: $('f-enemies'),
     behavior: $('f-behavior'), enemyHp: $('f-hp'), minDist: $('f-mind'), maxDist: $('f-maxd'), ttl: $('f-ttl'),
     enemyAim: $('f-aim'), enemyShoots: $('f-shoots'), adaptive: $('f-adaptive'), leadHint: $('f-lead'),
@@ -78,6 +79,8 @@
     }
   })();
   fill(fields.throwable, [['', 'None']].concat(Object.entries(ST.THROWABLES).map(([k, t]) => [k, t.name])));
+  // The perks that do something in a drill (ST.PERKS), alphabetical after None.
+  fill(fields.perk, [['', 'None']].concat(Object.values(ST.PERKS).sort((a, b) => a.name.localeCompare(b.name)).map((k) => [k.id, k.name])));
   fill(fields.scope, Object.keys(ST.SCOPES).map(k => [k, `${k} (shows ${ST.scopeMaxDist(k)} units in any direction)`]));
   fill(fields.behavior, ST.MOVEMENT_ORDER.map(k => [k, ST.MOVEMENT[k].name]));
   fill(fields.enemyAim, Object.entries(ST.AIM).map(([k, a]) => [k, a.name]));
@@ -138,8 +141,11 @@
   }
 
   function updateWeaponInfo() {
-    const w = ST.WEAPONS[fields.weapon.value];
-    if (!w) return;
+    const perk = ST.PERKS[fields.perk.value];
+    $('perk-hint').textContent = perk ? perk.desc : '';
+    const base = ST.WEAPONS[fields.weapon.value];
+    if (!base) return;
+    const w = ST.perkedGun(base, fields.perk.value);   // the numbers you will actually shoot with
     const rpm = Math.round(60 / w.fireDelay);
     const pellets = w.pellets ? ` × ${w.pellets} pellets` : '';
     const n = ST.fmt.dec;
@@ -320,12 +326,12 @@
       const saved = locked ? null : LS.get('st.lastSettings.' + item.id, null);
       writeSettings(modeDefaults(item));         // the drill's own preset is the floor
       if (saved) writeSettings(saved);           // then whatever of the saved run still makes sense
-      if (overrides) writeSettings(overrides);   // and a guide's link picks the gun, locked or not
+      if (overrides) writeSettings(overrides);   // and a guide's link picks the gun or perk, locked or not
       // Custom is the one drill whose point is the full parameter set.
       $('advanced').open = item.id === 'custom';
       const s = readSettings();
       const w = ST.WEAPONS[s.weapon];
-      const extra = [s.secondary && ST.WEAPONS[s.secondary] ? ' + ' + ST.WEAPONS[s.secondary].name : '', s.throwable && ST.THROWABLES[s.throwable] ? ' + ' + ST.THROWABLES[s.throwable].name : ''].join('');
+      const extra = [s.secondary && ST.WEAPONS[s.secondary] ? ' + ' + ST.WEAPONS[s.secondary].name : '', s.throwable && ST.THROWABLES[s.throwable] ? ' + ' + ST.THROWABLES[s.throwable].name : '', s.perk && ST.PERKS[s.perk] ? ' + ' + ST.PERKS[s.perk].name : ''].join('');
       $('preset-line').textContent = item.id === 'custom' ? 'Custom sets every weapon and scenario setting yourself.' : `${w ? w.name : s.weapon}${extra} · ${s.scope} · ${s.duration} s`;
     }
     LS.set('st.lastSelection', { kind, id: item.id });

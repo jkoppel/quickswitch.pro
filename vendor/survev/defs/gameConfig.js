@@ -10,6 +10,7 @@ window.SURVEV_GAME_CONFIG = {
     "freeSwitchCooldown": 1,
     "headshotChance": 0.15,
     "cookSpeedPenalty": 3,
+    "hasteSpeedBonus": 4.8,
     "throwableMaxMouseDist": 18,
     "cookTime": 0.1,
     "throwTime": 0.3

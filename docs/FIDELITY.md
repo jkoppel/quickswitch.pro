@@ -66,6 +66,29 @@ the shooter too: `player.damage` spares teammates but not the source. Frags and 
 `explosion_01`, survev's sound for an explosion on grass. Silenced guns draw survev's black tracer,
 the USAS-12 its red one.
 
+You can give yourself one perk per drill, and the 20 perks that touch a fight work as in survev's
+`player.ts`, `weaponManager.ts` and `bullet.ts`:
+
+- **Gun perks** change your gun, never the bots'. Ammo perks multiply damage by 1.12 for their
+  ammo; Hollow-Points and the OKAMI bar by 1.08 for every round. 9mm Overpressure, High-Velocity
+  Rounds, Hollow-Points and .45 in the Chamber also change speed, range or spread. Splinter
+  Rounds split each round in three. One in the Chamber boosts the first and last round of a
+  magazine. Firepower loads `extendedClip`. AP Rounds hit obstacles 1.5× as hard. Explosive
+  Rounds burst on impact for 3 damage (`explosion_rounds`, or the smaller `explosion_rounds_sg`
+  for shotgun pellets) and fizzle at full range without bouncing.
+- **Body perks** change you. Cast Ironskin takes 45% off and bounces rounds back, like a pan.
+  Flak Jacket takes 10% off bullets and 90% off blasts and shrapnel. Windwalk gives 3 s of haste
+  when an enemy round passes within 5 units. Takedown gives 25 health and haste on a kill. Gift
+  of the Woods regenerates 1 health a second. Small Arms adds 1 to your speed. Each perk's
+  `scale` changes your size, so a bigger player is easier to hit.
+
+Endless Ammo and High-Value Targets are left out because they change nothing here: reserves are
+infinite and bots carry no perks. So are the loot, healing, adrenaline, role and trick perks.
+
+Not yet modelled: survev slows you to half speed for a gun's fire delay after each shot, and each
+gun has its own `speed.equip` and `speed.attack` move speed. The trainer moves you at one speed
+whatever you hold.
+
 Missing, now implemented: ricochet at `maxReflect` 3 with half damage per bounce, off everything
 survev makes of metal — barrels in the open and the walls, columns and control panels of a bunker,
 all of which inherit `reflectBullets` from the `metal` material in `mapObjectHelpers.ts`. Rectangular
@@ -87,7 +110,7 @@ Deliberate deviations, and why:
 - **Bots push each other apart.** survev players pass through one another; its movement collision
   loop only considers obstacles. Overlapping bots make a drill degenerate, so the trainer separates
   them.
-- **No armour, helmets, perks, building layers, or muzzle clipping against obstacles.** None of them
+- **No armour, helmets, building layers, or muzzle clipping against obstacles.** None of them
   change the aiming task, and all of them would need map and inventory systems the trainer does not
   have.
 - **Benchmark scores from before the scope fix are not comparable.** The scenarios changed, so

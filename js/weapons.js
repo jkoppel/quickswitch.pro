@@ -79,6 +79,10 @@ window.ST = window.ST || {};
       noDistAdj: !!b.noDistAdj,            // shotgun pellets skip the +-1 unit range jitter
       obstacleDamage: b.obstacleDamage !== undefined ? b.obstacleDamage : 1,
       shrapnel: !!b.shrapnel,
+      noSplinter: !!g.noSplinter,
+      extendedClip: g.extendedClip || g.maxClip,
+      extendedReload: g.extendedReload || g.maxReload,
+      explosiveRoundsAlt: !!b.useExplosiveRoundsAlt,   // shotgun pellets get the quieter round blast
       onHit: b.onHit || null,              // explosive rounds (the USAS-12's) blow up where they stop
       toMouseHit: !!g.toMouseHit,          // rounds travel only as far as the cursor (the USAS-12)
       fireMode: g.fireMode,
@@ -93,6 +97,53 @@ window.ST = window.ST || {};
   }
   // Legacy key used by drills/scenarios.
   if (ST.WEAPONS.awm) ST.WEAPONS.awm.id = 'awc';
+
+  // ---------- perks ----------
+  // The perks that change a fight against bots, each by survev's own rules (weaponManager.ts,
+  // bullet.ts, player.ts) and numbers (perkDefs.ts). Loot, role, adrenaline, healing and event perks
+  // are left out: there is nothing in a drill for them to act on.
+  const PD = window.SURVEV_PERK_DEFS || { perks: {}, ammoBonuses: {}, ammoBonusDamageMult: 1 };
+  const PERK_IDS = ['high_velocity', 'splinter', 'chambered', 'explosive', 'firepower', 'ap_rounds',
+    'bonus_9mm', 'bonus_45', 'bonus_assault', 'treat_9mm', 'treat_762', 'treat_556', 'treat_12g', 'treat_super',
+    'steelskin', 'flak_jacket', 'windwalk', 'takedown', 'gotw', 'small_arms'];
+  ST.PERKS = {};
+  for (const id of PERK_IDS) {
+    const p = PD.perks[id];
+    if (p) ST.PERKS[id] = { id, name: p.name, desc: p.desc, props: p.properties || {} };
+  }
+  const props = (perk) => (ST.PERKS[perk] ? ST.PERKS[perk].props : {});
+  // player.ts recalculateScale: 1 plus every perk's scale, clamped to net.ts's 0.75..2.
+  ST.perkScale = (perk) => Math.min(2, Math.max(0.75, 1 + (props(perk).scale || 0)));
+
+  // The player's gun as a perk changes it. Fixed changes are folded into a copy of the definition;
+  // per-shot ones (splinter, One in the Chamber, .45 empowered rounds) are flags fireGun reads.
+  ST.perkedGun = (def, perk) => {
+    if (!perk || !ST.PERKS[perk] || def.slot !== 'gun') return def;
+    const P = props(perk);
+    const d = { ...def, perk };
+    // weaponManager.isBulletSaturated: Hollow-Points and the full-size bar add 8% to every round;
+    // an ammo perk (ammoBonuses) adds ammoBonusDamageMult to its own ammo.
+    if (perk === 'bonus_assault' || perk === 'treat_super') d.dmg *= 1.08;
+    if ((PD.ammoBonuses[def.ammoType] || []).includes(perk)) d.dmg *= PD.ammoBonusDamageMult;
+    if (perk === 'bonus_9mm' && def.ammoType === '9mm') {
+      d.spread *= P.spreadMul; d.moveSpread *= P.spreadMul;   // fireWeapon scales the whole spread
+      d.speed *= P.speedMult; d.range *= P.distanceMult;
+    }
+    if (perk === 'high_velocity') { d.speed *= P.speedMult; d.range *= P.distanceMult; }
+    if (perk === 'bonus_assault') d.speed *= P.speedMult;
+    if (perk === 'bonus_45' && def.ammoType === '45acp') d.empowered45 = P;
+    if (perk === 'splinter' && !def.noSplinter) { d.dmg *= P.mainDamageMult; d.splinter = P.splitsDamageMult; }
+    if (perk === 'chambered' && def.ammoType !== '12gauge') d.chambered = P.damageMult;
+    if (perk === 'firepower') { d.mag = def.extendedClip; d.reloadCount = def.extendedReload; }
+    if (perk === 'ap_rounds') d.obstacleDamage *= P.obstacleMult;
+    // bullet.ts: a gun's own onHit (the USAS-12's) wins over explosive rounds, which neither
+    // bounce nor burst when they peter out at full range.
+    if (perk === 'explosive' && !def.onHit) {
+      d.onHit = def.explosiveRoundsAlt ? 'explosion_rounds_sg' : 'explosion_rounds';
+      d.roundsBlast = true;
+    }
+    return d;
+  };
 
   // A gun's class, worked out from its survev numbers rather than listed by hand: 12-gauge guns are
   // shotguns, pistols say so, automatics are SMGs on pistol ammo, LMGs with a big belt or drum and
