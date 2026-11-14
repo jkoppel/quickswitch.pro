@@ -90,3 +90,28 @@ test('every gun page sends you to a drill the trainer can load with that gun, cl
     assert.ok(pages[`guns/${id}/index.html`].includes(`href="${href.replace(/&/g, '&amp;')}"`), `${id}: the page links it`);
   }
 });
+
+test('every perk the trainer can give you has a page that links into a drill with it, and no other perk does', async () => {
+  const { PERK_IDS, PERK_PRACTICE, perkPracticeHref } = await import('../../tools/build-pages.mjs');
+  const vm = await import('node:vm');
+  const ctx = { window: {}, console };
+  ctx.ST = ctx.window.ST = {};
+  vm.createContext(ctx);
+  for (const f of ['gameConfig', 'gunDefs', 'bulletDefs', 'throwableDefs', 'explosionDefs', 'obstacleDefs', 'perkDefs']) {
+    vm.runInContext(readFileSync(new URL(`vendor/survev/defs/${f}.js`, root), 'utf8'), ctx);
+  }
+  vm.runInContext(readFileSync(new URL('js/weapons.js', root), 'utf8'), ctx);
+  assert.deepEqual(Object.keys(PERK_PRACTICE).sort(), Object.keys(ctx.ST.PERKS).sort(), 'the pages link the perks the trainer has');
+  const pages = buildPages();
+  const modes = readFileSync(new URL('js/modes.js', root), 'utf8');
+  for (const id of PERK_IDS) {
+    const html = pages[`perks/${id}/index.html`];
+    if (!PERK_PRACTICE[id]) { assert.ok(!html.includes('href="/drill/'), `${id}: no drill link`); continue; }
+    const href = perkPracticeHref(id);
+    const [, drill, gun, perk] = /^\/drill\/([a-z]+)\?(?:gun=([a-z0-9_]+)&)?perk=([a-z0-9_]+)$/.exec(href);
+    assert.equal(perk, id);
+    assert.ok(modes.includes(`id: '${drill}'`), `${id}: ${drill} is a drill`);
+    if (gun) assert.ok(ctx.ST.WEAPONS[gun], `${id}: ?gun=${gun} is a trainer weapon`);
+    assert.ok(html.includes(`href="${href.replace(/&/g, '&amp;')}"`), `${id}: the page links it`);
+  }
+});

@@ -163,6 +163,27 @@ export function practiceDrill(id) {
 // The trainer keys the AWM-S as "awm"; every other gun keeps survev's id.
 export const trainerKey = (id) => (id === 'awc' ? 'awm' : id);
 export const practiceHref = (id) => `/drill/${practiceDrill(id)}?gun=${trainerKey(id)}`;
+
+// The perks the trainer can give you (ST.PERKS in js/weapons.js; a unit test holds the two
+// together), each with the drill that shows it off and, for ammo perks, a gun that takes it.
+// The rest (loot, healing, adrenaline, roles, tricks) get no link.
+const PERK_DRILLS = {
+  dodge: { name: 'Dodge', how: 'a strafing bot with hard aim that leads your movement' },
+  chase: { name: 'Chase', how: 'a bot that runs, so you shoot on the move' },
+  cook: { name: 'Cooked Frag', how: 'grenades against juking bots, where a badly timed frag hurts you too' },
+  barrel: { name: 'Barrel Trap', how: 'bots rushing you through a field of barrels you can pop' },
+};
+export const PERK_PRACTICE = {
+  high_velocity: ['sniper'], splinter: ['duel'], chambered: ['duel', 'mosin'], explosive: ['duel'],
+  firepower: ['duel'], ap_rounds: ['barrel'], bonus_9mm: ['duel', 'mp5'], bonus_45: ['duel', 'vector45'],
+  bonus_assault: ['duel'], treat_9mm: ['duel', 'mp5'], treat_762: ['duel', 'ak47'], treat_556: ['duel', 'm4a1'],
+  treat_12g: ['quickswitch'], treat_super: ['duel'], steelskin: ['dodge'], flak_jacket: ['cook'],
+  windwalk: ['dodge'], takedown: ['duel'], gotw: ['dodge'], small_arms: ['chase'],
+};
+export const perkPracticeHref = (id) => {
+  const [drillId, gun] = PERK_PRACTICE[id];
+  return `/drill/${drillId}?${gun ? `gun=${gun}&` : ''}perk=${id}`;
+};
 const TIERS_ORDER = ['S', 'A', 'B', 'C', 'D'];
 // The arrows on vote buttons, drawn rather than typed.
 const CHEVRON = (dir) => `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="${dir === 'up' ? 'M2.5 7.5 6 4l3.5 3.5' : 'M2.5 4.5 6 8l3.5-3.5'}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -538,7 +559,9 @@ function perkPage(id) {
   const body = `<article>
 <h1>${esc(p.name)} perk in survev.io and surviv.io</h1>
 <p class="lead">${esc(p.desc) || 'The game gives this perk no description.'}</p>
-<p class="tl-link"><a href="/perks/tier-list/">Rank ${esc(p.name)} in your own perk tier list</a></p>
+${PERK_PRACTICE[id] ? `<p class="practice"><a class="cta" href="${esc(perkPracticeHref(id))}">Practice with ${esc(p.name)}</a> <span class="muted">${{ ...DRILLS, ...PERK_DRILLS }[PERK_PRACTICE[id][0]].name}${PERK_PRACTICE[id][1] ? ` with the ${esc(GUNS[PERK_PRACTICE[id][1]].name)}` : ''}: ${{ ...DRILLS, ...PERK_DRILLS }[PERK_PRACTICE[id][0]].how}.</span></p>
+` : `<p class="muted">The trainer doesn't model ${esc(p.name)} yet, so there's no drill for it.</p>
+`}<p class="tl-link"><a href="/perks/tier-list/">Rank ${esc(p.name)} in your own perk tier list</a></p>
 <ul class="facts">
 <li>${from.length ? `You get it from ${andList(from)}.` : 'It isn\'t in normal loot or any role\'s kit.'}</li>
 ${ammo.length ? `<li>${andList(ammo)} rounds do ×${PERKS.ammoBonusDamageMult} damage with it.</li>\n` : ''}</ul>

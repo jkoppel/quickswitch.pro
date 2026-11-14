@@ -1,6 +1,7 @@
 // The guide pages link straight into the trainer: /drill/<id> opens one drill and /play/<id> one
 // routine, selected in the picker and one press from playing; a gun page's /drill/<id>?gun=<id>
-// also hands you that gun. Every such link must land on the drill it names with the right gun, on
+// also hands you that gun, and a perk page's ?perk=<id> that perk. Every such link must land on
+// the drill it names with the right gun and perk, on
 // a first visit, and Start must then play it with every sprite and sound loading.
 //
 //   node tests/e2e/deeplinks.mjs http://localhost:3210 [outDir]      (vercel dev or any static host)
@@ -38,6 +39,17 @@ for (const dir of readdirSync(join(root, 'guns'), { withFileTypes: true })) {
   const m = /<a class="cta" href="(\/drill\/[a-z]+\?gun=([a-z0-9_]+))">[^<]*<\/a> <span class="muted">([^:]+):/.exec(html);
   if (m) { names.set(m[1], m[3]); guns.set(m[1], m[2]); }
 }
+// Each perk page's practice link does the same with ?perk=, and some name a gun too.
+const perks = new Map();
+for (const dir of readdirSync(join(root, 'perks'), { withFileTypes: true })) {
+  if (!dir.isDirectory()) continue;
+  const html = readFileSync(join(root, 'perks', dir.name, 'index.html'), 'utf8');
+  const m = /<a class="cta" href="(\/drill\/[a-z]+\?(?:gun=([a-z0-9_]+)&amp;)?perk=([a-z0-9_]+))">[^<]*<\/a> <span class="muted">([^:]+?)(?: with the [^:]+)?:/.exec(html);
+  if (!m) continue;
+  const link = m[1].replace(/&amp;/g, '&');
+  names.set(link, m[4]); perks.set(link, m[3]);
+  if (m[2]) guns.set(link, m[2]);
+}
 const links = new Set(names.keys());
 
 let failures = 0;
@@ -61,6 +73,10 @@ for (const link of [...links].sort()) {
   if (guns.has(link)) {
     const weapon = await page.evaluate(() => document.getElementById('f-weapon').value);
     ok(weapon === guns.get(link), `${link}: the drill loads the ${guns.get(link)} (has ${weapon})`);
+  }
+  if (perks.has(link)) {
+    const perk = await page.evaluate(() => document.getElementById('f-perk').value);
+    ok(perk === perks.get(link), `${link}: the drill gives you ${perks.get(link)} (has ${perk || 'none'})`);
   }
   await page.click('#btn-start');
   await page.waitForTimeout(800);
