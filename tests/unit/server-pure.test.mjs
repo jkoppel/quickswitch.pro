@@ -138,3 +138,13 @@ test('share text names scenarios as the app does, and the home card gives way to
   assert.match(page, /name="description" content="keep"/);
   assert.match(inject(tpl, 'https://s', null, 'https://s/'), /og:title" content="site"/);
 });
+
+test('a profile is its own canonical page and a challenge stays out of search', () => {
+  const tpl = '<head>\n<link rel="canonical" href="https://s/">\n</head>';
+  const profile = inject(tpl, 'https://s', { title: 'p', description: 'd', image: '/i' }, 'https://s/u/p');
+  assert.match(profile, /<link rel="canonical" href="https:\/\/s\/u\/p">/);
+  assert.doesNotMatch(profile, /noindex/);
+  const challenge = inject(tpl, 'https://s', { title: 'c', description: 'd', image: '/i', noindex: true }, 'https://s/c/x');
+  assert.match(challenge, /<meta name="robots" content="noindex">/);
+  assert.match(inject(tpl, 'https://s', null, 'https://s/'), /<link rel="canonical" href="https:\/\/s\/">/);
+});
