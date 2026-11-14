@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How to quickswitch in survev.io: the exact rule and the best guns · Quickswitch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="survev&#39;s quickswitch rule from its source: one switch once a second costs 0.25 s, pump shotguns share a deploy group, and the guns that gain most from switching.">
+<link rel="canonical" href="https://quickswitch.pro/guides/quickswitch/">
+<meta property="og:site_name" content="Quickswitch">
+<meta property="og:type" content="article">
+<meta property="og:title" content="How to quickswitch in survev.io: the exact rule and the best guns · Quickswitch">
+<meta property="og:description" content="survev&#39;s quickswitch rule from its source: one switch once a second costs 0.25 s, pump shotguns share a deploy group, and the guns that gain most from switching.">
+<meta property="og:url" content="https://quickswitch.pro/guides/quickswitch/">
+<meta property="og:image" content="https://quickswitch.pro/api/og?kind=site">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/platform/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/guides/pages.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"How to quickswitch in survev.io","url":"https://quickswitch.pro/guides/quickswitch/"}</script>
+</head>
+<body>
+<main class="doc">
+<header class="doc-head">
+<a class="logo-link" href="/"><span class="logo">QUICKSWITCH<span class="dot">.</span>PRO</span></a>
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/guides/">Guides</a> <span class="sep">/</span> <span>Quickswitching</span></nav>
+</header>
+<article>
+<h1>How to quickswitch in survev.io</h1>
+<p class="lead">After a slow shot, switch guns instead of waiting. survev lets you fire your other gun 0.25 s after switching, once a second, so an M870 shot can be followed by MP5 fire long before the pump comes back.</p>
+
+<h2>The rule, from survev's weapon code</h2>
+<ul>
+<li><b>A switch normally costs the new gun's switch delay.</b> The MP5's is 0.75 s; the M870's is 0.9 s.</li>
+<li><b>One switch a second is quick.</b> It costs 0.25 s (<code>baseSwitchDelay</code>) whatever the gun. Another switch within that second pays the full delay.</li>
+<li><b>Guns in the same deploy group can't skip each other's cycle.</b> If the gun you leave is still cycling and shares a deploy group with the one you pick up, you pay the full switch delay. In survev the M870, SPAS-12 and SPAS-16 share one group, so two pump shotguns don't quickswitch. Pair a pump shotgun with a gun from any other class.</li>
+</ul>
+
+<h2>Which guns gain most</h2>
+<p>A quickswitch is worth it when the gun's own cycle is much longer than 0.25 s. The table lists every gun whose next shot takes more than twice that long, slowest first.</p>
+<table><thead><tr><th>Gun</th><th>Ammo</th><th class="n">Next shot, waiting</th><th class="n">Next shot, quickswitching</th><th class="n">Time saved</th></tr></thead>
+<tbody>
+<tr><td><a href="/guns/mosin/">Mosin-Nagant</a></td><td>7.62mm</td><td class="n">1.75 s</td><td class="n">0.25 s</td><td class="n">1.5 s</td></tr>
+<tr><td><a href="/guns/sv98/">SV-98</a></td><td>7.62mm</td><td class="n">1.5 s</td><td class="n">0.25 s</td><td class="n">1.25 s</td></tr>
+<tr><td><a href="/guns/awc/">AWM-S</a></td><td>.308 Subsonic</td><td class="n">1.5 s</td><td class="n">0.25 s</td><td class="n">1.25 s</td></tr>
+<tr><td><a href="/guns/scout_elite/">Scout Elite</a></td><td>5.56mm</td><td class="n">1 s</td><td class="n">0.25 s</td><td class="n">0.75 s</td></tr>
+<tr><td><a href="/guns/barrett/">Barrett M107</a></td><td>.50 AE</td><td class="n">0.925 s</td><td class="n">0.25 s</td><td class="n">0.675 s</td></tr>
+<tr><td><a href="/guns/m870/">M870</a></td><td>12 gauge</td><td class="n">0.9 s</td><td class="n">0.25 s</td><td class="n">0.65 s</td></tr>
+<tr><td><a href="/guns/blr/">BLR 81</a></td><td>7.62mm</td><td class="n">0.8 s</td><td class="n">0.25 s</td><td class="n">0.55 s</td></tr>
+<tr><td><a href="/guns/spas12/">SPAS-12</a></td><td>12 gauge</td><td class="n">0.75 s</td><td class="n">0.25 s</td><td class="n">0.5 s</td></tr>
+<tr><td><a href="/guns/model94/">Model 94</a></td><td>.45 ACP</td><td class="n">0.7 s</td><td class="n">0.25 s</td><td class="n">0.45 s</td></tr>
+<tr><td><a href="/guns/sw500/">S&amp;W 500</a></td><td>.50 AE</td><td class="n">0.65 s</td><td class="n">0.25 s</td><td class="n">0.4 s</td></tr>
+</tbody></table>
+
+<h2>How to practice it</h2>
+<ol>
+<li>Fire the slow gun.</li>
+<li>Press the other slot's key (or Q, or right click) straight after the shot, not after you've started waiting.</li>
+<li>Fire the second gun as soon as it's up. The next quick switch is ready a second after the last one.</li>
+</ol>
+<p>Quickswitch's <b>Quick Switch</b> and <b>Shotgun Rush</b> drills give you two guns with survev's exact switch rule, and the results screen counts how many of your shots beat the first gun's own cycle.</p>
+</article>
+<footer class="doc-foot">
+<p><a class="cta" href="/">Train it in the browser</a></p>
+<p class="muted">Every number on this page comes from survev's source (<code>gunDefs.ts</code>, <code>bulletDefs.ts</code>, <code>gameConfig.ts</code>). Quickswitch is a fan project, not affiliated with survev.io, Kongregate or surviv.io.</p>
+</footer>
+</main>
+</body>
+</html>
