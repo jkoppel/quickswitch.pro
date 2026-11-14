@@ -45,7 +45,7 @@ body { overflow: auto; background: var(--night); }
 .t-s { background: #ff7f7f; } .t-a { background: #ffbf7f; } .t-b { background: #ffdf7f; } .t-c { background: #bfff7f; } .t-d { background: #7fbfff; }
 .tguns { line-height: 1.8; }
 .trange { font-size: 12px; white-space: nowrap; }
-.doc blockquote { margin: 12px 0; padding: 4px 0 4px 16px; border-left: 3px solid var(--orange); }
+.doc blockquote { margin: 12px 0; padding: 4px 0 4px 16px; border-left: 1px solid var(--line); }
 .doc blockquote p { margin: 0 0 4px; color: var(--ink); }
 .doc blockquote footer { font-size: 13px; color: var(--ink-muted); }
 .video { position: relative; aspect-ratio: 16 / 9; margin: 16px 0 8px; background: #000; }
