@@ -182,6 +182,13 @@ r = await inPage(`const g = ST.currentGame, p = g.player;
 ok(near(r.taken, r.full * 0.9 * 0.55) && near(r.scale, 1.7), `body perks stack: Flak Jacket then Ironskin take ${r.taken} of ${r.full}; their sizes add up to ${r.scale}× the size`);
 const icons = await page.evaluate(() => [...document.querySelectorAll('#hud-perks img')].map((i) => (i.naturalWidth > 0 ? '' : '!') + i.alt).join(', '));
 ok(icons === 'Cast Ironskin, Flak Jacket, Gift of the Woods', `the HUD shows your perks' icons (${icons})`);
+const tile = (await page.$$('#hud-perks .perk'))[0];
+const tb = await tile.boundingBox();
+await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
+await page.waitForTimeout(200);
+const tip = await page.evaluate(() => { const t = document.querySelector('#hud-perks .tooltip-text'); const r = t.getBoundingClientRect(); return { vis: getComputedStyle(t).visibility, left: r.left, text: t.innerText }; });
+ok(tip.vis === 'visible' && tip.left >= 0 && tip.text === 'Cast Ironskin\nTake reduced damage and reflect enemy bullets.\nIncreased size.',
+  `hovering a perk shows survev's tooltip, on screen (${JSON.stringify(tip)})`);
 await page.screenshot({ path: join(out, 'perks.png') });
 
 ok(!errors.length, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`);

@@ -92,8 +92,15 @@ canvas#backdrop { position: fixed; inset: 0; display: block; z-index: 0; }
 /* Perks: a dark tile with each perk's survev loot icon, every perk you have, in the bottom-left
    corner. Rows stack upward and stop short of the health bar. A perk whose haste is running lights up. */
 #hud-perks { position: absolute; left: 12px; bottom: 32px; max-width: calc(50% - 190px); display: flex; flex-wrap: wrap-reverse; gap: 4px; }
-#hud-perks .perk { width: 44px; height: 44px; padding: 6px; background: rgba(0, 0, 0, 0.4); border: 2px solid transparent; border-radius: var(--radius-sm); }
+#hud-perks .perk { position: relative; width: 44px; height: 44px; padding: 6px; background: rgba(0, 0, 0, 0.4); border: 2px solid transparent; border-radius: var(--radius-sm); pointer-events: auto; cursor: none; }
 #hud-perks .perk img { display: block; width: 100%; height: 100%; }
+/* survev's .tooltip-perk, verbatim in look: hidden until hover, 180px, black at 75%, arrow down. */
+#hud-perks .tooltip-text { visibility: hidden; position: absolute; z-index: 1; left: 50%; bottom: 115%; transform: translateX(calc(-50% + var(--shift, 0px))); width: 180px; padding: 5px; border-radius: 6px; background: #000; opacity: 0.75; color: #fff; text-align: center; }
+#hud-perks .tooltip-text::after { content: " "; position: absolute; top: 100%; left: 50%; margin-left: calc(-5px - var(--shift, 0px)); border: 5px solid transparent; border-top-color: #000; }
+#hud-perks .tooltip-title { padding: 4px; font-size: 18px; font-weight: bold; color: yellow; }
+#hud-perks .tooltip-desc { padding: 4px; font-size: 16px; }
+#hud-perks .perk:hover .tooltip-text { visibility: visible; }
+@media (hover: none) { #hud-perks .tooltip-text { display: none; } }
 #hud-perks .perk.on { border-color: var(--yellow); }
 #hud-spin { position: absolute; left: 12px; bottom: 32px; display: flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.9; visibility: hidden; text-shadow: var(--text-shadow-field); }
 #hud-spin .bar { width: 96px; height: 5px; background: rgba(0, 0, 0, 0.5); border-radius: 3px; overflow: hidden; }

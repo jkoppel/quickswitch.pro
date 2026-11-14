@@ -6,7 +6,11 @@
       "properties": {
         "minBoost": 100,
         "scale": 0.25
-      }
+      },
+      "descLines": [
+        "Max adrenaline.",
+        "Increased size."
+      ]
     },
     "assume_leadership": {
       "name": "Assume Leadership",
@@ -14,7 +18,11 @@
       "properties": {
         "minBoost": 50,
         "scale": 0.15
-      }
+      },
+      "descLines": [
+        "Half-full adrenaline.",
+        "Slightly increased size."
+      ]
     },
     "firepower": {
       "name": "Firepower",
@@ -27,7 +35,11 @@
       "properties": {
         "scale": 0.2,
         "healthRegen": 1
-      }
+      },
+      "descLines": [
+        "Restore health over time.",
+        "Increased size."
+      ]
     },
     "windwalk": {
       "name": "Windwalk",
@@ -60,7 +72,11 @@
       "properties": {
         "scale": 0.4,
         "damageReduction": 0.45
-      }
+      },
+      "descLines": [
+        "Take reduced damage and reflect enemy bullets.",
+        "Increased size."
+      ]
     },
     "ap_rounds": {
       "name": "AP Rounds",
@@ -84,7 +100,11 @@
       "properties": {
         "scale": -0.25,
         "gunEquipSpeed": 1
-      }
+      },
+      "descLines": [
+        "Move faster with weapons deployed.",
+        "Decreased size."
+      ]
     },
     "takedown": {
       "name": "Takedown",
@@ -171,7 +191,11 @@
       "desc": "First and last round in each magazine deal bonus damage. Does not apply to shotguns.",
       "properties": {
         "damageMult": 1.25
-      }
+      },
+      "descLines": [
+        "First and last round in each magazine deal bonus damage.",
+        "Does not apply to shotguns."
+      ]
     },
     "martyrdom": {
       "name": "Martyrdom",
@@ -242,7 +266,11 @@
           "frag": 3,
           "mirv": 2
         }
-      }
+      },
+      "descLines": [
+        "Greatly reduces damage from explosions & shrapnel.",
+        "Increased grenade capacity."
+      ]
     },
     "amped_explosives": {
       "name": "Hyperfragmentation",

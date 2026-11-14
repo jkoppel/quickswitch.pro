@@ -607,6 +607,17 @@
     spin: $('hud-spin'), spinFill: $('hud-spin-fill'), perks: $('hud-perks'),
   };
   let lastPerks = null;
+  // The perk tiles take the mouse for their tooltips; a click on one still reaches the game.
+  hudEls.perks.addEventListener('mousedown', (e) => { if (game && game.onMouseDown) game.onMouseDown(e); });
+  hudEls.perks.addEventListener('contextmenu', (e) => e.preventDefault());
+  // survev centres the tooltip over its tile; in our corner that would run off the screen's left
+  // edge, so it slides right just enough to fit, and its arrow stays on the tile.
+  hudEls.perks.addEventListener('mouseover', (e) => {
+    const tile = e.target.closest('.perk');
+    if (!tile) return;
+    const r = tile.getBoundingClientRect();
+    tile.style.setProperty('--shift', `${Math.max(0, 90 + 4 - (r.left + r.width / 2))}px`);
+  });
   let lastHud = '';
   let lastSlots = '';
   function updateHud(h) {
@@ -641,7 +652,11 @@
     const perkKey = `${h.perks.join()}|${h.haste}`;
     if (perkKey !== lastPerks) {
       lastPerks = perkKey;
-      hudEls.perks.innerHTML = h.perks.map((id) => `<div class="perk${h.haste === id ? ' on' : ''}" title="${ST.PERKS[id].name}"><img src="vendor/survev/img/perks/${id}.svg" alt="${ST.PERKS[id].name}"></div>`).join('');
+      // survev's perk tooltip on hover: the name in yellow over the description, in a black box above.
+      const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      hudEls.perks.innerHTML = h.perks.map((id) => { const k = ST.PERKS[id]; return `<div class="perk tooltip-perk${h.haste === id ? ' on' : ''}">`
+        + `<div class="tooltip-text"><div class="tooltip-title">${esc(k.name)}</div><div class="tooltip-desc">${k.lines.map(esc).join('<br>')}</div></div>`
+        + `<img src="vendor/survev/img/perks/${id}.svg" alt="${esc(k.name)}"></div>`; }).join('');
       // The spin meter shares the corner: it sits on top of the perks.
       hudEls.spin.style.bottom = h.perks.length ? `${32 + hudEls.perks.offsetHeight + 8}px` : '';
     }

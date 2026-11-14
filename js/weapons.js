@@ -111,7 +111,8 @@ window.ST = window.ST || {};
   ST.PERKS = {};
   for (const id of PERK_IDS) {
     const p = PD.perks[id];
-    if (p) ST.PERKS[id] = { id, name: p.name, desc: p.desc, props: p.properties || {}, body: BODY_PERKS.includes(id) };
+    // lines: the description as survev's tooltip breaks it (en.json's </br>).
+    if (p) ST.PERKS[id] = { id, name: p.name, desc: p.desc, lines: p.descLines || [p.desc], props: p.properties || {}, body: BODY_PERKS.includes(id) };
   }
   // A drill's perks, as a list of known ids with no repeats, in a fixed order. Accepts a list, or
   // one id (settings saved before you could pick several).
