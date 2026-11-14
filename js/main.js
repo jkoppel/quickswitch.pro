@@ -642,6 +642,8 @@
     if (perkKey !== lastPerks) {
       lastPerks = perkKey;
       hudEls.perks.innerHTML = h.perks.map((id) => `<div class="perk${h.haste === id ? ' on' : ''}" title="${ST.PERKS[id].name}"><img src="vendor/survev/img/perks/${id}.svg" alt="${ST.PERKS[id].name}"></div>`).join('');
+      // The spin meter shares the corner: it sits on top of the perks.
+      hudEls.spin.style.bottom = h.perks.length ? `${32 + hudEls.perks.offsetHeight + 8}px` : '';
     }
     // The only live readout the trainer adds: how hard you are spinning, because you cannot see your
     // own angular velocity and the whole point of the drill is learning what "spinning" feels like.
